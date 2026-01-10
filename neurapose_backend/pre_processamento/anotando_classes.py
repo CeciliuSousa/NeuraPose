@@ -1,12 +1,14 @@
-# neurapose/pre_processamento/anotando_classes.py
+# ==========================================================
+# neurapose_backend/pre_processamento/anotando_classes.py
+# ==========================================================
+
 """
 Ferramenta interativa para anotacao de classes.
 Le pastas de predicoes e jsons, exibe videos e permite
-classificar cada ID como normal ou furto.
+classificar cada ID1 como normal ou furto.
 """
 
 import os
-import sys
 import cv2
 import json
 from pathlib import Path
@@ -17,14 +19,12 @@ from colorama import Fore, init as colorama_init
 
 
 # Configuracoes centralizadas
-from neurapose.config_master import (
+from neurapose_backend.config_master import (
     PROCESSING_OUTPUT_DIR,
-    PROCESSING_PREDS_DIR,
-    PROCESSING_JSONS_DIR,
     PROCESSING_ANNOTATIONS_DIR,
     MIN_FRAMES_PER_ID,
     CLASSE1,
-    CLASSE2,
+    CLASSE2
 )  
 
 colorama_init(autoreset=True)
@@ -133,13 +133,11 @@ def exibir_video_com_bboxes(video_path: Path, frames_index, present_ids:set=None
             except Exception:
                 continue
 
-            # Apenas desenhar para IDs que sejam mantidos ou removidos (candidatos)
             if gid not in present_ids and gid not in removed_ids:
                 continue
 
             color = kept_color if gid in present_ids else removed_color
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            # Texto ID removido conforme solicitado: somente as bboxes coloridas são exibidas
 
         # Nenhuma legenda/overlay de texto extra exibida (apenas bboxes e IDs)
         cv2.imshow(title, frame)
@@ -170,7 +168,6 @@ def salvar_json(path: Path, data):
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Anotar IDs por video")
-    # Diretório raiz dos resultados de pré-processamento (alias: --input-dir-process)
     parser.add_argument("--root", default=str(PROCESSING_OUTPUT_DIR),
                         help=f"Root de processamento (default: {PROCESSING_OUTPUT_DIR})")
     parser.add_argument("--input-dir-process", "--input-dir", dest="root",
@@ -183,7 +180,6 @@ def main():
     parser.add_argument("--negative-class", default=CLASSE1.lower(),
                         help="Classe negativa (default: normal)")
 
-    # Arquivo de saida das anotacoes (alias: --output-dir-annotations)
     parser.add_argument("--labels-out", default=str(PROCESSING_ANNOTATIONS_DIR / "labels.json"),
                         help=f"Caminho para labels de saida (default: {PROCESSING_ANNOTATIONS_DIR / 'labels.json'})")
     parser.add_argument("--output-dir-annotations", dest="labels_out",
@@ -235,7 +231,6 @@ def main():
 
         frames_index, id_counter = indexar_por_frame(records)
 
-        # Status: video encontrado / nao encontrado / ja anotado
         if not vpath:
             print(Fore.RED + f"\n[VIDEO] {stem}   [STATUS: NAO ENCONTRADO]")
             print(Fore.YELLOW + "  Video nao encontrado")
@@ -345,21 +340,16 @@ def main():
                     print(f"    ID {pid}: {video_labels[pid]}")
 
                 print(Fore.GREEN + f"\n  Anotacao para {stem} salva em {labels_out}")
-                break  # sai do while -> passa ao proximo json
+                break
 
             elif choice == "2":
-                # Deleta arquivos correspondentes (videos originais, predicoes e json)
-                # Tenta remover em varios locais: root/videos e predicoes do processamento
-                # 1) videos na pasta root/videos
                 videos_dir_candidates = [root / "videos", root.parent / "videos"]
                 for vd in videos_dir_candidates:
                     if vd.exists():
                         _find_and_remove(vd, f"{stem}*.mp4", "video(s) na pasta videos")
 
-                # 2) predicoes (videos preditos)
                 _find_and_remove(pred_dir, f"{stem}*.mp4", "video(s) em predicoes")
 
-                # 3) json atual e tracking
                 try:
                     jpath.unlink()
                     print(Fore.YELLOW + f"  JSON removido: {jpath}")
@@ -374,11 +364,11 @@ def main():
                         print(Fore.YELLOW + f"  Erro ao remover tracking: {tracking}")
 
                 print(Fore.YELLOW + f"\n  Operacao cancelada e arquivos removidos para {stem}.")
-                break  # sai do while -> passa ao proximo json
+                break
 
             elif choice == "3":
                 print(Fore.BLUE + "\n  Repetindo analise do mesmo video...\n")
-                continue  # repete o while True (mesmo jpath)
+                continue
 
             else:
                 print(Fore.YELLOW + "\n  Opcao invalida. Voltando ao menu do mesmo video.")

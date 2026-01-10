@@ -1,8 +1,6 @@
 # ======================================================
-# neurapose/pre_processamento/processar.py
+# neurapose_backend/pre_processamento/processar.py
 # ======================================================
-# Script principal para pre-processamento de videos.
-# Paths e configuracoes vem do config_master.py!
 
 import sys
 import argparse
@@ -10,14 +8,14 @@ from pathlib import Path
 from colorama import Fore, init as colorama_init
 
 # Importa configuracoes centralizadas
-from neurapose.config_master import (
+from neurapose_backend.config_master import (
     PROCESSING_INPUT_DIR,
     PROCESSING_OUTPUT_DIR,
     RTMPOSE_PREPROCESSING_PATH,
 )
 
-from neurapose.pre_processamento.utils.ferramentas import imprimir_banner, carregar_sessao_onnx
-from neurapose.pre_processamento.pipeline.processador import processar_video
+from neurapose_backend.pre_processamento.utils.ferramentas import imprimir_banner, carregar_sessao_onnx
+from neurapose_backend.pre_processamento.pipeline.processador import processar_video
 
 import warnings
 warnings.filterwarnings("ignore")

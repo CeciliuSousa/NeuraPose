@@ -1,5 +1,5 @@
 # ================================================================
-# LSTM/__init__.py
+# neurapose-backend/app/LSTM/__init__.py
 # ================================================================
 
 from .modulos.fabrica_modelo import ClassifierFactory

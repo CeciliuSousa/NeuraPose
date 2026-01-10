@@ -1,7 +1,6 @@
 # ==============================================================
-# pre_processamento/modulos/tracking.py
+# neurapose_backend/pre_processamento/modulos/tracking.py
 # ==============================================================
-# Classes e funções para auxiliar no rastreamento e Re-Identificação.
 
 import cv2
 import numpy as np

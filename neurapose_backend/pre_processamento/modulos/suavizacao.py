@@ -1,10 +1,9 @@
 # ==============================================================
-# pre_processamento/modulos/suavizacao.py
+# neurapose_backend/pre_processamento/modulos/suavizacao.py
 # ==============================================================
-# Suavização temporal de keypoints.
 
 import numpy as np
-from neurapose.pre_processamento.configuracao.config import EMA_ALPHA, EMA_MIN_CONF
+from neurapose_backend.pre_processamento.configuracao.config import EMA_ALPHA, EMA_MIN_CONF
 
 class EmaSmoother:
     """

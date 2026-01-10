@@ -1,4 +1,7 @@
-# neurapose/pre_processamento/split_dataset_label.py
+# ==============================================================================
+# neurapose_backend/pre_processamento/split_dataset_label.py
+# ==============================================================================
+
 """
 Split dataset CLI (versão com nome de módulo válido).
 Uso via: python -m neurapose.pre_processamento.split_dataset_label --input-dir-process <path> --output-root <path> --dataset-name <name>
@@ -6,7 +9,6 @@ Uso via: python -m neurapose.pre_processamento.split_dataset_label --input-dir-p
 Mantém comportamento idêntico ao script original `split-dataset-label.py` quando nenhum argumento é passado.
 """
 
-import sys
 import json
 import shutil
 import numpy as np
@@ -17,12 +19,11 @@ from sklearn.model_selection import train_test_split
 
 
 # Configuracoes centralizadas (valores padrao)
-from neurapose.config_master import (
+from neurapose_backend.config_master import (
     PROCESSING_DATASET,
     PROCESSING_OUTPUT_DIR,
     PROCESSING_VIDEOS_DIR,
     PROCESSING_JSONS_DIR,
-    PROCESSING_ANNOTATIONS_DIR,
     TEST_DATASETS_ROOT,
     TRAIN_SPLIT,
     TEST_SPLIT,

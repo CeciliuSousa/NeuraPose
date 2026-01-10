@@ -1,6 +1,7 @@
 # ===========================================================
-# LSTM/src/analisar_modelos.py  — versão atualizada
+# neurapose_backend/pre_processamento/analisar_modelos.py
 # ===========================================================
+
 import os
 import re
 from colorama import Fore, init

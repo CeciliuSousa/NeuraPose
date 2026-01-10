@@ -1,3 +1,7 @@
+# ==========================================================
+# neurapose_backend/pre_processamento/anotando_classes_temp.py
+# ==========================================================
+
 import os
 import cv2
 import json
@@ -22,7 +26,7 @@ except:
 colorama_init(autoreset=True)
 
 # Configuracoes centralizadas (usar mesmos defaults que em anotando_classes.py)
-from neurapose.config_master import (
+from neurapose_backend.config_master import (
     PROCESSING_OUTPUT_DIR,
     PROCESSING_ANNOTATIONS_DIR,
     MIN_FRAMES_PER_ID,

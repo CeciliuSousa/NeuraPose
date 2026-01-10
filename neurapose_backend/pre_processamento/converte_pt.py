@@ -1,4 +1,7 @@
-# neurapose/pre_processamento/converte_pt.py
+# ==============================================================================
+# neurapose_backend/pre_processamento/converte_pt.py
+# ==============================================================================
+
 """
 Converte JSONs de keypoints para formato PyTorch (.pt).
 Entrada: JSONs do pre-processamento + labels.json
@@ -17,7 +20,7 @@ import torch
 
 
 # Configuracoes centralizadas
-from neurapose.config_master import (
+from neurapose_backend.config_master import (
     PROCESSING_DATASET,
     PROCESSING_JSONS_DIR,
     PROCESSING_ANNOTATIONS_DIR,

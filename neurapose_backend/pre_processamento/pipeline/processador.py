@@ -1,13 +1,6 @@
 # ==============================================================
-# pre_processamento/pipeline/processador.py
+# neurapose_backend/pre_processamento/pipeline/processador.py
 # ==============================================================
-# Pipeline completo de pre-processamento:
-# 1. Normalizacao de FPS
-# 2. Deteccao (YOLO + BoTSORT)
-# 3. Extracao de Pose (RTMPose)
-# 4. Geracao de JSON e Video de saida
-#
-# Paths e configuracoes vem do config_master.py!
 
 import cv2
 import json
@@ -16,8 +9,8 @@ from pathlib import Path
 from tqdm import tqdm
 from colorama import Fore
 
-from ...detector.yolo_detector import yolo_detector_botsort
-from ..configuracao.config import (
+from neurapose_backend.detector.yolo_detector import yolo_detector_botsort
+from neurapose_backend.config_master import (
     SIMCC_W, 
     SIMCC_H, 
     POSE_CONF_MIN,
@@ -25,14 +18,14 @@ from ..configuracao.config import (
     FRAME_DISPLAY_W,
     FRAME_DISPLAY_H,
 )
-from ..utils.geometria import (
+from neurapose_backend.pre_processamento.utils.geometria import (
     _calc_center_scale,
     get_affine_transform,
     transform_preds
 )
-from ..utils.visualizacao import desenhar_esqueleto, color_for_id
-from ..modulos.rtmpose import preprocess_rtmpose_input, decode_simcc_output
-from ..modulos.suavizacao import EmaSmoother
+from neurapose_backend.pre_processamento.utils.visualizacao import desenhar_esqueleto, color_for_id
+from neurapose_backend.pre_processamento.modulos.rtmpose import preprocess_rtmpose_input, decode_simcc_output
+from neurapose_backend.pre_processamento.modulos.suavizacao import EmaSmoother
 
 def calcular_deslocamento(p_inicial, p_final):
     """Calcula a distância em pixels entre o ponto inicial e final."""
@@ -41,7 +34,6 @@ def calcular_deslocamento(p_inicial, p_final):
     return np.linalg.norm(p2 - p1)
 
 def processar_video(video_path: Path, sess, input_name, out_root: Path, show=False):
-    # ------------------ Diretorios -----------------------
     videos_dir = out_root / "videos"
     preds_dir = out_root / "predicoes"
     json_dir = out_root / "jsons"
@@ -50,7 +42,6 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     preds_dir.mkdir(parents=True, exist_ok=True)
     json_dir.mkdir(parents=True, exist_ok=True)
 
-    # ------------------ Normalizar FPS (usa FPS_TARGET do config) ----------------
     cap_in = cv2.VideoCapture(str(video_path))
     W = int(cap_in.get(cv2.CAP_PROP_FRAME_WIDTH))
     H = int(cap_in.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -74,7 +65,6 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     cap_in.release()
     writer_norm.release()
 
-    # ------------------ Inferencia -----------------------
     cap = cv2.VideoCapture(str(norm_path))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
@@ -88,7 +78,6 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
 
     json_path = json_dir / f"{video_path.stem}_{int(fps_out)}fps.json"
 
-    # Executa detector
     res_list = yolo_detector_botsort(videos_dir=norm_path)
     res = res_list[0]
     results = res["results"]
@@ -107,7 +96,6 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
 
         regs = results[frame_idx - 1].boxes if frame_idx - 1 < len(results) else None
 
-        # Checa se ha deteccoes e IDs validos
         if regs is None or len(regs) == 0 or regs.id is None:
             writer_pred.write(frame)
             if show:
@@ -130,7 +118,6 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
 
             x1, y1, x2, y2 = map(int, box)
 
-            # Pose
             center, scale = _calc_center_scale(x1, y1, x2, y2)
             trans = get_affine_transform(center, scale, 0, (SIMCC_W, SIMCC_H))
             crop = cv2.warpAffine(frame, trans, (SIMCC_W, SIMCC_H))
@@ -180,13 +167,13 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     writer_pred.release()
 
     # ============================================================
-    # 1. SALVAR JSON BRUTO (Opcional, mas bom para debug)
+    # 1. SALVAR JSON BRUTO
     # ============================================================
     with open(json_path, "w") as f:
         json.dump(registros, f, indent=2)
 
     # ============================================================
-    # 2. FILTRAGEM INTELIGENTE (LIMPEZA V6)
+    # 2. FILTRAGEM INTELIGENTE
     # ============================================================
     print(Fore.CYAN + "\n[INFO] Iniciando limpeza de IDs...")
     
@@ -202,20 +189,18 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
             stats_id[pid] = {"frames": 0, "inicio": centro, "fim": centro}
         
         stats_id[pid]["frames"] += 1
-        stats_id[pid]["fim"] = centro # Atualiza última posição conhecida
+        stats_id[pid]["fim"] = centro
 
     # Define quem fica e quem sai
     ids_validos = []
     
     for pid, dados in stats_id.items():
-        # REGRA A: Duração (Ignora "fantasmas" rápidos como o ID 55)
-        # Se durou menos de 1 segundo (30 frames), é lixo.
+        # REGRA A: Duração (Ignora "fantasmas" abaixo de 30 frames)
         if dados["frames"] < 30:
             print(Fore.YELLOW + f"  - ID {pid} removido (Curta duração: {dados['frames']} frames)")
             continue
             
-        # REGRA B: Imobilidade (Ignora cadeiras fixas como o ID 12)
-        # Se moveu menos de 50 pixels no vídeo todo, é lixo.
+        # REGRA B: Imobilidade (Ignora obejetos fixos)
         distancia = calcular_deslocamento(dados["inicio"], dados["fim"])
         if distancia < 50.0:
             print(Fore.YELLOW + f"  - ID {pid} removido (Estático: moveu apenas {distancia:.1f} px)")
@@ -228,7 +213,6 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     # ============================================================
     # 3. SALVAR TRACKING FINAL (Apenas IDs Válidos)
     # ============================================================
-    # Filtra o mapa de IDs para remover os excluídos
     id_map_limpo = {str(k): int(v) for k, v in id_map.items() if v in ids_validos}
 
     tracking_analysis = {
@@ -237,10 +221,8 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
         "id_map": id_map_limpo,
         "tracking_by_frame": {}
     }
-    
-    # Filtra os registros frame a frame
+
     for reg in registros:
-        # Só adiciona se o ID estiver na lista de válidos
         if reg["id_persistente"] in ids_validos:
             f_id = reg["frame"]
             if f_id not in tracking_analysis["tracking_by_frame"]:
@@ -253,7 +235,6 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
                 "confidence": reg["confidence"]
             })
     
-    # Salva o arquivo final limpo
     tracking_path = json_dir / f"{video_path.stem}_{int(fps_out)}fps_tracking.json"
     with open(tracking_path, "w", encoding="utf-8") as f:
         json.dump(tracking_analysis, f, indent=2, ensure_ascii=False)

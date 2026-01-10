@@ -1,10 +1,6 @@
-# ==========================================================
-# Verificador de integridade entre labels.json e JSONs de keypoints
-# ----------------------------------------------------------
-# 1. Lê labels.json e verifica correspondência com arquivos .json
-# 2. Confere se os IDs esperados estão presentes nos JSONs
-# 3. Gera relatório completo em /resultados/data-labex-completo/relatórios/debug.txt
-# ==========================================================
+# ===========================================================
+# neurapose_backend/pre_processamento/verifica_banco.py
+# ===========================================================
 
 import json
 import re
@@ -34,20 +30,17 @@ def find_json(base_dir: Path, stem: str):
     stem_norm = stem.lower().replace("-", "_").replace(" ", "")
     
     # 1. Tenta a correspondência exata conforme esperado pelo labels.json 
-    # (com base nas variantes geradas)
     variants = [
         stem_norm,
-        re.sub(r"([a-z])(\d)", r"\1_\2", stem_norm), # Garante underscore após palavra se ausente (ex: furto_001)
-        stem_norm.replace("_", ""), # Versão sem underscore
+        re.sub(r"([a-z])(\d)", r"\1_\2", stem_norm),
+        stem_norm.replace("_", ""),
     ]
     
     for v in variants:
         path = base_dir / f"{v}.json"
         if path.exists():
             return path
-            
-    # Se ainda não encontrou, tenta a busca por wildcard como último recurso
-    # (Recomendado remover ou usar com extrema cautela)
+
     matches = sorted(list(base_dir.glob(f"*{stem_norm.replace('_', '')}*.json")))
     return matches[0] if matches else None
 
