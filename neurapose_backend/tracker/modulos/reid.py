@@ -11,7 +11,7 @@ from ultralytics.utils.ops import xywh2xyxy
 from ultralytics.utils.plotting import save_one_box
 
 import torchvision.transforms as T
-from neurapose.config_master import DEVICE
+from neurapose_backend.config_master import DEVICE
 
 class OSNetAIN(nn.Module):
     def __init__(self, state_dict):
@@ -27,7 +27,6 @@ class OSNetAIN(nn.Module):
 
 class CustomReID:
     def __init__(self, model_path):
-        # print(Fore.CYAN + f"[ReID] Carregando OSNet AIN: {model_path}")
         ckpt = torch.load(model_path, map_location=DEVICE)
         state_dict = ckpt.get("state_dict", ckpt)
 
@@ -35,7 +34,6 @@ class CustomReID:
         self.device = DEVICE
         self.model.to(self.device)
 
-        # Adicione o transformador de normalização
         self.norm = T.Compose([
             T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
@@ -56,7 +54,6 @@ class CustomReID:
             crop_resized = cv2.resize(crop, (128, 256))
             crop_t = torch.from_numpy(crop_resized.copy()).permute(2, 0, 1).unsqueeze(0).float() / 255.0
 
-            # Normaliza aplicada no crop_t
             crop_t = self.norm(crop_t)
 
             crop_t = crop_t.to(self.device)

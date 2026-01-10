@@ -4,20 +4,16 @@
 
 import os
 import cv2
-import torch
 import logging
 import numpy as np
 from pathlib import Path
 from ultralytics import YOLO
 
-
-
 # Importacoes do tracker (usando interface modular via rastreador.py)
 from ..tracker.rastreador import CustomBoTSORT, CustomReID, save_temp_tracker_yaml
-from ..tracker.utils.ferramentas import cosine_similarity
 
 # Importa nome do modelo YOLO e ROOT do config centralizado
-from neurapose_backend.config_master import YOLO_PATH, YOLO_MODEL, ROOT, DETECTION_CONF, BOTSORT_YAML_PATH, YOLO_CLASS_PERSON, DEVICE
+from neurapose_backend.config_master import YOLO_PATH, YOLO_MODEL, ROOT, DETECTION_CONF, YOLO_CLASS_PERSON, DEVICE
 
 logging.getLogger("ultralytics").setLevel(logging.ERROR)
 os.environ["YOLO_VERBOSE"] = "False"
@@ -115,21 +111,16 @@ def yolo_detector_botsort(videos_dir=None):
     """
 
     videos_path = Path(videos_dir or (ROOT / "videos"))
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # ================================================================
-    # MODELO YOLO - Usar caminho centralizado (config_master) e baixar se não existir
+    # MODELO YOLO
     # ================================================================
-    model_path = YOLO_PATH  # Path já configurado no config_master
+    model_path = YOLO_PATH
 
     # Criar diretório de modelos se não existir
     model_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not model_path.exists():
-        # print(f"[INFO] Modelo {YOLO_MODEL_NAME} não encontrado localmente.")
-        # print(f"[INFO] Baixando {YOLO_MODEL_NAME} automaticamente...")
-        
-        # Extrai o nome base do modelo (ex: "yolov8l" de "yolov8l.pt")
         model_base = YOLO_MODEL.replace('.pt', '')
 
         try:
@@ -138,7 +129,6 @@ def yolo_detector_botsort(videos_dir=None):
 
             # Salva o modelo baixado no local correto
             temp_model.save(str(model_path))
-            # print(f"[OK] Modelo {YOLO_MODEL} baixado e salvo em: {model_path}")
 
         except Exception as e:
             # Se o download falhar, remove o arquivo parcial/corrompido
@@ -171,8 +161,6 @@ def yolo_detector_botsort(videos_dir=None):
     # Loop para todos os vídeos
     # ============================================================
     for video in videos:
-        # print(f"\n[PROCESSANDO] {video.name}")
-
         cap = cv2.VideoCapture(str(video))
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
 
@@ -180,7 +168,6 @@ def yolo_detector_botsort(videos_dir=None):
         model.tracker = tracker
 
         tracker_yaml_path = save_temp_tracker_yaml()
-        # Log qual YAML esta sendo usado para o tracker
         logging.getLogger("neurapose.tracker").info(f"Usando BoTSORT YAML: {tracker_yaml_path}")
 
         # Execução do YOLO + tracking
@@ -197,7 +184,6 @@ def yolo_detector_botsort(videos_dir=None):
 
         if not results or not hasattr(results[0], "boxes"):
             print("[ERRO] Sem resultados válidos.")
-            # libera captura que abrimos acima
             cap.release()
             continue
 
@@ -229,8 +215,6 @@ def yolo_detector_botsort(videos_dir=None):
 
                     tid = int(track_id)
 
-                    # OBS: aqui não precisamos mais de embeddings para fusão;
-                    # mantemos lista de features só para futuro, mas não usamos.
                     try:
                         f = tracker.tracks[tid].feat.copy()
                     except Exception:
