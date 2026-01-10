@@ -34,11 +34,11 @@ install:
 
 dev:
 	@echo "Iniciando servidor de desenvolvimento..."
-	cd $(BACKEND_DIR) && $(UVICORN) app.main:app --reload --host 0.0.0.0 --port 8000
+	cd $(BACKEND_DIR) && $(UVICORN) main:app --reload --host 0.0.0.0 --port 8000
 
 run:
 	@echo "Iniciando servidor..."
-	cd $(BACKEND_DIR) && $(UVICORN) app.main:app --host 0.0.0.0 --port 8000
+	cd $(BACKEND_DIR) && $(UVICORN) main:app --host 0.0.0.0 --port 8000
 
 # ================================================================
 # Docker

@@ -178,18 +178,30 @@ def run_processing_task(input_path: Path, output_path: Path, onnx_path: Path, sh
         finally:
             state.reset()
 
-def _pick_folder_proc(queue):
-    import tkinter as tk
-    from tkinter import filedialog
+def pick_folder_via_subprocess():
+    import subprocess
+    import sys
+    
+    # Get current python executable to run the script
+    python_exe = sys.executable
+    picker_script = Path(__file__).parent / "picker.py"
+    
     try:
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
-        folder = filedialog.askdirectory()
-        root.destroy()
-        queue.put(folder)
-    except:
-        queue.put(None)
+        # Run picker.py and capture stdout
+        # Using shell=False for security and robustness
+        result = subprocess.check_output(
+            [python_exe, str(picker_script)],
+            stderr=subprocess.STDOUT,
+            universal_newlines=True
+        )
+        folder = result.strip()
+        return folder if folder else None
+    except subprocess.CalledProcessError:
+        # This happens if exit code is non-zero (e.g. cancelled)
+        return None
+    except Exception as e:
+        logger.error(f"Error calling picker subprocess: {e}")
+        return None
 
 # ==============================================================
 # ENDPOINTS
@@ -262,20 +274,8 @@ def resume_process():
 
 @app.get("/pick-folder")
 def pick_folder():
-    """Abre janela nativa do Windows usando processo separado (thread-safe)."""
-    from multiprocessing import Process, Queue
-    q = Queue()
-    p = Process(target=_pick_folder_proc, args=(q,))
-    p.start()
-    # Espera até 60 segundos por uma resposta
-    from queue import Empty
-    try:
-        folder = q.get(timeout=60)
-    except Empty:
-        folder = None
-    p.join(timeout=1)
-    if p.is_alive():
-        p.terminate()
+    """Abre janela nativa do Windows usando subprocesso (mais estável no Windows)."""
+    folder = pick_folder_via_subprocess()
         
     if folder:
         return {"path": folder}
