@@ -1,4 +1,7 @@
-# neurapose/app/testar_modelo.py
+# ==============================================================
+# neurapose-backend/app/testar_modelo.py
+# ==============================================================
+
 """
 Script principal para teste do modelo treinado.
 Processa videos, gera predicoes e calcula metricas.

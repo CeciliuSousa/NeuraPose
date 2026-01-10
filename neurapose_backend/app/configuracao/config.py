@@ -1,5 +1,5 @@
 # ==============================================================
-# src/configuracao/config.py
+# neurapose-backend/app/configuracao/config.py
 # ==============================================================
 
 import argparse

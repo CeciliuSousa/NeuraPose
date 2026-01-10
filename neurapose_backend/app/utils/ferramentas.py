@@ -1,5 +1,5 @@
 # ==============================================================
-# src/utils/ferramentas.py (COMPLETO E CORRIGIDO)
+# neurapose-backend/app/utils/ferramentas.py (COMPLETO E CORRIGIDO)
 # ==============================================================
 
 import torch

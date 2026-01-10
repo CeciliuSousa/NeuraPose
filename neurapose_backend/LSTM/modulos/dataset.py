@@ -1,10 +1,7 @@
 # ================================================================
-# LSTM/modulos/dataset.py
+# neurapose-backend/app/LSTM/modulos/dataset.py
 # ================================================================
-# Carregamento e preparação de dados para o LSTM.
 
-import pickle # Mantido para compatibilidade, mas não usado para carregar .pt
-import numpy as np
 import torch
 from torch.utils.data import TensorDataset
 
@@ -13,7 +10,7 @@ def load_data_pt(path):
     Carrega o dataset salvo no formato PyTorch (.pt) contendo o dicionário:
     {'data': Tensor(N, C, T, V), 'labels': Tensor(N)}
     """
-    # ⚠️ CORREÇÃO: Usar torch.load para carregar o arquivo .pt
+    # CORREÇÃO: Usar torch.load para carregar o arquivo .pt
     data_dict = torch.load(path, map_location='cpu')
 
     # O script de conversão já salvou 'data' e 'labels' como tensores PyTorch.
@@ -26,13 +23,6 @@ def load_data_pt(path):
             f"O tensor X_data carregado tem shape {X.shape}, mas o formato esperado é (N, C, T=30, V). "
             "Verifique se o script de conversão usou max_frames=30 e salvou corretamente."
         )
-
-    # --------------------------------------------------------------------------
-    # Transformação para a entrada LSTM: (N, C, T, V) -> (N, T, C*V)
-    # A LSTM espera Batch x Seq_Len x Features
-    # Features por time step: C*V = 2*17 = 34
-    # Seq_Len (T) = 30
-    # --------------------------------------------------------------------------
     
     # 1. Permutar: (N, C, T, V) -> (N, T, C, V)
     X = X.permute(0, 2, 1, 3) 

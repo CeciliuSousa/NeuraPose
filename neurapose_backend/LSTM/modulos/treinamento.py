@@ -1,7 +1,6 @@
 # ================================================================
-# LSTM/modulos/treinamento.py
+# neurapose-backend/LSTM/modulos/treinamento.py
 # ================================================================
-# Lógica de treinamento (loop de época) e Early Stopping.
 
 import numpy as np
 import torch

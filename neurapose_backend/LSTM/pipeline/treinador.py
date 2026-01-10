@@ -1,4 +1,7 @@
-# neurapose/LSTM/pipeline/treinador.py
+# ================================================================
+# neurapose-backend/app/LSTM/pipeline/treinador.py
+# ================================================================
+
 """
 Script principal para treinamento do modelo temporal (TFT/LSTM).
 Configuracoes vem do config_master.py
@@ -27,7 +30,7 @@ from ..modulos.loss import FocalLoss
 from ..modulos.custom_dataset import AugmentedDataset
 
 # Configuracoes centralizadas
-from neurapose.config_master import (
+from neurapose_backend.config_master import (
     MODEL_BEST_FILENAME,
     MODEL_FINAL_FILENAME,
     NORM_STATS_FILENAME,

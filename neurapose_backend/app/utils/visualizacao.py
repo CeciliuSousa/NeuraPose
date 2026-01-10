@@ -1,5 +1,5 @@
 # ==============================================================
-# src/utils/visualizacao.py (COMPLETO E CORRIGIDO)
+# neurapose-backend/app/utils/visualizacao.py (COMPLETO E CORRIGIDO)
 # ==============================================================
 # Este módulo é responsável pela geração de vídeos e visualização
 # dos resultados, desenhando esqueletos, bounding boxes e overlays.
@@ -9,7 +9,6 @@ import numpy as np
 import hashlib
 from pathlib import Path
 from tqdm import tqdm
-from colorama import Fore
 
 from neurapose_backend.app.configuracao.config import (
     CLASSE1,

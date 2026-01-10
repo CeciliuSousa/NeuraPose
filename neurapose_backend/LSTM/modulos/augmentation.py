@@ -1,3 +1,7 @@
+# ================================================================
+# neurapose-backend/app/LSTM/modulos/augmentation.py
+# ================================================================
+
 import torch
 import numpy as np
 

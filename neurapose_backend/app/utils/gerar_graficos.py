@@ -1,5 +1,5 @@
 # ==============================================================
-# src/utils/gerar_graficos.py
+# neurapose-backend/app/utils/gerar_graficos.py
 # ==============================================================
 
 import json

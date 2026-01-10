@@ -1,3 +1,7 @@
+# ===========================================
+# neurapose_backend/LSTM/modulos/custom_dataset.py
+# ===========================================
+
 import torch
 from torch.utils.data import Dataset
 from ..modulos.augmentation import TimeSeriesAugmenter
@@ -22,9 +26,6 @@ class AugmentedDataset(Dataset):
         y_sample = self.y[idx]
 
         if self.augment:
-            # Aplica augmentation. O método augment espera tensor.
-            # Como estamos pegando uma amostra, x_sample é (T, F).
-            # O augment lida com isso.
             x_sample = TimeSeriesAugmenter.augment(x_sample)
 
         return x_sample, y_sample

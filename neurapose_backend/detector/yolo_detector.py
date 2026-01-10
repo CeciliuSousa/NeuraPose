@@ -1,5 +1,5 @@
 # ================================================================
-# detector/yolo_detector.py
+# neurapose-backend/app/detector/yolo_detector.py
 # ================================================================
 
 import os
@@ -96,7 +96,7 @@ def merge_tracks(track_data, gap_thresh=1.5):
 
 
 # ================================================================
-# 2. YOLO + BoTSORT + coleta de IDs + fusão de IDs
+# 2. YOLO + BoTSORT + OSNet ReID
 # ================================================================
 def yolo_detector_botsort(videos_dir=None):
     """

@@ -1,10 +1,8 @@
 # ================================================================
 # LSTM/modulos/fabrica_modelo.py
 # ================================================================
-# Factory para criação e carregamento de modelos LSTM/Transformer.
 
 import torch
-import re
 from pathlib import Path
 from ...app.configuracao.config import TIME_STEPS, NUM_CHANNELS, NUM_JOINTS # Importa as constantes
 from ..models.models import (
@@ -18,7 +16,7 @@ class ClassifierFactory:
         
         # Hyperparâmetros base, onde input_size=C*V e T=TIME_STEPS (30)
         self.hp = dict(
-            input_size=NUM_CHANNELS * NUM_JOINTS, # 34 features por frame
+            input_size=NUM_CHANNELS * NUM_JOINTS,
             hidden_size=128,
             num_layers=2,
             num_heads=8,
@@ -38,7 +36,7 @@ class ClassifierFactory:
             "bilstm": "bilstm", "tcn": "tcn",
             "wavenet": "wavenet",
             "transformer": "transformer",
-            "tft": "temporalfusiontransformer", # Corrigido o alias para o nome da classe
+            "tft": "temporalfusiontransformer",
         }
         # Tenta o alias, senão usa o nome da classe como fallback (ex: 'TemporalFusionTransformer' -> 'temporalfusiontransformer')
         key = aliases.get(name, name).replace('-', '') 
@@ -76,7 +74,7 @@ class ClassifierFactory:
     def _build_model(self, key: str):
         # Mapeamento do nome da chave para a classe (adaptado para TIME_STEPS, se necessário)
         
-        # ⚠️ IMPORTANTE: Ajustar a hidden_size de saída para 30 nos modelos que usam 'flatten'
+        # IMPORTANTE: Ajustar a hidden_size de saída para 30 nos modelos que usam 'flatten'
         # Seu modelo TFT/LSTM usa Pooling/Last State, então a lógica é simplificada.
 
         match key:
@@ -140,7 +138,7 @@ class ClassifierFactory:
             model.load_state_dict(state_dict)
         except RuntimeError as e:
             # Pode ocorrer se os HPs inferidos não baterem com o modelo salvo
-            print(f"⚠️ Aviso: Falha ao carregar state_dict (RuntimeError). Tentando strict=False. Erro original: {e}")
+            print(f"Aviso: Falha ao carregar state_dict (RuntimeError). Tentando strict=False. Erro original: {e}")
             model.load_state_dict(state_dict, strict=False)
             
         model.eval()

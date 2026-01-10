@@ -1,8 +1,10 @@
+# ==============================================================
+# neurapose-backend/app/log_service.py
+# ==============================================================
+
 import sys
-import io
 from collections import deque
 from typing import List
-import logging
 
 class LogBuffer:
     _instance = None
@@ -10,14 +12,13 @@ class LogBuffer:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(LogBuffer, cls).__new__(cls)
-            cls._instance.logs = deque(maxlen=1000) # Keep last 1000 lines
+            cls._instance.logs = deque(maxlen=1000)
         return cls._instance
     
     def write(self, message: str):
         if not message:
             return
             
-        # tqdm e outros usam \r para atualizar a mesma linha
         if "\r" in message:
             # Dividimos por \r para pegar as atualizações
             parts = [p for p in message.split("\r") if p.strip()]
@@ -27,7 +28,7 @@ class LogBuffer:
             if message.startswith("\r") and self._instance.logs:
                 self._instance.logs.pop()
             
-            # Adicionamos as partes (geralmente só a última nos interessa)
+            # Adicionamos as partes
             for part in parts:
                 self._instance.logs.append(part)
         elif message.strip():

@@ -1,5 +1,5 @@
 # ==============================================================
-# src/modulos/extracao_pose.py (COMPLETO E CORRIGIDO)
+# neurapose-backend/app/modulos/extracao_pose.py
 # ==============================================================
 
 import cv2

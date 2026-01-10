@@ -1,5 +1,5 @@
 # ==============================================================
-# src/pipeline/processador_video.py
+# neurapose-backend/app/pipeline/processador_video.py
 # ==============================================================
 
 import time

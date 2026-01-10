@@ -1,5 +1,5 @@
 # ==============================================================
-# src/modulos/processamento_sequencia.py
+# neurapose-backend/app/modulos/processamento_sequencia.py
 # ==============================================================
 
 import numpy as np

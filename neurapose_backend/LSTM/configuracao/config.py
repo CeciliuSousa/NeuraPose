@@ -1,13 +1,8 @@
 # ================================================================
-# LSTM/configuracao/config.py
-# ================================================================
-# ATENCAO: Valores default vem do config_master.py!
-# Use args para sobrescrever apenas quando necessario.
+# neurapose-backend/app/LSTM/configuracao/config.py
 # ================================================================
 
-import sys
 import argparse
-from pathlib import Path
 
 # Importa valores do config_master para usar como defaults
 from neurapose_backend.config_master import (
@@ -62,7 +57,6 @@ def get_config():
 
     args, _ = parser.parse_known_args()
 
-    # Mapeamento de string -> Classe
     model_map = {
         "lstm": LSTM,
         "robust": RobustLSTM,
@@ -78,8 +72,8 @@ def get_config():
 
     model_key = args.model.lower()
     if model_key not in model_map:
-        print(f"[AVISO] Modelo '{args.model}' nao reconhecido. Usando RobustLSTM padrao.")
-        ModelClass = RobustLSTM
+        print(f"[AVISO] Modelo '{args.model}' nao reconhecido. Usando TemporalFusionTransformer padrao.")
+        ModelClass = TemporalFusionTransformer
     else:
         ModelClass = model_map[model_key]
 

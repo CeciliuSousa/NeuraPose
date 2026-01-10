@@ -1,8 +1,6 @@
 # ================================================================
-# LSTM/pipeline/retreinador.py
+# neurapose-backend/app/pipeline/retreinador.py
 # ================================================================
-# Script para retreinamento de modelos existentes.
-# Paths e configuracoes vem do config_master.py!
 
 import os
 import json
@@ -22,7 +20,7 @@ from ..modulos.dataset import load_data_pkl
 from ..modulos.treinamento import train_one_epoch
 
 # Importa paths e constantes do config_master
-from neurapose.config_master import (
+from neurapose_backend.config_master import (
     RETRAIN_MODELS_DIR,
     CLASS_NAMES,
     DEVICE,

@@ -1,5 +1,5 @@
 # ==============================================================
-# src/modulos/inferencia_lstm.py
+# neurapose-backend/app/modulos/inferencia_lstm.py
 # ==============================================================
 
 import torch
