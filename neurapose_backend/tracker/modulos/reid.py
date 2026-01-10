@@ -1,7 +1,6 @@
 # ================================================================
-# neurapose/tracker/modulos/reid.py
+# neurapose_backend/tracker/modulos/reid.py
 # ================================================================
-# Módulo de Re-Identificação (ReID) usando OSNet.
 
 import torch
 import torch.nn as nn

@@ -1,7 +1,6 @@
 # ================================================================
-# neurapose/tracker/modulos/botsort.py
+# neurapose_backend/tracker/modulos/botsort.py
 # ================================================================
-# Implementacao customizada do BoT-SORT.
 
 import numpy as np
 from colorama import Fore
@@ -10,8 +9,8 @@ from ultralytics.trackers.utils.kalman_filter import KalmanFilterXYWH
 from ultralytics.trackers.utils import matching
 from ultralytics.trackers.utils.gmc import GMC
 
-from ..configuracao.config import BOT_SORT_CONFIG
-from .reid import CustomReID
+from neurapose_backend.config_master import BOT_SORT_CONFIG
+from neurapose_backend.tracker.modulos.reid import CustomReID
 
 class CustomBoTSORT(BOTSORT_ORIGINAL):
     def __init__(self, frame_rate=30):

@@ -1,8 +1,6 @@
 # ================================================================
-# neurapose/tracker/utils/ferramentas.py
+# neurapose_backend/tracker/utils/ferramentas.py
 # ================================================================
-# Funcoes auxiliares para o tracker.
-# Paths e configuracoes vem do config_master.py
 
 import yaml
 import numpy as np

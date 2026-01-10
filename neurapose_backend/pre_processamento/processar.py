@@ -88,6 +88,6 @@ def main():
 
 
 if __name__ == "__main__":
-    import neurapose.config_master as cm
+    import neurapose_backend.config_master as cm
     cm.imprimir_configs_yolo_botsort()
     main()
