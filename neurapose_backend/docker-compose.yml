@@ -1,0 +1,56 @@
+# ================================================================
+# NeuraPose Backend - Docker Compose
+# ================================================================
+# Orquestra o container da API com suporte a GPU
+
+services:
+  neurapose-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: neurapose-api
+    ports:
+      - "8000:8000"
+    volumes:
+      # Monta a pasta neurapose original (somente leitura)
+      - ../neurapose:/app/neurapose:ro
+      # Dados persistentes
+      - ./data:/app/data
+      # Modelos e datasets (leitura/escrita)
+      - ../neurapose/meus-modelos-treinados:/app/neurapose/meus-modelos-treinados
+      - ../neurapose/datasets:/app/neurapose/datasets
+      - ../neurapose/resultado_processamento:/app/neurapose/resultado_processamento
+    environment:
+      - PYTHONPATH=/app
+      - CUDA_VISIBLE_DEVICES=0
+      - TORCH_HOME=/app/data/torch_cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Opcional: Redis para cache de jobs (descomente se necessário)
+  # redis:
+  #   image: redis:alpine
+  #   container_name: neurapose-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+
+# volumes:
+#   redis_data:
+
+networks:
+  default:
+    name: neurapose-network

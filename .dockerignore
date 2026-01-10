@@ -1,0 +1,42 @@
+# Arquivos de ambiente virtual
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Lock files (opcional, pode querer manter)
+# uv.lock
+
+# Arquivos de IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Arquivos de sistema
+.DS_Store
+Thumbs.db
+
+# Logs e arquivos temporarios
+*.log
+*.tmp
+
+# Modelos grandes (baixar em runtime)
+# neurapose-backend/detector/models/*.pt
+# neurapose-backend/tracker/weights/*.pth
+# neurapose-backend/app/modelos/
+
+# Dados de usuario (usar volumes)
+# neurapose-backend/videos/*
+neurapose_backend/datasets/*
+neurapose_backend/meus-modelos-treinados/*
+neurapose_backend/resultado_processamento/*
+neurapose_backend/result-process-test*
+neurapose_backend/relatorios-teste/*
+neurapose_backend/retreinamentos/*
+
+# Manter estrutura de pastas
+!neurapose_backend/videos/.gitkeep
+!neurapose_backend/datasets/.gitkeep
+!neurapose_backend/meus-modelos-treinados/.gitkeep

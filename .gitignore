@@ -1,0 +1,32 @@
+# Python-generated files
+__pycache__/
+.venv
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+*node_modules/
+
+# Modelos pesados (apenas na pasta neurapose)
+neurapose_backend/**/*.pt
+neurapose_backend/**/*.pth
+neurapose_backend/**/*.onnx
+neurapose_backend/**/*.json
+neurapose_backend/**/*.pkl
+neurapose_backend/**/*.jpg
+
+neurapose_backend/datasets
+neurapose_backend/info
+neurapose_backend/resultados-processamentos
+neurapose_backend/videos
+neurapose_backend/modelos-lstm-treinados
+neurapose_backend/relatorios-testes/
+neurapose_backend/result-process-test
+
+# Backend - arquivos de dados (não código)
+neurapose_backend/data/
+neurapose_backend/logs/
+neurapose_backend/.env
+
+# Frontend (ainda não desenvolvido)

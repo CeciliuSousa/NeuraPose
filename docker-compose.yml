@@ -1,0 +1,62 @@
+# ============================================================
+# docker-compose.yml - NeuraPose
+# ============================================================
+# Orquestra o container NeuraPose com GPU e volumes persistentes.
+#
+# Uso:
+#   docker-compose up -d          # Inicia em background
+#   docker-compose exec neurapose bash   # Acessa o container
+#   docker-compose down           # Para o container
+# ============================================================
+
+services:
+  neurapose:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: neurapose-teste:1.0.0
+    container_name: neurapose
+
+    # Suporte a GPU NVIDIA
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+    # Volumes persistentes
+    volumes:
+      # Videos de entrada
+      - ./neurapose/videos:/app/neurapose/videos
+
+      # Datasets processados
+      - ./neurapose/datasets:/app/neurapose/datasets
+
+      # Modelos treinados
+      - ./neurapose/meus-modelos-treinados:/app/neurapose/meus-modelos-treinados
+
+      # Saida do pre-processamento
+      - ./neurapose/resultado_processamento:/app/neurapose/resultado_processamento
+
+      # Relatorios de teste
+      - ./neurapose/relatorios-teste:/app/neurapose/relatorios-teste
+
+      # Modelos pre-treinados (YOLO, RTMPose, OSNet)
+      - ./neurapose/detector/models:/app/neurapose/detector/models
+      - ./neurapose/app/modelos:/app/neurapose/app/modelos
+      - ./neurapose/tracker/weights:/app/neurapose/tracker/weights
+      - ./neurapose/pre_processamento/modelos:/app/neurapose/pre_processamento/modelos
+
+    # Mantem container rodando
+    stdin_open: true
+    tty: true
+
+    # Variaveis de ambiente
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - PYTHONUNBUFFERED=1
+
+    # Reinicia automaticamente
+    restart: unless-stopped
