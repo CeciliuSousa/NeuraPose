@@ -9,8 +9,10 @@ def pick_folder():
         # Set to topmost so it doesn't appear behind the browser
         root.attributes("-topmost", True)
         
+        initial_dir = sys.argv[1] if len(sys.argv) > 1 else None
+        
         # Open dialog
-        folder = filedialog.askdirectory()
+        folder = filedialog.askdirectory(initialdir=initial_dir)
         
         # Cleanup
         root.destroy()

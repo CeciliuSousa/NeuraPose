@@ -10,7 +10,8 @@ from ultralytics.utils.ops import xywh2xyxy
 from ultralytics.utils.plotting import save_one_box
 
 import torchvision.transforms as T
-from neurapose_backend.config_master import DEVICE
+from config_master import DEVICE
+
 
 class OSNetAIN(nn.Module):
     def __init__(self, state_dict):

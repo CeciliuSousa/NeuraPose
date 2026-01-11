@@ -4,9 +4,10 @@
 
 import cv2
 import numpy as np
-from neurapose_backend.pre_processamento.configuracao.config import (
+from pre_processamento.configuracao.config import (
     SIMCC_W, SIMCC_H, SIMCC_SPLIT_RATIO, MEAN, STD
 )
+
 
 def decode_simcc_output(simcc_x, simcc_y, split_ratio=SIMCC_SPLIT_RATIO):
     """

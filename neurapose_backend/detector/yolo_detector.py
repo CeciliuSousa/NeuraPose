@@ -10,10 +10,12 @@ from pathlib import Path
 from ultralytics import YOLO
 
 # Importacoes do tracker (usando interface modular via rastreador.py)
-from ..tracker.rastreador import CustomBoTSORT, CustomReID, save_temp_tracker_yaml
+from tracker.rastreador import CustomBoTSORT, CustomReID, save_temp_tracker_yaml
+
 
 # Importa nome do modelo YOLO e ROOT do config centralizado
-from neurapose_backend.config_master import YOLO_PATH, YOLO_MODEL, ROOT, DETECTION_CONF, YOLO_CLASS_PERSON, DEVICE
+from config_master import YOLO_PATH, YOLO_MODEL, ROOT, DETECTION_CONF, YOLO_CLASS_PERSON, DEVICE
+
 
 logging.getLogger("ultralytics").setLevel(logging.ERROR)
 os.environ["YOLO_VERBOSE"] = "False"
@@ -187,27 +189,15 @@ def yolo_detector_botsort(videos_dir=None):
             cap.release()
             continue
 
-        frame_idx = 0
         track_data = {}
-
-        # ============================================================
-        # COLETA DE TRACKS POR FRAME (start, end, frames)
-        # ============================================================
-        while True:
-            ret, _ = cap.read()
-            if not ret or frame_idx >= len(results):
-                break
-
-            r = results[frame_idx]
-
+        for idx, r in enumerate(results):
             if r.boxes is not None and len(r.boxes) > 0:
                 ids_tensor = r.boxes.id
                 if ids_tensor is None:
-                    frame_idx += 1
                     continue
 
                 ids = ids_tensor.cpu().numpy()
-                current_time = frame_idx / fps
+                current_time = idx / fps
 
                 for track_id in ids:
                     if track_id is None or track_id < 0:
@@ -225,16 +215,14 @@ def yolo_detector_botsort(videos_dir=None):
                             "start": current_time,
                             "end": current_time,
                             "features": [f],
-                            "frames": {frame_idx},
+                            "frames": {idx},
                         }
                     else:
                         track_data[tid]["end"] = current_time
-                        track_data[tid]["frames"].add(frame_idx)
+                        track_data[tid]["frames"].add(idx)
 
                         if len(track_data[tid]["features"]) < 20:
                             track_data[tid]["features"].append(f)
-
-            frame_idx += 1
 
         cap.release()
 

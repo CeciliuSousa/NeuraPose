@@ -8,14 +8,16 @@ from pathlib import Path
 from colorama import Fore, init as colorama_init
 
 # Importa configuracoes centralizadas
-from neurapose_backend.config_master import (
+from config_master import (
     PROCESSING_INPUT_DIR,
     PROCESSING_OUTPUT_DIR,
     RTMPOSE_PREPROCESSING_PATH,
 )
 
-from neurapose_backend.pre_processamento.utils.ferramentas import imprimir_banner, carregar_sessao_onnx
-from neurapose_backend.pre_processamento.pipeline.processador import processar_video
+
+from pre_processamento.utils.ferramentas import imprimir_banner, carregar_sessao_onnx
+from pre_processamento.pipeline.processador import processar_video
+
 
 import warnings
 warnings.filterwarnings("ignore")

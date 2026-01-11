@@ -4,7 +4,8 @@
 
 import torch
 from torch.utils.data import Dataset
-from ..modulos.augmentation import TimeSeriesAugmenter
+from LSTM.modulos.augmentation import TimeSeriesAugmenter
+
 
 class AugmentedDataset(Dataset):
     def __init__(self, X, y, augment=False):

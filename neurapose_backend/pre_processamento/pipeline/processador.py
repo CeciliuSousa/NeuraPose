@@ -9,8 +9,9 @@ from pathlib import Path
 from tqdm import tqdm
 from colorama import Fore
 
-from neurapose_backend.detector.yolo_detector import yolo_detector_botsort
-from neurapose_backend.config_master import (
+from detector.yolo_detector import yolo_detector_botsort
+
+from config_master import (
     SIMCC_W, 
     SIMCC_H, 
     POSE_CONF_MIN,
@@ -18,14 +19,23 @@ from neurapose_backend.config_master import (
     FRAME_DISPLAY_W,
     FRAME_DISPLAY_H,
 )
-from neurapose_backend.pre_processamento.utils.geometria import (
+
+from pre_processamento.utils.geometria import (
     _calc_center_scale,
     get_affine_transform,
     transform_preds
 )
+
 from neurapose_backend.pre_processamento.utils.visualizacao import desenhar_esqueleto, color_for_id
 from neurapose_backend.pre_processamento.modulos.rtmpose import preprocess_rtmpose_input, decode_simcc_output
 from neurapose_backend.pre_processamento.modulos.suavizacao import EmaSmoother
+
+# Para integração com o preview do site
+try:
+    from neurapose_backend.app.state import ProcessingState
+    state_notifier = ProcessingState()
+except:
+    state_notifier = None
 
 def calcular_deslocamento(p_inicial, p_final):
     """Calcula a distância em pixels entre o ponto inicial e final."""
@@ -42,33 +52,44 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     preds_dir.mkdir(parents=True, exist_ok=True)
     json_dir.mkdir(parents=True, exist_ok=True)
 
-    cap_in = cv2.VideoCapture(str(video_path))
-    W = int(cap_in.get(cv2.CAP_PROP_FRAME_WIDTH))
-    H = int(cap_in.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps_out = FPS_TARGET
+    cap_test = cv2.VideoCapture(str(video_path))
+    orig_fps = cap_test.get(cv2.CAP_PROP_FPS)
+    cap_test.release()
+    
+    # Se o FPS original estiver próximo o suficiente do target (ex: 29.97 vs 30), pulamos o pass de escrita
+    if abs(orig_fps - FPS_TARGET) < 0.5:
+        print(Fore.CYAN + f"[INFO] FPS original ({orig_fps:.2f}) adequado. Pulando normalização.")
+        norm_path = video_path
+    else:
+        print(Fore.CYAN + f"[INFO] Normalizando FPS de {orig_fps:.2f} para {FPS_TARGET}...")
+        cap_in = cv2.VideoCapture(str(video_path))
+        W = int(cap_in.get(cv2.CAP_PROP_FRAME_WIDTH))
+        H = int(cap_in.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        
+        norm_path = videos_dir / f"{video_path.stem}_{int(FPS_TARGET)}fps.mp4"
+        writer_norm = cv2.VideoWriter(
+            str(norm_path),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            FPS_TARGET,
+            (W, H)
+        )
 
-    norm_path = videos_dir / f"{video_path.stem}_{int(fps_out)}fps.mp4"
+        while True:
+            ok, frame = cap_in.read()
+            if not ok: break
+            writer_norm.write(frame)
 
-    writer_norm = cv2.VideoWriter(
-        str(norm_path),
-        cv2.VideoWriter_fourcc(*"mp4v"),
-        fps_out,
-        (W, H)
-    )
+        cap_in.release()
+        writer_norm.release()
 
-    while True:
-        ok, frame = cap_in.read()
-        if not ok:
-            break
-        writer_norm.write(frame)
-
-    cap_in.release()
-    writer_norm.release()
-
+    # Reabre o vídeo (normalizado ou original) para o pipeline
     cap = cv2.VideoCapture(str(norm_path))
+    W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps_out = int(cap.get(cv2.CAP_PROP_FPS))
 
-    out_video = preds_dir / f"{video_path.stem}_{int(fps_out)}fps_pose.mp4"
+    out_video = preds_dir / f"{video_path.stem}_{fps_out}fps_pose.mp4"
     writer_pred = cv2.VideoWriter(
         str(out_video),
         cv2.VideoWriter_fourcc(*"mp4v"),
@@ -98,12 +119,9 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
 
         if regs is None or len(regs) == 0 or regs.id is None:
             writer_pred.write(frame)
-            if show:
-                frame_resized = cv2.resize(frame, (FRAME_DISPLAY_W, FRAME_DISPLAY_H))
-                cv2.imshow("Inferencia", frame_resized)
-                if cv2.waitKey(1) == ord("q"):
-                    break
-
+            if show and state_notifier:
+                state_notifier.set_frame(frame)
+            
             frame_idx += 1
             pbar.update(1)
             continue
@@ -152,12 +170,8 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
             })
 
         writer_pred.write(frame)
-
-        if show:
-            frame_resized = cv2.resize(frame, (FRAME_DISPLAY_W, FRAME_DISPLAY_H))
-            cv2.imshow("Inferencia", frame_resized)
-            if cv2.waitKey(1) == ord("q"):
-                break
+        if show and state_notifier:
+            state_notifier.set_frame(frame)
 
         frame_idx += 1
         pbar.update(1)

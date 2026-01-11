@@ -32,6 +32,7 @@ Thumbs.db
 neurapose_backend/datasets/*
 neurapose_backend/meus-modelos-treinados/*
 neurapose_backend/resultado_processamento/*
+neurapose_backend/resultado_reidentificacao/*
 neurapose_backend/result-process-test*
 neurapose_backend/relatorios-teste/*
 neurapose_backend/retreinamentos/*

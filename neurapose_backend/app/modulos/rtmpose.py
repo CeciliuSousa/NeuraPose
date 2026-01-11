@@ -4,9 +4,10 @@
 
 import cv2
 import numpy as np
-from ..configuracao.config import (
+from app.configuracao.config import (
     SIMCC_W, SIMCC_H, SIMCC_SPLIT_RATIO, MEAN, STD
 )
+
 
 def decode_simcc_output(simcc_x, simcc_y, split_ratio=SIMCC_SPLIT_RATIO):
     """

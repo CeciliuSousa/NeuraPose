@@ -3,7 +3,8 @@
 # ==============================================================
 
 import numpy as np
-from ..configuracao.config import EMA_ALPHA, EMA_MIN_CONF
+from app.configuracao.config import EMA_ALPHA, EMA_MIN_CONF
+
 
 def _expand_bbox(x1, y1, x2, y2, margin, W, H):
     """

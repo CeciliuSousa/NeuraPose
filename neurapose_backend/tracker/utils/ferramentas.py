@@ -7,7 +7,8 @@ import numpy as np
 from pathlib import Path
 
 # Importa configuracoes centralizadas
-from neurapose_backend.config_master import BOT_SORT_CONFIG, BOTSORT_YAML_PATH
+from config_master import BOT_SORT_CONFIG, BOTSORT_YAML_PATH
+
 
 def cosine_similarity(a, b):
     a = np.asarray(a)

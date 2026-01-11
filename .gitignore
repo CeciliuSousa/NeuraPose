@@ -19,6 +19,7 @@ neurapose_backend/**/*.jpg
 neurapose_backend/datasets
 neurapose_backend/info
 neurapose_backend/resultados-processamentos
+neurapose_backend/resultados-reidentificacao
 neurapose_backend/videos
 neurapose_backend/modelos-lstm-treinados
 neurapose_backend/relatorios-testes/

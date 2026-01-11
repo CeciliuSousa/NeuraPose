@@ -7,7 +7,7 @@ import onnxruntime as ort
 from pathlib import Path
 from yt_dlp import YoutubeDL
 from colorama import Fore
-from neurapose_backend.app.configuracao.config import (
+from app.configuracao.config import (
     YOLO_PATH,
     OSNET_PATH,
     RTMPOSE_PATH,
@@ -19,6 +19,7 @@ from neurapose_backend.app.configuracao.config import (
     MODEL_NAME, 
     DATASET_NAME 
 )
+
 
 def status_str(ok: bool):
     """Retorna uma string colorida indicando sucesso ou falha."""

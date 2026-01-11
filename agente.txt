@@ -1,0 +1,33 @@
+Permita me ser mais claro! O frontend deve fazer requisições no backend para fazer tarefas como! 
+
+- uv run python -m neurapose_backend.pre_processamento.processar --input-folder "neurapose_backend/videos/<meus-videos>" (flags: --show ou sem --show para não mostrar os vídeos processando em tempo real --output-folder "neurapose/resutaldos-/<meus-videos>") (por padrão ele já deve salvar algo como "meus-videos" em resultados-processamentos)
+
+- uv run python -m neurapose_backend.pre_processamento.reid-manual --input-dir "neurapose_backend/resultados-reidentificacoes" (por padrão ele já deve salvar algo como "meus-videos-reid" em resultados-reidentificacoes)
+
+- uv run python -m neurapose_backend.pre_processamento.anotando_classes --input-dir-process "neurapose_backend/resultados_reidetificacoes/<videos que foram processados depois passam por uma reidentificalçao>" (algumas flags extras --min-frames 10 --positive-class furto --negative-class normal, caso necesário, podem ser opões dentro do site e caixas de textos para classes por exemplo) (aqui ele gera um arquivo json chamado labels.json dentro de uma pasta anotacoes)
+
+- uv run python -m neurapose_backend.pre_processamento.split_dataset_label --input-dir-process "neurapose_backend/resultados_reidetificacoes/<vídeos que foram processados, reidentifcados e depois anotados>" (flags: --dataset-name data-labex-v2 --output-root neurapose/datasets --train-split treino --test-split teste) (aqui ele já deve salvar algo em datasets como "meus-videos-reid" já que o processo de split vai ter que ser feito nas pasta onde tem o anotacoes/labels.json)
+
+- uv run python -m neurapose_backend.LSTM.pipeline.treinador --dataset neurapose_backend/datasets/<ex: meu-dataset>/treino/data/data.pt --annotations neurapose_backend/datasets/<ex: meu-dataset>/treino/anotacoes/labels.json (flags: --model tft --epochs 5000 --name tft-data-labex-teste)
+
+- uv run python -m neurapose_backend.app.testar_modelo --model tft --relatorio tft-data-labex-teste --input-dir neurapose_backend/datasets/<meu-dataset>/teste2/videos --show
+
+todas as configurações, flags, caminhos de entrada e de saída devem ser exibidos no front, a ideia é facilitar e aumentar a produtividade pq esses processos são todos feitos via terminal e demora bastante, a ideia é adaptar tudo para funcionar dentro do site do mesmo jeito que já funciona via terminal! 
+
+você irá encontrar todas essa configurações dentro dos módulos de neurapose_backend, nas pastas app, pre_processamento, detector, LSTM e tracker! 
+
+faça adaptação de todas as tarefas de cada uma dessas etapas dentro do site, em processamento não precisamos específicar o OSNet, podemos deixar isso para a pagina configurações, no lugar dela em processamento podemos colocar a opção de escolher entre cpu e gpu! aliás essas informações deve ser exibidas no dashboard, sobre cpu, gpu, ram e etc! 
+
+tudo já está pronto dentro os módulos em neurapose_backend, tudo que precisamos fazer é adaptar na api para funcionar dentro do frontend! 
+
+nas partes de adicionar caminhos das pastas, coloque o explorador nativo igual ao que tem na página de processamento, coloque os caminhos padrões, exemplo em processamento tempos a entrada em vídeos e a saída em resultados-processamentos! podemos fazer a mesma coisa para as outras paginas, temos pastas para modelos-lstm-treinados, temos para resultados-processamentos de processar.py, temos para resultados-reidentifcacoes para guardar processos do reid-manual.py, datasets para guardar os splits, o processo de anotar vai gerar um arquivo anotacoes/labels.json com uma pequena mudança das pasta "resutados-processamento" para "resutaldos-reidentificacoes" já que esse banco filtrado que vai ser usado para treinar o lstm! com informações mais limpas.
+
+O FRONTEND DEVE SER FLEXIVEL COM OS COMANDOS QUE EU FAZIA NO TERMINAL, TODAS AS CONFIGURAÇÕES JÁ CONFIGURADAS NOS CÓDIGOS .PY DENTRO DAS SUBPASTAS DE NEURAPOSE DEVE REFLETIR CADA UMA EM SUA PÁGINA ESPECÍFICA, EXEMPLO EM PROCESSAMENTO NÃO PRECISAMOS DE ALGO COMO (--BATCH OU --EPOCAS OU MUITAS OUTRAS CONFIGURAÇÕES QUE VÃO SER EXCLUSIVAS DE OUTRAS TAREFAS, CADA QUAL COM SUAS PRÓPRIAS CONFIGURAÇÕES)
+
+TODAS AS CONFIGURAÇÕES NA PAGINA CONFIGURAÇÕES DEVE REFLETIR NO BACKEND, ELAS VÃO SEMPRE RECEBER UM PADRÃO DE CONNFIG_MASTER SEMPRE QUE RENICIAR OS SERVIDORES OU APERTAR EM RESTAURAR NO FRONTE, CASO O USUÁRIO SALVE ALGUMAS CONFIGURAÇÕES DIFERENTES, ESSAS CONFIGURAÇÕES DEVEM SER SALVAS NO BACKEND EM UM ARQUIVO DIFERENTE, ASSIM O USUÁRIO PODE ALTERAR ENTRE AS PADRÕES DO CONFIG_MASTER E AS QUE ELE MESMO SALVOU! 
+
+NO BACKEND PRETENDO COLOCAR OUTRS MODELOS OSNET, OUTROS MODELOS YOLO, OUTROS MODELOS RTMPOSE (DE DIFRENTES DIMENSÕES), NO FRONTEND DEVE TER UM BARRA DE SELECIONAR AS OPÇÕES QUE O FRONTEND BUSCAR ATRAVÉS DO BACKEND! 
+
+AS FUNCIONALIDADES DE ALGUMAS PAGINAS DO BACKEND NÃO DEVEM FICAR EXPOSTAS QUANDO O USUÁRIO FOR TENTAR ACESSAR PELO EXPLORAR NATIVO DO SITE, AO TENTAR ACESSAR O EXPLORAR DO COMPUTADOR, DEVE SER EXIBIDA SOMENTE A PAGINA DO APP COMO NEURAPOSE-APP/BACKEND AQUI DEVE MOSTRAR SOMENTE AS PASTAS DOS PROCESSAMENTOS, ANOTAÇÕES, REIDENTICACÇÕES, DATASETS E ETC! PASTAS COMO APP, PRE_PROCESSAMENTO, LSTM, DETECTOR, TRACKER, CONFIG_MASTER E ETC DEVEM FICA RESTRITAS NO FRONTEND, EM HIPOTESE NENHUMA TEMOS A NESSECIDADE DE LIBERAR CONTEUDOS DELAS!  
+
+EM HIPÒTESE NENHUMA RODE COMANDOS DE TERMINAL, NEM ME PEÇA PARA RODAR COMANDOS DE TERMINAL, PARA NÃO ACABAR TRAVANDO NO MEIO DAS EDIÇÕES, FAÇA TODO UM PLANEJAMENTO EM PORTUGUES-BR

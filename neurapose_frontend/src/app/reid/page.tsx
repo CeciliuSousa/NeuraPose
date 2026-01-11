@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/ui/page-header';
-import { Play, ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RefreshCw, FileVideo } from 'lucide-react';
+import { Play, ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RefreshCw, FileVideo, RotateCcw } from 'lucide-react';
 import { APIService, ReIDVideo, ReIDData } from '@/services/api';
 
 export default function ReidPage() {
@@ -10,26 +10,54 @@ export default function ReidPage() {
     const [videos, setVideos] = useState<ReIDVideo[]>([]);
     const [selectedVideo, setSelectedVideo] = useState<ReIDVideo | null>(null);
     const [reidData, setReidData] = useState<ReIDData | null>(null);
-    const [rootPath, setRootPath] = useState('');
+    const [inputPath, setInputPath] = useState('');
+    const [outputPath, setOutputPath] = useState('');
 
-    // Rules State
+    // Anotações Atuais (Vídeo Selecionado)
     const [swaps, setSwaps] = useState<{ src: number; tgt: number; start: number; end: number }[]>([]);
     const [deletions, setDeletions] = useState<{ id: number; start: number; end: number }[]>([]);
     const [cuts, setCuts] = useState<{ start: number; end: number }[]>([]);
 
-    // Form Inputs
+    // Lote de Anotações (Todos os vídeos)
+    const [batchAnnotations, setBatchAnnotations] = useState<Record<string, any>>({});
+
+    // Forms
     const [swapForm, setSwapForm] = useState({ src: '', tgt: '', range: '' });
     const [delForm, setDelForm] = useState({ id: '', range: '' });
     const [cutForm, setCutForm] = useState({ range: '' });
 
     useEffect(() => {
+        // Load settings
+        const savedInput = localStorage.getItem('np_reid_input');
+        const savedOutput = localStorage.getItem('np_reid_output');
+        const savedBatch = localStorage.getItem('np_reid_batch');
+
+        if (savedInput) setInputPath(savedInput);
+        if (savedOutput) setOutputPath(savedOutput);
+        if (savedBatch) setBatchAnnotations(JSON.parse(savedBatch));
+
+        // Load defaults if empty
+        APIService.getConfig().then(res => {
+            if (res.data.status === 'success') {
+                const { processing_output, reid_output } = res.data.paths;
+                if (!savedInput) setInputPath(processing_output);
+                if (!savedOutput) setOutputPath(reid_output);
+            }
+        });
+
         loadVideos();
     }, []);
+
+    useEffect(() => {
+        localStorage.setItem('np_reid_input', inputPath);
+        localStorage.setItem('np_reid_output', outputPath);
+        localStorage.setItem('np_reid_batch', JSON.stringify(batchAnnotations));
+    }, [inputPath, outputPath, batchAnnotations]);
 
     const loadVideos = async () => {
         setLoading(true);
         try {
-            const res = await APIService.listReIDVideos(rootPath || undefined);
+            const res = await APIService.listReIDVideos(inputPath || undefined);
             setVideos(res.data.videos);
         } catch (error) {
             console.error(error);
@@ -39,19 +67,38 @@ export default function ReidPage() {
     };
 
     const handleSelectVideo = async (video: ReIDVideo) => {
+        if (selectedVideo && (swaps.length > 0 || deletions.length > 0 || cuts.length > 0)) {
+            // Auto-save current annotations to batch
+            saveToBatch(selectedVideo.id);
+        }
+
         setSelectedVideo(video);
         setReidData(null);
-        setSwaps([]);
-        setDeletions([]);
-        setCuts([]);
+
+        // Load from batch if exists
+        const saved = batchAnnotations[video.id];
+        setSwaps(saved?.rules || []);
+        setDeletions(saved?.deletions || []);
+        setCuts(saved?.cuts || []);
 
         try {
-            // Load Data
-            const res = await APIService.getReIDData(video.id, rootPath || undefined);
+            const res = await APIService.getReIDData(video.id, inputPath || undefined);
             setReidData(res.data);
         } catch (error) {
             console.error("Erro ao carregar dados do video", error);
         }
+    };
+
+    const saveToBatch = (videoId: string) => {
+        setBatchAnnotations(prev => ({
+            ...prev,
+            [videoId]: {
+                video_id: videoId,
+                rules: swaps,
+                deletions: deletions,
+                cuts: cuts
+            }
+        }));
     };
 
     const parseRange = (rangeStr: string): [number, number] => {
@@ -84,23 +131,43 @@ export default function ReidPage() {
         setCuts([...cuts, { start, end }]);
         setCutForm({ range: '' });
     };
-
-    const handleApply = async () => {
-        if (!selectedVideo) return;
-        setLoading(true);
-        try {
-            const payload = {
+    const handleApplyBatch = async () => {
+        // Save current one first
+        if (selectedVideo) {
+            const currentAnnotations = {
+                video_id: selectedVideo.id,
                 rules: swaps,
                 deletions: deletions,
                 cuts: cuts
             };
-            const res = await APIService.applyReIDChanges(selectedVideo.id, payload, rootPath || undefined);
-            alert(`Processamento concluído! Novo vídeo em: ${res.data.output_video}`);
-        } catch (error) {
-            console.error(error);
-            alert('Erro ao aplicar mudanças.');
-        } finally {
-            setLoading(false);
+            const updatedBatch = { ...batchAnnotations, [selectedVideo.id]: currentAnnotations };
+
+            const list = Object.values(updatedBatch).filter((v: any) =>
+                v.rules.length > 0 || v.deletions.length > 0 || v.cuts.length > 0
+            );
+
+            if (list.length === 0) {
+                alert("Nenhuma anotação pendente para salvar.");
+                return;
+            }
+
+            if (!confirm(`Deseja processar ${list.length} vídeos agora? Saída em: ${outputPath}`)) return;
+
+            setLoading(true);
+            try {
+                await APIService.batchApplyReID({
+                    videos: list,
+                    root_path: inputPath,
+                    output_path: outputPath
+                });
+                alert("Processamento em lote iniciado no backend!");
+                setBatchAnnotations({}); // Clear after starting
+            } catch (error) {
+                console.error(error);
+                alert('Erro ao iniciar processamento em lote.');
+            } finally {
+                setLoading(false);
+            }
         }
     };
 
@@ -110,21 +177,46 @@ export default function ReidPage() {
                 title="Re-identificação Manual"
                 description="Corrija IDs, remova ruídos e corte trechos indesejados."
             >
-                <div className="flex gap-2">
-                    <input
-                        type="text"
-                        placeholder="Pasta personalizada..."
-                        className="px-3 py-1 text-sm rounded bg-background border border-border"
-                        value={rootPath}
-                        onChange={(e) => setRootPath(e.target.value)}
-                    />
-                    <button
-                        onClick={() => loadVideos()}
-                        className="p-2 hover:bg-muted rounded transition-colors"
-                        title="Recarregar Vídeos"
-                    >
-                        <RefreshCw className="w-4 h-4" />
-                    </button>
+                <div className="flex flex-col md:flex-row items-center justify-between border-b border-border pb-6 gap-4">
+                    <div className="flex items-center gap-3">
+                        <div className="p-3 bg-primary/10 rounded-xl">
+                            <ScanFace className="w-8 h-8 text-primary" />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-bold tracking-tight">Re-identificação Manual</h1>
+                            <p className="text-muted-foreground italic truncate max-w-md">Limpeza e correção de IDs em massa.</p>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-1 max-w-2xl gap-2">
+                        <div className="flex-1 space-y-1">
+                            <label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Pasta Processada (Input)</label>
+                            <div className="flex gap-1">
+                                <input
+                                    value={inputPath}
+                                    onChange={(e) => setInputPath(e.target.value)}
+                                    className="flex-1 bg-secondary/50 border border-border text-xs py-2 px-3 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                                    placeholder="Caminho do processamento..."
+                                />
+                                <button
+                                    onClick={loadVideos}
+                                    className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
+                                    title="Carregar Vídeos"
+                                >
+                                    <RotateCcw className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 space-y-1">
+                            <label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Pasta ReID (Output)</label>
+                            <input
+                                value={outputPath}
+                                onChange={(e) => setOutputPath(e.target.value)}
+                                className="w-full bg-secondary/50 border border-border text-xs py-2 px-3 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
+                                placeholder="Caminho de saída..."
+                            />
+                        </div>
+                    </div>
                 </div>
             </PageHeader>
 
@@ -167,7 +259,7 @@ export default function ReidPage() {
                             {/* Video Player Area */}
                             <div className="bg-black aspect-video rounded-xl overflow-hidden relative group">
                                 <video
-                                    src={`/api/reid/video/${selectedVideo.id}?root_path=${encodeURIComponent(rootPath)}`}
+                                    src={`/api/reid/video/${selectedVideo.id}?root_path=${encodeURIComponent(inputPath)}`}
                                     controls
                                     className="w-full h-full object-contain"
                                 />
@@ -263,21 +355,38 @@ export default function ReidPage() {
                                 </div>
                             </div>
 
-                            <div className="pt-4 pb-10">
+                            <div className="pt-4 pb-10 flex gap-4">
                                 <button
-                                    onClick={handleApply}
+                                    onClick={() => selectedVideo && saveToBatch(selectedVideo.id)}
+                                    className="flex-1 py-4 bg-secondary text-foreground font-semibold rounded-xl hover:bg-muted transition-colors flex items-center justify-center gap-2"
+                                >
+                                    Agendar para Lote
+                                </button>
+                                <button
+                                    onClick={handleApplyBatch}
                                     disabled={loading}
-                                    className="w-full py-4 bg-primary text-primary-foreground font-bold rounded-xl hover:brightness-110 flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
+                                    className="flex-[2] py-4 bg-primary text-primary-foreground font-bold rounded-xl hover:brightness-110 flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
                                 >
                                     <Save className="w-5 h-5" />
-                                    {loading ? 'Processando (Pode demorar)...' : 'Aplicar Mudanças e Salvar'}
+                                    {loading ? 'Processando Lote...' : 'Salvar Reidentificações (Lote)'}
                                 </button>
                             </div>
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50">
-                            <ScanFace className="w-16 h-16 mb-4" />
-                            <p>Selecione um vídeo para começar</p>
+                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50 space-y-4">
+                            <ScanFace className="w-20 h-20" />
+                            <div className="text-center">
+                                <p className="text-xl font-semibold">Nenhum vídeo selecionado</p>
+                                <p className="text-sm">Selecione um vídeo na lateral para iniciar as anotações.</p>
+                            </div>
+                            {Object.keys(batchAnnotations).length > 0 && (
+                                <button
+                                    onClick={handleApplyBatch}
+                                    className="mt-8 px-6 py-3 bg-primary/20 text-primary border border-primary/30 rounded-lg hover:bg-primary/30 transition-all font-bold"
+                                >
+                                    Processar {Object.keys(batchAnnotations).length} vídeos pendentes
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>

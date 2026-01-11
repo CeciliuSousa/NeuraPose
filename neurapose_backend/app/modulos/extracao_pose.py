@@ -5,7 +5,7 @@
 import cv2
 import numpy as np
 from tqdm import tqdm
-from ..configuracao.config import (
+from app.configuracao.config import (
     CLASSE1,
     CLASSE2,
     SIMCC_W,
@@ -15,22 +15,28 @@ from ..configuracao.config import (
     CLASSE2_THRESHOLD,
     MODEL_NAME
 )
-from ..modulos.processamento_sequencia import (
+
+from app.modulos.processamento_sequencia import (
     EmaSmoother, 
     _expand_bbox, 
     montar_sequencia_individual
 )
-from ..utils.geometria import (
+
+from app.utils.geometria import (
     get_affine_transform,
     transform_preds,
     _calc_center_scale
 )
-from ..modulos.rtmpose import (
+
+from app.modulos.rtmpose import (
     decode_simcc_output,
     preprocess_rtmpose_input
 )
-from ..modulos.inferencia_lstm import rodar_lstm_uma_sequencia
-from ..utils.visualizacao import desenhar_esqueleto, desenhar_info_predicao
+
+from app.modulos.inferencia_lstm import rodar_lstm_uma_sequencia
+
+from app.utils.visualizacao import desenhar_esqueleto, desenhar_info_predicao
+
 
 
 def extrair_keypoints_rtmpose_padronizado(

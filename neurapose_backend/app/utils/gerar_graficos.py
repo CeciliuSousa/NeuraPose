@@ -10,11 +10,12 @@ from pathlib import Path
 from typing import Dict, Any
 from colorama import Fore
 
-from neurapose_backend.app.configuracao.config import (
+from app.configuracao.config import (
     CLASSE1,
     CLASSE2,
     TEMPORAL_MODEL
 )
+
 
 # Configuração de estilo profissional
 sns.set_style("whitegrid")

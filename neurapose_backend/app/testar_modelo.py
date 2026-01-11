@@ -19,17 +19,20 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Configuracoes
-from neurapose_backend.app.configuracao.config import (
+from app.configuracao.config import (
     CLASSE1, CLASSE2, DATASET_DIR, RTMPOSE_PATH, MODEL_DIR, METRICAS_DIR,
     LABELS_TEST_PATH, DEVICE,
     MODEL_NAME, BEST_MODEL_PATH,
     args as config_args
 )
 
-from neurapose_backend.app.utils.ferramentas import verificar_recursos, imprimir_banner, carregar_sessao_onnx
-from neurapose_backend.app.pipeline.processador_video import processar_video
-from neurapose_backend.app.utils.gerar_graficos import gerar_todos_graficos
-from neurapose_backend.LSTM import ClassifierFactory
+
+from app.utils.ferramentas import verificar_recursos, imprimir_banner, carregar_sessao_onnx
+from app.pipeline.processador_video import processar_video
+
+from app.utils.gerar_graficos import gerar_todos_graficos
+from LSTM import ClassifierFactory
+
 
 colorama_init(autoreset=True)
 args = config_args

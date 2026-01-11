@@ -6,7 +6,8 @@
 
 import cv2
 import numpy as np
-from neurapose_backend.pre_processamento.configuracao.config import SIMCC_W, SIMCC_H
+from pre_processamento.configuracao.config import SIMCC_W, SIMCC_H
+
 
 def get_dir(src_point, rot_rad):
     """Calcula vetor de direção rotacionado."""

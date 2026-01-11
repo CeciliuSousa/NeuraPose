@@ -3,7 +3,8 @@
 # ==============================================================
 
 import torch
-from ..configuracao.config import DEVICE
+from app.configuracao.config import DEVICE
+
 
 def rodar_lstm_uma_sequencia(seq_np, model, mu, sigma):
     """

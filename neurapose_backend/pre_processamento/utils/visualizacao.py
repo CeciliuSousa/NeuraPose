@@ -6,7 +6,8 @@
 import cv2
 import numpy as np
 import hashlib
-from neurapose_backend.pre_processamento.configuracao.config import PAIRS
+from pre_processamento.configuracao.config import PAIRS
+
 
 def _hash_to_color(i: int):
     """Gera uma cor consistente baseada no hash do ID."""

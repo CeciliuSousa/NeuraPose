@@ -22,22 +22,25 @@ from pathlib import Path
 from collections import Counter
 from colorama import Fore, init as colorama_init
 
-from neurapose_backend.config_master import (
+from config_master import (
     PROCESSING_OUTPUT_DIR,
     REID_MANUAL_SUFFIX,
     REID_MANUAL_LABELS_FILENAME,
 )
 
-from neurapose_backend.pre_processamento.anotando_classes import (
+
+from pre_processamento.anotando_classes import (
     listar_jsons,
     encontrar_video_para_json,
     carregar_pose_records,
     salvar_json,
 )
 
+
 # Visualizacao de esqueletos (utilitários prontos)
-from neurapose_backend.pre_processamento.utils.visualizacao import desenhar_esqueleto, color_for_id
-from neurapose_backend.pre_processamento.configuracao.config import POSE_CONF_MIN
+from pre_processamento.utils.visualizacao import desenhar_esqueleto, color_for_id
+from pre_processamento.configuracao.config import POSE_CONF_MIN
+
 
 # ==============================================================================
 # 0. FUNÇÕES LÓGICAS DE CORTE E REGRAS

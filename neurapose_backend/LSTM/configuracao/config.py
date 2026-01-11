@@ -5,7 +5,7 @@
 import argparse
 
 # Importa valores do config_master para usar como defaults
-from neurapose_backend.config_master import (
+from config_master import (
     EPOCHS,
     BATCH_SIZE,
     LEARNING_RATE,
@@ -19,11 +19,12 @@ from neurapose_backend.config_master import (
     TRAINED_MODEL_NAME,
 )
 
+
 # Importa classes de modelos
-from ..models.models import (
+from LSTM.models.models import (
     LSTM, RobustLSTM, PooledLSTM, BILSTM, AttentionLSTM,
     TCN, TransformerModel, TemporalFusionTransformer, WaveNet
-) 
+)
 
 def get_config():
     """

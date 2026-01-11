@@ -19,10 +19,11 @@ from sklearn.model_selection import train_test_split
 
 
 # Configuracoes centralizadas (valores padrao)
-from neurapose_backend.config_master import (
+from config_master import (
     PROCESSING_DATASET,
     PROCESSING_OUTPUT_DIR,
     PROCESSING_VIDEOS_DIR,
+
     PROCESSING_JSONS_DIR,
     TEST_DATASETS_ROOT,
     TRAIN_SPLIT,

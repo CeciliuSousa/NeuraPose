@@ -9,8 +9,9 @@ from ultralytics.trackers.utils.kalman_filter import KalmanFilterXYWH
 from ultralytics.trackers.utils import matching
 from ultralytics.trackers.utils.gmc import GMC
 
-from neurapose_backend.config_master import BOT_SORT_CONFIG
-from neurapose_backend.tracker.modulos.reid import CustomReID
+from config_master import BOT_SORT_CONFIG
+from tracker.modulos.reid import CustomReID
+
 
 class CustomBoTSORT(BOTSORT_ORIGINAL):
     def __init__(self, frame_rate=30):

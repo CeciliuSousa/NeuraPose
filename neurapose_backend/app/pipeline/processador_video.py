@@ -9,8 +9,9 @@ from pathlib import Path
 from colorama import Fore
 
 # Importações do projeto
-from neurapose_backend.detector.yolo_detector import yolo_detector_botsort as yolo_detector
-from neurapose_backend.app.configuracao.config import (
+from detector.yolo_detector import yolo_detector_botsort as yolo_detector
+
+from app.configuracao.config import (
     CLASSE1,
     CLASSE2,
     PREDICOES_DIR,
@@ -18,11 +19,13 @@ from neurapose_backend.app.configuracao.config import (
     RELATORIOS_ROOT,
     CLASSE2_THRESHOLD,
 )
-from neurapose_backend.app.modulos.extracao_pose import extrair_keypoints_rtmpose_padronizado
-from neurapose_backend.app.modulos.processamento_sequencia import montar_sequencia_individual
-from neurapose_backend.app.modulos.inferencia_lstm import rodar_lstm_uma_sequencia
-from neurapose_backend.app.modulos.tracking import TrackHistory
-from neurapose_backend.app.utils.visualizacao import gerar_video_predicao
+
+from app.modulos.extracao_pose import extrair_keypoints_rtmpose_padronizado
+from app.modulos.processamento_sequencia import montar_sequencia_individual
+from app.modulos.inferencia_lstm import rodar_lstm_uma_sequencia
+from app.modulos.tracking import TrackHistory
+from app.utils.visualizacao import gerar_video_predicao
+
 
 
 def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_preview=False):

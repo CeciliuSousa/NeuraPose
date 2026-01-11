@@ -247,12 +247,12 @@ OSNET_PATH = OSNET_DIR / OSNET_MODEL
 # PATHS DE PRE-PROCESSAMENTO
 # ==============================================================
 # Input: pasta com videos RAW para processar
-# Exemplo: videos/data-labex-completo
-PROCESSING_INPUT_DIR = ROOT / "videos" / PROCESSING_DATASET
+# Exemplo: videos/
+PROCESSING_INPUT_DIR = ROOT / "videos"
 
 # Output: pasta onde serao salvos os dados processados
-# Exemplo: resultado_processamento/data-labex-completo/
-PROCESSING_OUTPUT_DIR = ROOT / "resultado_processamento" / PROCESSING_DATASET
+# Exemplo: resultados-processamentos/
+PROCESSING_OUTPUT_DIR = ROOT / "resultados-processamentos"
 
 # Subpastas de saida do processamento
 PROCESSING_VIDEOS_DIR = PROCESSING_OUTPUT_DIR / "videos"
@@ -263,6 +263,9 @@ PROCESSING_ANNOTATIONS_DIR = PROCESSING_OUTPUT_DIR / "anotacoes"
 # -------------------------------------------------------------
 # REID MANUAL (Ferramenta de correção manual de IDs persistentes)
 # -------------------------------------------------------------
+# Pasta padrao de saida para ReID
+REID_OUTPUT_DIR = ROOT / "resultados-reidentificacao"
+
 # Sufixo a ser aplicado no nome do diretório de saída (ex: "teste" -> "teste-reid")
 REID_MANUAL_SUFFIX = "-reid"
 # Nome do arquivo de labels gerado pelo reid-manual (mapping por vídeo)

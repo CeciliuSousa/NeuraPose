@@ -1,16 +1,24 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import api from '@/services/api';
+import { APIService } from '@/services/api';
 import {
   Activity,
   Video,
   Database,
   AlertCircle,
   CheckCircle2,
-  Cpu
+  Cpu,
+  Zap,
+  HardDrive
 } from 'lucide-react';
 import Link from 'next/link';
+
+interface SystemInfo {
+  cpu: { usage: number; cores: number };
+  ram: { total: number; available: number; used: number; percent: number };
+  gpu: { name: string; memory_total: number; memory_used: number; memory_free: number } | null;
+}
 
 interface SystemStatus {
   status: string;
@@ -22,13 +30,18 @@ interface SystemStatus {
 
 export default function Home() {
   const [status, setStatus] = useState<SystemStatus | null>(null);
+  const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const checkHealth = async () => {
+    const fetchData = async () => {
       try {
-        const response = await api.get('/health');
-        setStatus(response.data);
+        const [healthRes, infoRes] = await Promise.all([
+          APIService.healthCheck(),
+          APIService.getSystemInfo()
+        ]);
+        setStatus(healthRes.data);
+        setSysInfo(infoRes.data);
       } catch (err) {
         setStatus({
           status: 'error',
@@ -40,11 +53,11 @@ export default function Home() {
       }
     };
 
-    checkHealth();
-    // Poll every 30 seconds
-    const interval = setInterval(checkHealth, 30000);
+    fetchData();
+    const interval = setInterval(fetchData, 5000); // Poll hardware every 5 seconds
     return () => clearInterval(interval);
   }, []);
+
 
   return (
     <div className="space-y-8">
@@ -78,31 +91,43 @@ export default function Home() {
       {/* Info Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
+          title="Uso de CPU"
+          value={`${sysInfo?.cpu.usage.toFixed(1) || '0'}%`}
+          icon={Cpu}
+          description={`${sysInfo?.cpu.cores || '-'} núcleos detectados`}
+          progress={sysInfo?.cpu.usage}
+        />
+        <StatsCard
+          title="Memória RAM"
+          value={`${sysInfo?.ram.used.toFixed(1) || '0'} GB`}
+          icon={HardDrive}
+          description={`De ${sysInfo?.ram.total.toFixed(1) || '-'} GB totais`}
+          progress={sysInfo?.ram.percent}
+        />
+        {sysInfo?.gpu ? (
+          <StatsCard
+            title="Memória GPU"
+            value={`${sysInfo.gpu.memory_used.toFixed(1)} GB`}
+            icon={Zap}
+            description={sysInfo.gpu.name}
+            progress={(sysInfo.gpu.memory_used / sysInfo.gpu.memory_total) * 100}
+          />
+        ) : (
+          <StatsCard
+            title="GPU"
+            value="N/A"
+            icon={Zap}
+            description="Nenhuma GPU encontrada"
+          />
+        )}
+        <StatsCard
           title="Versão API"
           value={status?.version || '...'}
           icon={Activity}
           description="Build atual do backend"
         />
-        <StatsCard
-          title="Dispositivo"
-          value={status?.device?.toUpperCase() || '...'}
-          icon={Cpu}
-          description="Processamento ativo"
-        />
-        {/* Placeholder stats */}
-        <StatsCard
-          title="Vídeos"
-          value="-"
-          icon={Video}
-          description="Processados hoje"
-        />
-        <StatsCard
-          title="Datasets"
-          value="-"
-          icon={Database}
-          description="Disponíveis para treino"
-        />
       </div>
+
 
       {/* Quick Actions */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -129,7 +154,7 @@ export default function Home() {
   );
 }
 
-function StatsCard({ title, value, icon: Icon, description }: any) {
+function StatsCard({ title, value, icon: Icon, description, progress }: any) {
   return (
     <div className="p-6 rounded-xl border border-border bg-card text-card-foreground shadow-sm">
       <div className="flex items-center justify-between space-y-0 pb-2">
@@ -137,10 +162,19 @@ function StatsCard({ title, value, icon: Icon, description }: any) {
         <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
       <div className="text-2xl font-bold">{value}</div>
-      <p className="text-xs text-muted-foreground mt-1">{description}</p>
+      <p className="text-xs text-muted-foreground mt-1 mb-3">{description}</p>
+      {progress !== undefined && (
+        <div className="w-full bg-secondary h-1.5 rounded-full overflow-hidden">
+          <div
+            className={`h-full transition-all duration-500 ${progress > 80 ? 'bg-red-500' : progress > 50 ? 'bg-yellow-500' : 'bg-green-500'}`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }
+
 
 function ActionCard({ href, title, description, gradient }: any) {
   return (

@@ -1,14 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, RotateCcw, ShieldAlert } from 'lucide-react';
+
+import { Settings, Save, RotateCcw, ShieldAlert, FolderOpen } from 'lucide-react';
 import { APIService } from '@/services/api';
+import { FileExplorerModal } from '@/components/file-explorer-modal';
 
 export default function ConfigPage() {
     const [config, setConfig] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState('');
+
+    // File Explorer State
+    const [explorerOpen, setExplorerOpen] = useState(false);
+    const [activeKey, setActiveKey] = useState<string | null>(null);
 
     useEffect(() => {
         loadConfig();
@@ -20,7 +26,7 @@ export default function ConfigPage() {
             const res = await APIService.getAllConfig();
             setConfig(res.data);
         } catch (err) {
-            console.error("Erro ao carregar colnfig:", err);
+            console.error("Erro ao carregar config:", err);
             setMessage("Erro ao carregar configurações do backend.");
         } finally {
             setLoading(false);
@@ -31,8 +37,10 @@ export default function ConfigPage() {
         setSaving(true);
         setMessage('');
         try {
+            // No backend atualizado, o updateConfig já persiste em user_settings.json por padrão
             await APIService.updateConfig(config);
-            setMessage("Configurações salvas com sucesso!");
+            setMessage("Configurações persistidas com sucesso!");
+            setTimeout(() => setMessage(''), 3000);
         } catch (err) {
             console.error("Erro ao salvar:", err);
             setMessage("Erro ao salvar configurações.");
@@ -41,95 +49,193 @@ export default function ConfigPage() {
         }
     };
 
-    if (loading) return <div className="flex items-center justify-center h-64">Carregando configurações...</div>;
-    if (!config) return <div className="p-8 text-red-500">Erro ao conectar com o backend.</div>;
+    const openExplorer = (key: string) => {
+        setActiveKey(key);
+        setExplorerOpen(true);
+    };
+
+    const onPathSelect = (path: string) => {
+        if (activeKey) {
+            setConfig({ ...config, [activeKey]: path });
+        }
+        setExplorerOpen(false);
+        setActiveKey(null);
+    };
+
+    const handleReset = async () => {
+        if (!confirm("Isso irá restaurar as configurações originais e excluir seu perfil personalizado. Continuar?")) return;
+        setSaving(true);
+        try {
+            await APIService.resetConfig();
+            await loadConfig();
+            setMessage("Configurações resetadas com sucesso!");
+        } catch (err) {
+            console.error("Erro ao resetar:", err);
+            setMessage("Erro ao resetar configurações.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleShutdown = async () => {
+        if (!confirm("Isso irá encerrar o servidor e todos os processos. Você precisará reiniciar manualmente o backend. Continuar?")) return;
+        try {
+            await APIService.shutdown();
+            setMessage("Servidor encerrando... Você pode fechar esta aba.");
+        } catch (err) {
+            console.error("Erro ao desligar:", err);
+            setMessage("Erro ao desligar servidor.");
+        }
+    };
+
+    if (loading) return <div className="flex items-center justify-center h-64 text-primary animate-pulse font-medium text-lg">Carregando configurações...</div>;
+    if (!config) return <div className="p-8 text-red-500 font-bold border border-red-500/20 bg-red-500/5 rounded-xl">Erro ao conectar com o backend. Além disso, verifique se o servidor está rodando.</div>;
 
     const sections = [
         {
-            title: "Modelos e Ferramentas",
+            title: "Modelos Re-ID & YOLO",
             items: [
-                { key: "YOLO_MODEL", label: "Modelo YOLO (Pessoas)", type: "text" },
-                { key: "PROCESSING_DATASET", label: "Dataset de Processamento", type: "text" },
+                { key: "OSNET_MODEL", label: "Modelo OSNet (Re-ID)", type: "path" },
+                { key: "YOLO_MODEL", label: "Modelo YOLO (Detecção)", type: "path" },
+                { key: "RTMPOSE_MODEL", label: "Modelo RTMPose", type: "path" },
+                { key: "TEMPORAL_MODEL", label: "Modelo Temporal (tft/lstm)", type: "select", options: ["tft", "lstm"] },
             ]
         },
         {
-            title: "Parâmetros de Detecção e Pose",
+            title: "Diretórios e Dados",
+            items: [
+                { key: "PROCESSING_DATASET", label: "Dataset Ativo", type: "text" },
+                { key: "CLASSE1", label: "Nome Classe 1 (Negativa)", type: "text" },
+                { key: "CLASSE2", label: "Nome Classe 2 (Positiva)", type: "text" },
+            ]
+        },
+        {
+            title: "Configurações YOLO & Pose",
             items: [
                 { key: "DETECTION_CONF", label: "Confiança YOLO (0-1)", type: "number", step: 0.01 },
                 { key: "POSE_CONF_MIN", label: "Confiança Pose Min (0-1)", type: "number", step: 0.01 },
-                { key: "EMA_ALPHA", label: "Suavização EMA (0-1)", type: "number", step: 0.01 },
-                { key: "FURTO_THRESHOLD", label: "Threshold Furto (0-1)", type: "number", step: 0.01 },
+                { key: "EMA_ALPHA", label: "Suavização EMA (Alpha)", type: "number", step: 0.01 },
+                { key: "CLASSE2_THRESHOLD", label: "Threshold CLASSE2 (Inferencia)", type: "number", step: 0.01 },
+            ]
+        },
+        {
+            title: "Rastreador (BoTSORT)",
+            items: [
+                { key: "track_high_thresh", label: "Track High Thresh", type: "number", step: 0.05 },
+                { key: "track_low_thresh", label: "Track Low Thresh", type: "number", step: 0.05 },
+                { key: "match_thresh", label: "Match (ReID) Thresh", type: "number", step: 0.05 },
+                { key: "track_buffer", label: "Track Buffer (Frames)", type: "number" },
             ]
         },
         {
             title: "Parâmetros de Treinamento",
             items: [
                 { key: "TIME_STEPS", label: "Janela Temporal (Frames)", type: "number" },
-                { key: "BATCH_SIZE", label: "Batch Size", type: "number" },
-                { key: "LEARNING_RATE", label: "Learning Rate", type: "number", step: 0.0001 },
+                { key: "BATCH_SIZE", label: "Tamanho do Lote (Batch)", type: "number" },
+                { key: "LEARNING_RATE", label: "Taxa de Aprendizado (LR)", type: "number", step: 0.0001 },
                 { key: "EPOCHS", label: "Épocas", type: "number" },
             ]
         }
     ];
 
     return (
-        <div className="space-y-6 max-w-4xl mx-auto pb-12">
-            <div className="flex items-center justify-between border-b border-border pb-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-md">
-                        <Settings className="w-6 h-6 text-primary" />
+        <div className="space-y-6 max-w-6xl mx-auto pb-20 px-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-border pb-6 gap-4">
+                <div className="flex items-center gap-4">
+                    <div className="p-4 bg-primary/10 rounded-2xl shadow-inner">
+                        <Settings className="w-10 h-10 text-primary" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold">Configurações Gerais</h1>
-                        <p className="text-sm text-muted-foreground">Gerencie os parâmetros do config_master.py</p>
+                        <h1 className="text-4xl font-extrabold tracking-tight">Configurações</h1>
+                        <p className="text-muted-foreground italic text-lg">Gestão de perfis e hiperparâmetros do NeuraPose.</p>
                     </div>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                     <button
-                        onClick={loadConfig}
-                        className="flex items-center gap-2 px-4 py-2 text-sm bg-secondary hover:bg-secondary/80 rounded-md transition-colors"
+                        onClick={handleShutdown}
+                        className="flex items-center gap-2 px-5 py-2.5 text-sm bg-red-600/10 text-red-500 hover:bg-red-600 hover:text-white rounded-xl transition-all font-bold border border-red-500/20"
+                    >
+                        <ShieldAlert className="w-4 h-4" />
+                        Desligar
+                    </button>
+                    <button
+                        onClick={handleReset}
+                        className="flex items-center gap-2 px-5 py-2.5 text-sm bg-secondary/50 hover:bg-secondary rounded-xl transition-colors font-bold border border-border"
                     >
                         <RotateCcw className="w-4 h-4" />
-                        Resetar
+                        Resetar Perfil
                     </button>
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="flex items-center gap-2 px-6 py-2 text-sm bg-primary text-primary-foreground hover:brightness-110 rounded-md transition-all font-medium disabled:opacity-50"
+                        className={`
+                            flex items-center gap-2 px-8 py-2.5 text-sm rounded-xl transition-all font-bold disabled:opacity-50 shadow-xl
+                            ${saving ? 'bg-primary/50' : 'bg-primary text-primary-foreground hover:scale-105 active:scale-95 shadow-primary/20'}
+                        `}
                     >
                         <Save className="w-4 h-4" />
-                        {saving ? 'Salvando...' : 'Salvar Alterações'}
+                        {saving ? 'Persistindo...' : 'Salvar Perfil'}
                     </button>
                 </div>
             </div>
 
             {message && (
-                <div className={`p-4 rounded-md text-sm flex items-center gap-3 ${message.includes('Erro') ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-green-500/10 text-green-500 border border-green-500/20'}`}>
-                    <ShieldAlert className="w-4 h-4" />
-                    {message}
+                <div className={`p-4 rounded-xl text-sm flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${message.includes('Erro') ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-green-500/10 text-green-500 border border-green-500/20'}`}>
+                    <ShieldAlert className={`w-5 h-5 ${message.includes('Erro') ? '' : 'hidden'}`} />
+                    <span className="font-semibold">{message}</span>
                 </div>
             )}
 
-            <div className="grid grid-cols-1 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {sections.map((section, sidx) => (
-                    <div key={sidx} className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-                        <div className="px-6 py-4 bg-muted/30 border-b border-border">
-                            <h2 className="font-semibold text-lg">{section.title}</h2>
+                    <div key={sidx} className="bg-card border border-border rounded-2xl overflow-hidden shadow-md flex flex-col">
+                        <div className="px-6 py-5 bg-muted/20 border-b border-border">
+                            <h2 className="font-bold text-xl tracking-wide">{section.title}</h2>
                         </div>
-                        <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="p-6 space-y-6 flex-1">
                             {section.items.map((item) => (
-                                <div key={item.key} className="space-y-2">
-                                    <label className="text-sm font-medium text-muted-foreground">{item.label}</label>
-                                    <input
-                                        type={item.type}
-                                        step={item.step}
-                                        value={config[item.key]}
-                                        onChange={(e) => setConfig({
-                                            ...config,
-                                            [item.key]: item.type === 'number' ? parseFloat(e.target.value) : e.target.value
-                                        })}
-                                        className="w-full bg-background border border-border rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-primary/50 transition-all text-sm"
-                                    />
+                                <div key={item.key} className="space-y-2.5">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-sm font-bold text-muted-foreground uppercase tracking-wider">{item.label}</label>
+                                    </div>
+
+                                    {item.type === 'path' ? (
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                value={config[item.key] || ''}
+                                                onChange={(e) => setConfig({ ...config, [item.key]: e.target.value })}
+                                                className="flex-1 bg-background border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/40 transition-all text-xs font-mono"
+                                            />
+                                            <button
+                                                onClick={() => openExplorer(item.key)}
+                                                className="p-2.5 bg-secondary hover:bg-primary/20 hover:text-primary rounded-xl transition-all border border-border"
+                                                title="Procurar arquivo/pasta"
+                                            >
+                                                <FolderOpen className="w-5 h-5" />
+                                            </button>
+                                        </div>
+                                    ) : item.type === 'select' ? (
+                                        <select
+                                            value={config[item.key]}
+                                            onChange={(e) => setConfig({ ...config, [item.key]: e.target.value })}
+                                            className="w-full bg-background border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/40 transition-all text-sm font-medium appearance-none"
+                                        >
+                                            {(item as any).options?.map((opt: string) => <option key={opt} value={opt}>{opt.toUpperCase()}</option>)}
+                                        </select>
+                                    ) : (
+                                        <input
+                                            type={item.type}
+                                            step={(item as any).step}
+                                            value={config[item.key]}
+                                            onChange={(e) => setConfig({
+                                                ...config,
+                                                [item.key]: item.type === 'number' ? parseFloat(e.target.value) : e.target.value
+                                            })}
+                                            className="w-full bg-background border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/40 transition-all text-sm font-medium"
+                                        />
+                                    )}
+
                                 </div>
                             ))}
                         </div>
@@ -137,9 +243,23 @@ export default function ConfigPage() {
                 ))}
             </div>
 
-            <div className="bg-orange-500/10 border border-orange-500/20 p-4 rounded-xl text-xs text-orange-500 leading-relaxed">
-                <strong>Atenção:</strong> Alterar estas configurações afeta diretamente o comportamento do sistema. O backend irá recarregar o arquivo config_master.py automaticamente, mas processos em andamento podem não ser afetados até o próximo reinício do processo.
+            <FileExplorerModal
+                isOpen={explorerOpen}
+                onClose={() => setExplorerOpen(false)}
+                onSelect={onPathSelect}
+                initialPath={activeKey ? config[activeKey] : undefined}
+                title={`Selecionar ${activeKey}`}
+            />
+
+            <div className="bg-primary/5 border border-primary/10 p-5 rounded-2xl text-xs text-muted-foreground leading-relaxed flex items-start gap-4">
+                <ShieldAlert className="w-8 h-8 text-primary/40 shrink-0" />
+                <div>
+                    <strong>Dica de Segurança:</strong> As alterações feitas aqui são persistidas em seu perfil de usuário (`user_settings.json`).
+                    Alguns parâmetros como modelos YOLO ou OSNet podem exigir reinício silencioso do detector em background.
+                    Pastas de sistema e arquivos de código estão ocultos por segurança.
+                </div>
             </div>
         </div>
     );
 }
+

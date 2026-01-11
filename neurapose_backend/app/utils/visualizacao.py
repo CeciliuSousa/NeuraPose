@@ -10,13 +10,14 @@ import hashlib
 from pathlib import Path
 from tqdm import tqdm
 
-from neurapose_backend.app.configuracao.config import (
+from app.configuracao.config import (
     CLASSE1,
     CLASSE2,
     POSE_CONF_MIN,
     TRACKER_NAME,
     PAIRS
 )
+
 
 def _hash_to_color(i: int):
     """Gera uma cor consistente baseada no hash do ID."""

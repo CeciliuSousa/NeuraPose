@@ -15,16 +15,18 @@ from datetime import datetime
 from colorama import Fore, init
 
 # Importa configuracoes do config_master (via LSTM/configuracao/config.py)
-from ..configuracao.config import get_config
-from ..modulos.dataset import load_data_pkl
-from ..modulos.treinamento import train_one_epoch
+from LSTM.configuracao.config import get_config
+from LSTM.modulos.dataset import load_data_pkl
+from LSTM.modulos.treinamento import train_one_epoch
+
 
 # Importa paths e constantes do config_master
-from neurapose_backend.config_master import (
+from config_master import (
     RETRAIN_MODELS_DIR,
     CLASS_NAMES,
     DEVICE,
 )
+
 
 init(autoreset=True)
 

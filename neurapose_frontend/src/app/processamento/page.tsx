@@ -19,9 +19,10 @@ export default function ProcessamentoPage() {
     const [config, setConfig] = useState({
         inputPath: '',
         outputPath: '',
-        onnxPath: '',
+        device: 'cuda', // 'cuda' ou 'cpu'
         showPreview: false,
     });
+
 
     // Processing State
     const [loading, setLoading] = useState(false);
@@ -33,27 +34,39 @@ export default function ProcessamentoPage() {
 
     // Logs & Health Polling
     useEffect(() => {
-        // Inicializa paths padrões ao carregar
-        APIService.healthCheck().then(res => {
-            const root = res.data.neurapose_root;
-            if (root) {
-                // Remove trailing slash/backslash e normaliza
-                const normalizedRoot = root.replace(/[\\/]+$/, '');
+        // 1. Tentar carregar estado do localStorage
+        const savedConfig = localStorage.getItem('np_process_config');
+        if (savedConfig) setConfig(JSON.parse(savedConfig));
+
+        const savedLogs = localStorage.getItem('np_process_logs');
+        if (savedLogs) setLogs(JSON.parse(savedLogs));
+
+        const savedLoading = localStorage.getItem('np_process_loading');
+        if (savedLoading === 'true') setLoading(true);
+
+        // 2. Inicializa paths padrões do backend
+        APIService.getConfig().then(res => {
+            if (res.data.status === 'success') {
+                const { processing_input, processing_output } = res.data.paths;
+                // Só atualiza se o campo estiver vazio
                 setConfig(prev => ({
                     ...prev,
-                    inputPath: `${normalizedRoot}\\neurapose_backend\\videos`,
-                    outputPath: `${normalizedRoot}\\neurapose_backend\\resultados-processamentos`
+                    inputPath: prev.inputPath || processing_input,
+                    outputPath: prev.outputPath || processing_output
                 }));
             }
-        }).catch(err => console.error("Erro ao carregar root do backend:", err));
+        }).catch(err => console.error("Erro ao carregar caminhos do backend:", err));
 
         let interval: NodeJS.Timeout;
 
         if (loading) {
+            localStorage.setItem('np_process_loading', 'true');
             interval = setInterval(async () => {
                 try {
                     const res = await APIService.getLogs();
-                    setLogs(res.data.logs);
+                    const newLogs = res.data.logs;
+                    setLogs(newLogs);
+                    localStorage.setItem('np_process_logs', JSON.stringify(newLogs));
 
                     // Checa também o status (pause/execução)
                     const health = await APIService.healthCheck();
@@ -62,17 +75,25 @@ export default function ProcessamentoPage() {
                     // Se o servidor diz que não está mais processando, paramos o polling
                     if (!health.data.processing && loading) {
                         setLoading(false);
+                        localStorage.setItem('np_process_loading', 'false');
                     }
                 } catch (e) {
                     console.error("Erro ao buscar status:", e);
                 }
             }, 1000);
+        } else {
+            localStorage.setItem('np_process_loading', 'false');
         }
 
         return () => {
             if (interval) clearInterval(interval);
         };
     }, [loading]);
+
+    // Persistir config ao mudar
+    useEffect(() => {
+        localStorage.setItem('np_process_config', JSON.stringify(config));
+    }, [config]);
 
     // Auto-scroll terminal
     useEffect(() => {
@@ -94,9 +115,10 @@ export default function ProcessamentoPage() {
             await APIService.startProcessing({
                 input_path: config.inputPath,
                 output_path: config.outputPath,
-                onnx_path: config.onnxPath || undefined,
+                device: config.device,
                 show_preview: config.showPreview
             });
+
         } catch (error: any) {
             console.error("Erro ao iniciar:", error);
             const errMsg = error.response?.data?.detail || error.message;
@@ -184,15 +206,23 @@ export default function ProcessamentoPage() {
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-muted-foreground">Modelo ONNX (Opcional)</label>
-                                <input
-                                    type="text"
-                                    value={config.onnxPath}
-                                    onChange={(e) => setConfig({ ...config, onnxPath: e.target.value })}
-                                    placeholder="Deixe vazio para usar o padrão"
-                                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all"
-                                />
+                                <label className="text-sm font-medium text-muted-foreground italic">Hardware para Inferência</label>
+                                <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-xl">
+                                    <button
+                                        onClick={() => setConfig({ ...config, device: 'cuda' })}
+                                        className={`py-2 text-xs font-bold rounded-lg transition-all ${config.device === 'cuda' ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-background/50 text-muted-foreground'}`}
+                                    >
+                                        GPU (CUDA)
+                                    </button>
+                                    <button
+                                        onClick={() => setConfig({ ...config, device: 'cpu' })}
+                                        className={`py-2 text-xs font-bold rounded-lg transition-all ${config.device === 'cpu' ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-background/50 text-muted-foreground'}`}
+                                    >
+                                        CPU
+                                    </button>
+                                </div>
                             </div>
+
 
                             <div className="pt-2">
                                 <label className="flex items-center gap-3 cursor-pointer group">

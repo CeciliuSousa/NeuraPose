@@ -20,14 +20,15 @@ from datetime import datetime
 from sklearn.model_selection import StratifiedShuffleSplit
 
 # Imports do projeto
-from ..configuracao.config import get_config
-from ..modulos.dataset import load_data_pt
-from ..utils.metricas import (
+from LSTM.configuracao.config import get_config
+from LSTM.modulos.dataset import load_data_pt
+from LSTM.utils.metricas import (
     counts_from_labels, evaluate, plot_curves, plot_confusion_matrix
 )
-from ..modulos.treinamento import train_one_epoch, EarlyStopper
-from ..modulos.loss import FocalLoss
-from ..modulos.custom_dataset import AugmentedDataset
+from LSTM.modulos.treinamento import train_one_epoch, EarlyStopper
+from LSTM.modulos.loss import FocalLoss
+from LSTM.modulos.custom_dataset import AugmentedDataset
+
 
 # Configuracoes centralizadas
 from neurapose_backend.config_master import (
