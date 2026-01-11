@@ -13,21 +13,24 @@ from app.log_service import LogBuffer, CaptureOutput
 # ==============================================================
 # SETUP PATHS
 # ==============================================================
-# Adiciona o diretório pai (NeuraPose-Teste) ao sys.path para importar 'neurapose'
 CURRENT_DIR = Path(__file__).resolve().parent
 ROOT_DIR = CURRENT_DIR.parent
-if str(ROOT_DIR) not in sys.path:
-    sys.path.insert(0, str(ROOT_DIR))
+
+# Adiciona o diretório atual e o ROOT ao sys.path
+for p in [str(CURRENT_DIR), str(ROOT_DIR)]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 # ==============================================================
 # IMPORTS DO PROJETO
 # ==============================================================
+# Importamos diretamente do config_master que está na mesma pasta
 try:
-    import neurapose_backend.config_master as cm
-    from neurapose_backend.pre_processamento.pipeline.processador import processar_video
-    from neurapose_backend.pre_processamento.utils.ferramentas import carregar_sessao_onnx
+    import config_master as cm
+    from pre_processamento.pipeline.processador import processar_video
+    from pre_processamento.utils.ferramentas import carregar_sessao_onnx
     # Import logic for Manual ReID
-    from neurapose_backend.pre_processamento.reid_manual import (
+    from pre_processamento.reid_manual import (
         aplicar_processamento_completo, 
         renderizar_video_limpo, 
         carregar_pose_records,
@@ -35,11 +38,25 @@ try:
         indexar_por_frame_e_contar_ids
     )
     # Import logic for Training
-    from neurapose_backend.LSTM.pipeline import treinador
+    from LSTM.pipeline import treinador
 except ImportError as e:
-    print(f"Erro ao importar modulos do NeuraPose: {e}")
-    # Fallback para desenvolvimento sem dependencias completas
-    pass
+    # Se falhar o import direto, tentamos com o prefixo do pacote neurapose_backend
+    try:
+        import neurapose_backend.config_master as cm
+        from neurapose_backend.pre_processamento.pipeline.processador import processar_video
+        from neurapose_backend.pre_processamento.utils.ferramentas import carregar_sessao_onnx
+        from neurapose_backend.pre_processamento.reid_manual import (
+            aplicar_processamento_completo, 
+            renderizar_video_limpo, 
+            carregar_pose_records,
+            salvar_json,
+            indexar_por_frame_e_contar_ids
+        )
+        from neurapose_backend.LSTM.pipeline import treinador
+    except ImportError as e2:
+        print(f"CRITICAL ERROR: Could not import project modules.\nDirect import failed: {e}\nPackage import failed: {e2}")
+        # Re-raise to stop the server if critical modules are missing
+        raise e2
 
 # ==============================================================
 # LOGGING
@@ -231,6 +248,45 @@ def health_check():
 @app.get("/config/all")
 def api_get_all_config():
     return get_all_cm_config()
+
+@app.get("/config")
+def api_get_config():
+    """Retorna configurações básicas, compatível com o FileExplorerModal do frontend."""
+    return {
+        "status": "success",
+        "paths": {
+            "processing_input": str(cm.PROCESSING_INPUT_DIR),
+            "processing_output": str(cm.PROCESSING_OUTPUT_DIR)
+        }
+    }
+
+@app.get("/browse")
+def browse_path(path: str = "."):
+    """Lista o conteúdo de uma pasta para o explorador de arquivos do frontend."""
+    try:
+        p = Path(path).resolve()
+        
+        # Por segurança, podemos limitar o browse ao ROOT_DIR ou drives específicos
+        # Para este projeto, vamos permitir navegar livremente, mas com cautela
+        
+        items = []
+        for entry in p.iterdir():
+            items.append({
+                "name": entry.name,
+                "path": str(entry.absolute()),
+                "is_dir": entry.is_dir()
+            })
+            
+        # Ordenar: pastas primeiro, depois nomes
+        items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
+        
+        return {
+            "current": str(p.absolute()),
+            "parent": str(p.parent.absolute()) if p.parent != p else str(p.absolute()),
+            "items": items
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/config/update")
 def api_update_config(updates: Dict[str, Any]):

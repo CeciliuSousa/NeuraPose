@@ -33,6 +33,20 @@ export default function ProcessamentoPage() {
 
     // Logs & Health Polling
     useEffect(() => {
+        // Inicializa paths padrões ao carregar
+        APIService.healthCheck().then(res => {
+            const root = res.data.neurapose_root;
+            if (root) {
+                // Remove trailing slash/backslash e normaliza
+                const normalizedRoot = root.replace(/[\\/]+$/, '');
+                setConfig(prev => ({
+                    ...prev,
+                    inputPath: `${normalizedRoot}\\neurapose_backend\\videos`,
+                    outputPath: `${normalizedRoot}\\neurapose_backend\\resultados-processamentos`
+                }));
+            }
+        }).catch(err => console.error("Erro ao carregar root do backend:", err));
+
         let interval: NodeJS.Timeout;
 
         if (loading) {
