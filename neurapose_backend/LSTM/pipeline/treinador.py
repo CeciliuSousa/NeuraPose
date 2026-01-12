@@ -31,13 +31,14 @@ from LSTM.modulos.custom_dataset import AugmentedDataset
 
 
 # Configuracoes centralizadas
-from neurapose_backend.config_master import (
+from config_master import (
     MODEL_BEST_FILENAME,
     MODEL_FINAL_FILENAME,
     NORM_STATS_FILENAME,
     CLASS_NAMES,
     DEVICE,
 )
+
 
 init(autoreset=True)
 

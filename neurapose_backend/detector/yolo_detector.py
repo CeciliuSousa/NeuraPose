@@ -1,21 +1,20 @@
 # ================================================================
-# neurapose-backend/app/detector/yolo_detector.py
+# neurapose_backend/detector/yolo_detector.py
 # ================================================================
 
 import os
 import cv2
+import torch
 import logging
 import numpy as np
 from pathlib import Path
 from ultralytics import YOLO
 
 # Importacoes do tracker (usando interface modular via rastreador.py)
-from tracker.rastreador import CustomBoTSORT, CustomReID, save_temp_tracker_yaml
-
+from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomReID, save_temp_tracker_yaml
 
 # Importa nome do modelo YOLO e ROOT do config centralizado
-from config_master import YOLO_PATH, YOLO_MODEL, ROOT, DETECTION_CONF, YOLO_CLASS_PERSON, DEVICE
-
+from neurapose_backend.config_master import YOLO_PATH, YOLO_MODEL, ROOT, DETECTION_CONF, YOLO_CLASS_PERSON, DEVICE
 
 logging.getLogger("ultralytics").setLevel(logging.ERROR)
 os.environ["YOLO_VERBOSE"] = "False"
@@ -30,8 +29,7 @@ bot_sort.ReID = CustomReID
 
 
 # ================================================================
-# 1. Função de fusão de IDs — Gera IDs persistentes
-#    (AGORA COMPORTAMENTO IGUAL AO PRIMEIRO CÓDIGO)
+# 1. Funcao de fusao de IDs - Gera IDs persistentes
 # ================================================================
 def merge_tracks(track_data, gap_thresh=1.5):
     """
@@ -41,8 +39,8 @@ def merge_tracks(track_data, gap_thresh=1.5):
       id_map: dict[id_qualquer] -> id_original
 
     Regra:
-      - Não usa embedding para decidir fusão.
-      - Só usa tempo (start/end) como no seu primeiro código:
+      - Nao usa embedding para decidir fusao.
+      - So usa tempo (start/end):
           overlap = not (end_a < start_b or end_b < start_a)
           gap = start_b - end_a
           if not overlap and 0 < gap < gap_thresh -> funde id_b em id_a
@@ -50,7 +48,7 @@ def merge_tracks(track_data, gap_thresh=1.5):
     merged_tracks = {}
     used = set()
 
-    # Ordena por instante de início (como no primeiro script)
+    # Ordena por instante de inicio
     ids_sorted = sorted(track_data.keys(), key=lambda tid: track_data[tid]["start"])
 
     for i, id_a in enumerate(ids_sorted):
@@ -65,7 +63,7 @@ def merge_tracks(track_data, gap_thresh=1.5):
         }
         used.add(id_a)
 
-        # Compara com os IDs seguintes na lista (id_b começa depois de id_a)
+        # Compara com os IDs seguintes na lista (id_b comeca depois de id_a)
         for id_b in ids_sorted[i + 1:]:
             if id_b in used:
                 continue
@@ -77,11 +75,10 @@ def merge_tracks(track_data, gap_thresh=1.5):
             start_b = data_b["start"]
             end_b = data_b["end"]
 
-            # Mesmo critério de overlap do código original
+            # Mesmo criterio de overlap do codigo original
             overlap = not (end_a < start_b or end_b < start_a)
             gap = start_b - end_a  # importante: b depois de a
 
-            # Esta é exatamente a lógica que fazia 1 fundir com 5 no seu primeiro código
             if not overlap and 0 < gap < gap_thresh:
                 merged_tracks[id_a]["aliases"].append(id_b)
                 merged_tracks[id_a]["end"] = max(end_a, end_b)
@@ -98,11 +95,11 @@ def merge_tracks(track_data, gap_thresh=1.5):
 
 
 # ================================================================
-# 2. YOLO + BoTSORT + OSNet ReID
+# 2. YOLO + BoTSORT + coleta de IDs + fusao de IDs
 # ================================================================
 def yolo_detector_botsort(videos_dir=None):
     """
-    Roda YOLOv8x + CustomBoTSORT em vários vídeos.
+    Roda YOLOv8x + CustomBoTSORT em varios videos.
     Retorna lista com:
         - video
         - fps
@@ -115,18 +112,19 @@ def yolo_detector_botsort(videos_dir=None):
     videos_path = Path(videos_dir or (ROOT / "videos"))
 
     # ================================================================
-    # MODELO YOLO
+    # MODELO YOLO - Usar caminho centralizado (config_master) e baixar se nao existir
     # ================================================================
     model_path = YOLO_PATH
 
-    # Criar diretório de modelos se não existir
+    # Criar diretorio de modelos se nao existir
     model_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not model_path.exists():
+        # Extrai o nome base do modelo (ex: "yolov8l" de "yolov8l.pt")
         model_base = YOLO_MODEL.replace('.pt', '')
 
         try:
-            # Ultralytics baixa automaticamente quando você instancia com nome
+            # Ultralytics baixa automaticamente quando voce instancia com nome
             temp_model = YOLO(model_base)
 
             # Salva o modelo baixado no local correto
@@ -138,13 +136,13 @@ def yolo_detector_botsort(videos_dir=None):
                 os.remove(model_path)
             raise FileNotFoundError(
                 f"Erro ao baixar modelo {YOLO_PATH}. "
-                f"Verifique sua conexão com a internet ou se o modelo não está corrompido.\nErro: {e}"
+                f"Verifique sua conexao com a internet ou se o modelo nao esta corrompido.\nErro: {e}"
             )
     
-    # Carrega o modelo (local ou recém-baixado)
+    # Carrega o modelo (local ou recem-baixado)
     model = YOLO(str(model_path)).to(DEVICE)
 
-    # Lista de vídeos
+    # Lista de videos
     if videos_path.is_file():
         videos = [videos_path]
     else:
@@ -154,13 +152,13 @@ def yolo_detector_botsort(videos_dir=None):
         ]
 
     if not videos:
-        print("[WARN] Nenhum vídeo encontrado.")
+        print("[WARN] Nenhum video encontrado.")
         return []
 
     resultados_finais = []
 
     # ============================================================
-    # Loop para todos os vídeos
+    # Loop para todos os videos
     # ============================================================
     for video in videos:
         cap = cv2.VideoCapture(str(video))
@@ -172,7 +170,7 @@ def yolo_detector_botsort(videos_dir=None):
         tracker_yaml_path = save_temp_tracker_yaml()
         logging.getLogger("neurapose.tracker").info(f"Usando BoTSORT YAML: {tracker_yaml_path}")
 
-        # Execução do YOLO + tracking
+        # Execucao do YOLO + tracking
         results = model.track(
             source=str(video),
             imgsz=1280,
@@ -185,19 +183,31 @@ def yolo_detector_botsort(videos_dir=None):
         )
 
         if not results or not hasattr(results[0], "boxes"):
-            print("[ERRO] Sem resultados válidos.")
+            print("[ERRO] Sem resultados validos.")
             cap.release()
             continue
 
+        frame_idx = 0
         track_data = {}
-        for idx, r in enumerate(results):
+
+        # ============================================================
+        # COLETA DE TRACKS POR FRAME (start, end, frames)
+        # ============================================================
+        while True:
+            ret, _ = cap.read()
+            if not ret or frame_idx >= len(results):
+                break
+
+            r = results[frame_idx]
+
             if r.boxes is not None and len(r.boxes) > 0:
                 ids_tensor = r.boxes.id
                 if ids_tensor is None:
+                    frame_idx += 1
                     continue
 
                 ids = ids_tensor.cpu().numpy()
-                current_time = idx / fps
+                current_time = frame_idx / fps
 
                 for track_id in ids:
                     if track_id is None or track_id < 0:
@@ -205,6 +215,8 @@ def yolo_detector_botsort(videos_dir=None):
 
                     tid = int(track_id)
 
+                    # OBS: aqui nao precisamos mais de embeddings para fusao;
+                    # mantemos lista de features so para futuro, mas nao usamos.
                     try:
                         f = tracker.tracks[tid].feat.copy()
                     except Exception:
@@ -215,23 +227,25 @@ def yolo_detector_botsort(videos_dir=None):
                             "start": current_time,
                             "end": current_time,
                             "features": [f],
-                            "frames": {idx},
+                            "frames": {frame_idx},
                         }
                     else:
                         track_data[tid]["end"] = current_time
-                        track_data[tid]["frames"].add(idx)
+                        track_data[tid]["frames"].add(frame_idx)
 
                         if len(track_data[tid]["features"]) < 20:
                             track_data[tid]["features"].append(f)
 
+            frame_idx += 1
+
         cap.release()
 
         if not track_data:
-            print("[WARN] Nenhum track válido.")
+            print("[WARN] Nenhum track valido.")
             continue
 
         # ============================================================
-        # FUSÃO FINAL DE IDs (AGORA SÓ PELO TEMPO)
+        # FUSAO FINAL DE IDs
         # ============================================================
         merged_tracks, id_map = merge_tracks(track_data)
 

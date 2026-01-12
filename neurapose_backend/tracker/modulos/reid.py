@@ -10,7 +10,7 @@ from ultralytics.utils.ops import xywh2xyxy
 from ultralytics.utils.plotting import save_one_box
 
 import torchvision.transforms as T
-from config_master import DEVICE
+from neurapose_backend.config_master import DEVICE
 
 
 class OSNetAIN(nn.Module):

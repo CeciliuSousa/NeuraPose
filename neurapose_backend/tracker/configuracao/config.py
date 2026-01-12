@@ -5,7 +5,7 @@
 from pathlib import Path
 
 # Importa BOT_SORT_CONFIG diretamente do config_master
-from config_master import BOT_SORT_CONFIG, OSNET_PATH
+from neurapose_backend.config_master import BOT_SORT_CONFIG, OSNET_PATH
 
 
 # Re-exporta para manter compatibilidade com imports existentes

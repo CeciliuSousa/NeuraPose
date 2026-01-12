@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PageHeader } from '@/components/ui/page-header';
-import { Play, ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RefreshCw, FileVideo, RotateCcw } from 'lucide-react';
+import { Play, ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RefreshCw, FileVideo, RotateCcw, FolderInput, FolderOutput } from 'lucide-react';
 import { APIService, ReIDVideo, ReIDData } from '@/services/api';
+import { FileExplorerModal } from '@/components/file-explorer-modal';
+
 
 export default function ReidPage() {
     const [loading, setLoading] = useState(false);
@@ -26,6 +27,11 @@ export default function ReidPage() {
     const [delForm, setDelForm] = useState({ id: '', range: '' });
     const [cutForm, setCutForm] = useState({ range: '' });
 
+    // FileExplorer state
+    const [explorerTarget, setExplorerTarget] = useState<'input' | 'output' | null>(null);
+    const [roots, setRoots] = useState<Record<string, string>>({});
+
+
     useEffect(() => {
         // Load settings
         const savedInput = localStorage.getItem('np_reid_input');
@@ -39,9 +45,10 @@ export default function ReidPage() {
         // Load defaults if empty
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
-                const { processing_output, reid_output } = res.data.paths;
-                if (!savedInput) setInputPath(processing_output);
-                if (!savedOutput) setOutputPath(reid_output);
+                const { processamentos, reidentificacoes } = res.data.paths;
+                setRoots(res.data.paths);
+                if (!savedInput) setInputPath(processamentos);
+                if (!savedOutput) setOutputPath(reidentificacoes);
             }
         });
 
@@ -172,53 +179,69 @@ export default function ReidPage() {
     };
 
     return (
-        <div className="h-[calc(100vh-8rem)] flex flex-col">
-            <PageHeader
-                title="Re-identificação Manual"
-                description="Corrija IDs, remova ruídos e corte trechos indesejados."
-            >
-                <div className="flex flex-col md:flex-row items-center justify-between border-b border-border pb-6 gap-4">
+        <div className="h-[calc(100vh-8rem)] flex flex-col space-y-4">
+            {/* Barra de Configuração Compacta */}
+            <div className="bg-card border border-border rounded-xl p-4">
+                <div className="flex flex-wrap items-center gap-4">
                     <div className="flex items-center gap-3">
-                        <div className="p-3 bg-primary/10 rounded-xl">
-                            <ScanFace className="w-8 h-8 text-primary" />
+                        <div className="p-2 bg-primary/10 rounded-lg">
+                            <ScanFace className="w-5 h-5 text-primary" />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-bold tracking-tight">Re-identificação Manual</h1>
-                            <p className="text-muted-foreground italic truncate max-w-md">Limpeza e correção de IDs em massa.</p>
+                            <h1 className="text-lg font-bold">Re-identificação Manual</h1>
+                            <p className="text-xs text-muted-foreground">Corrija IDs, remova ruídos e corte trechos.</p>
                         </div>
                     </div>
 
-                    <div className="flex flex-1 max-w-2xl gap-2">
-                        <div className="flex-1 space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Pasta Processada (Input)</label>
+                    <div className="flex-1" />
+
+                    <div className="flex items-end gap-3">
+                        <div className="space-y-1">
+                            <label className="text-[10px] uppercase font-bold text-muted-foreground">Entrada</label>
                             <div className="flex gap-1">
                                 <input
                                     value={inputPath}
                                     onChange={(e) => setInputPath(e.target.value)}
-                                    className="flex-1 bg-secondary/50 border border-border text-xs py-2 px-3 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-                                    placeholder="Caminho do processamento..."
+                                    className="w-48 bg-secondary/50 border border-border text-xs py-2 px-3 rounded-lg"
+                                    placeholder="resultados-processamentos/"
                                 />
                                 <button
-                                    onClick={loadVideos}
-                                    className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20 transition-colors"
-                                    title="Carregar Vídeos"
+                                    onClick={() => setExplorerTarget('input')}
+                                    className="p-2 bg-secondary border border-border rounded-lg hover:bg-secondary/80"
+                                    title="Selecionar Pasta"
                                 >
-                                    <RotateCcw className="w-4 h-4" />
+                                    <FolderInput className="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
-                        <div className="flex-1 space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-muted-foreground ml-1">Pasta ReID (Output)</label>
-                            <input
-                                value={outputPath}
-                                onChange={(e) => setOutputPath(e.target.value)}
-                                className="w-full bg-secondary/50 border border-border text-xs py-2 px-3 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary"
-                                placeholder="Caminho de saída..."
-                            />
+                        <div className="space-y-1">
+                            <label className="text-[10px] uppercase font-bold text-muted-foreground">Saída</label>
+                            <div className="flex gap-1">
+                                <input
+                                    value={outputPath}
+                                    onChange={(e) => setOutputPath(e.target.value)}
+                                    className="w-48 bg-secondary/50 border border-border text-xs py-2 px-3 rounded-lg"
+                                    placeholder="resultados-reidentificacoes/"
+                                />
+                                <button
+                                    onClick={() => setExplorerTarget('output')}
+                                    className="p-2 bg-secondary border border-border rounded-lg hover:bg-secondary/80"
+                                    title="Selecionar Pasta"
+                                >
+                                    <FolderOutput className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
+                        <button
+                            onClick={loadVideos}
+                            className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20"
+                            title="Recarregar Vídeos"
+                        >
+                            <RotateCcw className="w-4 h-4" />
+                        </button>
                     </div>
                 </div>
-            </PageHeader>
+            </div>
 
             <div className="grid grid-cols-12 gap-6 flex-1 overflow-hidden">
                 {/* Sidebar: Video List */}
@@ -391,6 +414,24 @@ export default function ReidPage() {
                     )}
                 </div>
             </div>
+
+            {/* File Explorer Modal */}
+            <FileExplorerModal
+                isOpen={explorerTarget !== null}
+                onClose={() => setExplorerTarget(null)}
+                onSelect={(path) => {
+                    if (explorerTarget === 'input') {
+                        setInputPath(path);
+                        loadVideos();
+                    } else if (explorerTarget === 'output') {
+                        setOutputPath(path);
+                    }
+                    setExplorerTarget(null);
+                }}
+                initialPath={explorerTarget === 'input' ? inputPath : outputPath}
+                rootPath={explorerTarget === 'input' ? roots.processamentos : roots.reidentificacoes}
+                title={explorerTarget === 'input' ? 'Selecionar Pasta de Entrada' : 'Selecionar Pasta de Saída'}
+            />
         </div>
     );
 }

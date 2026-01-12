@@ -9,6 +9,7 @@ wheels/
 *node_modules/
 
 # Modelos pesados (apenas na pasta neurapose)
+neurapose
 neurapose_backend/**/*.pt
 neurapose_backend/**/*.pth
 neurapose_backend/**/*.onnx
@@ -19,10 +20,11 @@ neurapose_backend/**/*.jpg
 neurapose_backend/datasets
 neurapose_backend/info
 neurapose_backend/resultados-processamentos
-neurapose_backend/resultados-reidentificacao
+neurapose_backend/resultados-reidentificacoes
 neurapose_backend/videos
 neurapose_backend/modelos-lstm-treinados
 neurapose_backend/relatorios-testes/
+neurapose_backend/relatorios-teste/
 neurapose_backend/result-process-test
 
 # Backend - arquivos de dados (não código)

@@ -11,11 +11,11 @@ from yt_dlp import YoutubeDL
 from colorama import Fore
 
 # Importa do config_master via pre_processamento config (usar import absoluto)
-from pre_processamento.configuracao.config import TRACKER_NAME
+from neurapose_backend.pre_processamento.configuracao.config import TRACKER_NAME
 
 
 # Importa do config_master (absoluto)
-from config_master import YOLO_MODEL, OSNET_PATH, DATASET_NAME, ROOT as PROJECT_ROOT
+from neurapose_backend.config_master import YOLO_MODEL, OSNET_PATH, DATASET_NAME, ROOT as PROJECT_ROOT
 
 
 

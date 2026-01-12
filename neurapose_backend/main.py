@@ -1,4 +1,5 @@
 import sys
+import os
 from pathlib import Path
 import logging
 from typing import List, Optional, Dict, Any
@@ -32,7 +33,8 @@ from app.user_config_manager import UserConfigManager
 try:
     import config_master as cm
     from pre_processamento.pipeline.processador import processar_video
-    from pre_processamento.utils.ferramentas import carregar_sessao_onnx
+    from pre_processamento.utils.ferramentas import carregar_sessao_onnx, imprimir_banner
+
     # Import logic for Manual ReID
     from pre_processamento.reid_manual import (
         aplicar_processamento_completo, 
@@ -44,27 +46,13 @@ try:
     # Import logic for Training
     from LSTM.pipeline import treinador
 except ImportError as e:
-    # Se falhar o import direto, tentamos com o prefixo do pacote neurapose_backend
-    try:
-        import neurapose_backend.config_master as cm
-        from neurapose_backend.pre_processamento.pipeline.processador import processar_video
-        from neurapose_backend.pre_processamento.utils.ferramentas import carregar_sessao_onnx
-        from neurapose_backend.pre_processamento.reid_manual import (
-            aplicar_processamento_completo, 
-            renderizar_video_limpo, 
-            carregar_pose_records,
-            salvar_json,
-            indexar_por_frame_e_contar_ids
-        )
-        from neurapose_backend.LSTM.pipeline import treinador
-    except ImportError as e2:
-        print(f"CRITICAL ERROR: Could not import project modules.\nDirect import failed: {e}\nPackage import failed: {e2}")
-        # Re-raise to stop the server if critical modules are missing
-        raise e2
+    print(f"CRITICAL ERROR: Could not import project modules.\\nImport failed: {e}")
+    raise e
 
 # Forçamos o reload do config_master caso ele tenha sido alterado em disco
 import importlib
 importlib.reload(cm)
+
 
 # ==============================================================
 # LOGGING
@@ -102,7 +90,7 @@ app.add_middleware(
 # ==============================================================
 class ProcessRequest(BaseModel):
     input_path: str
-    output_path: str
+    dataset_name: Optional[str] = None  # Nome do dataset (se vazio, usa nome da pasta de entrada)
     onnx_path: Optional[str] = None
     show_preview: bool = False
     device: str = "cuda"  # "cuda" ou "cpu"
@@ -130,6 +118,11 @@ class ReIDDelete(BaseModel):
 class ReIDCut(BaseModel):
     start: int
     end: int
+
+class ReIDApplyRequest(BaseModel):
+    rules: List[ReIDRule] = []
+    deletions: List[ReIDDelete] = []
+    cuts: List[ReIDCut] = []
 
 class AnnotationRequest(BaseModel):
     video_stem: str
@@ -213,6 +206,82 @@ def api_reset_config():
 # ==============================================================
 # HELPERS
 # ==============================================================
+def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, device: str = "cuda"):
+    """
+    Executa o processamento via subprocess chamando:
+    uv run python -m neurapose_backend.pre_processamento.processar --input-folder "..." [--show]
+    
+    Captura stdout/stderr em tempo real para o LogBuffer.
+    """
+    import subprocess
+    import threading
+    
+    state.reset()
+    state.is_running = True
+    log_buffer = LogBuffer()
+    
+    # Monta o comando
+    cmd = [
+        "uv", "run", "python", "-m", 
+        "neurapose_backend.pre_processamento.processar",
+        "--input-folder", input_path,
+        "--output-root", str(cm.PROCESSING_OUTPUT_DIR / f"{dataset_name}-processado")
+    ]
+    
+    if show:
+        cmd.append("--show")
+    
+    logger.info(f"Executando comando: {' '.join(cmd)}")
+    log_buffer.write(f"[CMD] {' '.join(cmd)}")
+    
+    try:
+        # Executa o comando com encoding UTF-8 explícito para Windows
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            cwd=str(ROOT_DIR),
+            encoding='utf-8',
+            errors='replace',  # Substitui caracteres inválidos ao invés de falhar
+            env={**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
+        )
+        
+        state.add_process(process)
+        
+        # Lê a saída em tempo real
+        for line in iter(process.stdout.readline, ''):
+            if state.stop_requested:
+                process.terminate()
+                log_buffer.write("[INFO] Processamento interrompido pelo usuário.")
+                break
+            
+            # Enquanto pausado, aguarda
+            while state.is_paused and not state.stop_requested:
+                import time
+                time.sleep(0.1)
+            
+            if line:
+                log_buffer.write(line.rstrip())
+        
+        process.wait()
+        
+        if process.returncode == 0:
+            log_buffer.write("[OK] Processamento concluído com sucesso!")
+            logger.info("Processamento concluído com sucesso.")
+        elif not state.stop_requested:
+            log_buffer.write(f"[ERRO] Processo finalizou com código: {process.returncode}")
+            logger.error(f"Processo finalizou com código: {process.returncode}")
+            
+    except Exception as e:
+        logger.error(f"Erro ao executar subprocess: {e}")
+        log_buffer.write(f"[ERRO] {str(e)}")
+    finally:
+        state.reset()
+
+
+# Mantém a função antiga para compatibilidade (pode ser removida futuramente)
 def run_processing_task(input_path: Path, output_path: Path, onnx_path: Path, show: bool, device: str = "cuda"):
     state.reset()
     state.is_running = True
@@ -223,6 +292,9 @@ def run_processing_task(input_path: Path, output_path: Path, onnx_path: Path, sh
     
     # Wrap execution to capture stdout/stderr to LogBuffer
     with CaptureOutput():
+        # Imprime banner como faz o processar.py
+        imprimir_banner(onnx_path)
+        
         logger.info(f"Iniciando processamento: {input_path} -> {output_path}")
         
         try:
@@ -233,13 +305,17 @@ def run_processing_task(input_path: Path, output_path: Path, onnx_path: Path, sh
                 final_out = output_path
                 if final_out == Path(cm.PROCESSING_OUTPUT_DIR):
                      final_out = output_path / v_name
+                print(f"[INFO] Processando 1 vídeo: {input_path.name}")
                 processar_video(input_path, sess, input_name, final_out, show=show)
             elif input_path.is_dir():
                 videos = sorted(input_path.glob("*.mp4"))
                 output_path.mkdir(parents=True, exist_ok=True)
-                for v in videos:
+                print(f"[INFO] Encontrados {len(videos)} vídeos em {input_path}")
+                for i, v in enumerate(videos, 1):
                     if state.stop_requested: break
+                    print(f"\n[{i}/{len(videos)}] Processando: {v.name}")
                     processar_video(v, sess, input_name, output_path, show=show)
+
             
             if state.stop_requested:
                 logger.info("Processamento interrompido pelo usuario.")
@@ -298,32 +374,6 @@ def run_testing_task(req: Dict[str, Any]):
             state.reset()
 
 
-def pick_folder_via_subprocess(initial_dir=None):
-    import subprocess
-    import sys
-    
-    # Get current python executable to run the script
-    python_exe = sys.executable
-    picker_script = Path(__file__).parent / "picker.py"
-    
-    try:
-        cmd = [python_exe, str(picker_script)]
-        if initial_dir:
-            cmd.append(str(initial_dir))
-            
-        result = subprocess.check_output(
-            cmd,
-            stderr=subprocess.STDOUT,
-            universal_newlines=True
-        )
-        folder = result.strip()
-        return folder if folder else None
-    except subprocess.CalledProcessError:
-        # This happens if exit code is non-zero (e.g. cancelled)
-        return None
-    except Exception as e:
-        logger.error(f"Error calling picker subprocess: {e}")
-        return None
 
 # ==============================================================
 # ENDPOINTS
@@ -387,13 +437,17 @@ def api_get_all_config():
 
 @app.get("/config")
 def api_get_config():
-    """Retorna configurações básicas, compatível com o FileExplorerModal do frontend."""
+    """Retorna configurações básicas e caminhos raiz para restrição do explorador."""
     return {
         "status": "success",
         "paths": {
-            "processing_input": str(cm.PROCESSING_INPUT_DIR),
-            "processing_output": str(cm.PROCESSING_OUTPUT_DIR),
-            "reid_output": str(cm.REID_OUTPUT_DIR)
+            "videos": str(cm.PROCESSING_INPUT_DIR),
+            "processamentos": str(cm.PROCESSING_OUTPUT_DIR),
+            "reidentificacoes": str(cm.REID_OUTPUT_DIR),
+            "datasets": str(cm.ROOT / "datasets"),
+            "modelos": str(cm.TRAINED_MODELS_DIR),
+            "anotacoes": str(cm.PROCESSING_ANNOTATIONS_DIR),
+            "root": str(cm.ROOT)
         }
     }
 
@@ -497,16 +551,29 @@ def shutdown_server():
 def video_feed():
     def generate():
         import cv2
+        import time
+        # Limite de tempo sem frame para encerrar o stream (evita loop infinito)
+        no_frame_count = 0
+        max_no_frame = 100  # 10 segundos sem frame = encerra
+        
         while True:
+            # Verifica se deve parar
+            if state.stop_requested:
+                break
+                
             frame = state.get_frame()
             if frame is not None:
+                no_frame_count = 0  # Reset counter
                 # Encode as JPEG
                 _, buffer = cv2.imencode('.jpg', frame)
                 yield (b'--frame\r\n'
                        b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
             else:
+                no_frame_count += 1
+                # Se não há processamento ativo e não há frames, encerra após timeout
+                if not state.is_running and no_frame_count > max_no_frame:
+                    break
                 # Small delay to not consume CPU
-                import time
                 time.sleep(0.1)
     return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
 
@@ -525,27 +592,40 @@ def resume_process():
     state.is_paused = False
     return {"status": "resumed"}
 
-@app.get("/pick-folder")
-def pick_folder(initial_dir: Optional[str] = None):
-    # Se não passar inicial, tenta usar o padrão do cm
-    if not initial_dir:
-        initial_dir = str(cm.PROCESSING_INPUT_DIR)
-        
-    path = pick_folder_via_subprocess(initial_dir)
-    return {"path": path}
 
 @app.post("/process")
 async def start_processing(req: ProcessRequest, background_tasks: BackgroundTasks):
-    """Inicia processamento de video(s)."""
+    """Inicia processamento de video(s) via subprocess."""
     inp = Path(req.input_path)
-    out = Path(req.output_path)
-    onnx = Path(req.onnx_path) if req.onnx_path else cm.RTMPOSE_PREPROCESSING_PATH
     
     if not inp.exists():
-        raise HTTPException(status_code=404, detail="Input path not found")
+        raise HTTPException(status_code=404, detail="Pasta de entrada não encontrada")
     
-    background_tasks.add_task(run_processing_task, inp, out, onnx, req.show_preview, req.device)
-    return {"status": "started", "detail": f"Processing {inp.name} -> {out.name} on {req.device}"}
+    # Calcula nome do dataset: se não fornecido, usa o nome da pasta de entrada
+    if req.dataset_name and req.dataset_name.strip():
+        dataset_name = req.dataset_name.strip()
+    else:
+        # Usa o nome da última pasta do caminho de entrada
+        dataset_name = inp.name if inp.is_dir() else inp.stem
+    
+    # Garante que o sufixo -processado não seja duplicado
+    if dataset_name.endswith("-processado"):
+        dataset_name = dataset_name[:-11]  # Remove o sufixo se já existir
+    
+    output_dir = cm.PROCESSING_OUTPUT_DIR / f"{dataset_name}-processado"
+    
+    background_tasks.add_task(
+        run_subprocess_processing, 
+        str(inp), 
+        dataset_name, 
+        req.show_preview, 
+        req.device
+    )
+    return {
+        "status": "started", 
+        "detail": f"Processando {inp.name} -> {output_dir.name}",
+        "output_dir": str(output_dir)
+    }
 
 @app.post("/test")
 async def start_testing(req: TestRequest, background_tasks: BackgroundTasks):

@@ -1,4 +1,7 @@
+'use client';
+
 import { useState, useEffect } from 'react';
+
 import {
     Tag,
     Video as VideoIcon,
@@ -7,10 +10,14 @@ import {
     Save,
     ChevronRight,
     Play,
-    Info
+    Info,
+    FolderInput,
+    RefreshCcw
 } from 'lucide-react';
 import { APIService } from '@/services/api';
 import { PageHeader } from '@/components/ui/page-header';
+import { FileExplorerModal } from '@/components/file-explorer-modal';
+
 
 export default function AnnotationPage() {
     const [videos, setVideos] = useState<any[]>([]);
@@ -21,14 +28,36 @@ export default function AnnotationPage() {
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState('');
 
+    // Config for paths and classes
+    const [inputPath, setInputPath] = useState('');
+    const [positiveClass, setPositiveClass] = useState('FURTO');
+    const [negativeClass, setNegativeClass] = useState('NORMAL');
+    const [explorerOpen, setExplorerOpen] = useState(false);
+    const [roots, setRoots] = useState<Record<string, string>>({});
+
     useEffect(() => {
-        loadVideos();
+        // Load defaults from config
+        APIService.getConfig().then(res => {
+            if (res.data.status === 'success') {
+                const savedPath = localStorage.getItem('np_annotation_input');
+                setRoots(res.data.paths);
+                setInputPath(savedPath || res.data.paths.reidentificacoes || '');
+            }
+        });
     }, []);
+
+    useEffect(() => {
+        if (inputPath) {
+            loadVideos();
+            localStorage.setItem('np_annotation_input', inputPath);
+        }
+    }, [inputPath]);
+
 
     const loadVideos = async () => {
         setLoading(true);
         try {
-            const res = await APIService.listAnnotationVideos();
+            const res = await APIService.listAnnotationVideos(inputPath || undefined);
             setVideos(res.data.videos);
         } catch (err) {
             console.error(err);
@@ -37,6 +66,7 @@ export default function AnnotationPage() {
             setLoading(false);
         }
     };
+
 
     const loadDetails = async (videoId: string) => {
         setSelectedVideo(videoId);
@@ -87,7 +117,55 @@ export default function AnnotationPage() {
                 description="Classifique os indivíduos detectados (NORMAL ou FURTO) para treinar o modelo de detecção de anomalias."
             />
 
+            {/* Barra de Configuração */}
+            <div className="bg-card border border-border rounded-xl p-4">
+                <div className="flex flex-wrap items-end gap-4">
+                    <div className="flex-1 min-w-[300px] space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-muted-foreground">Pasta de Entrada (ReID)</label>
+                        <div className="flex gap-2">
+                            <input
+                                value={inputPath}
+                                onChange={(e) => setInputPath(e.target.value)}
+                                className="flex-1 bg-secondary/50 border border-border text-sm py-2 px-3 rounded-lg"
+                                placeholder="resultados-reidentificacoes/..."
+                            />
+                            <button
+                                onClick={() => setExplorerOpen(true)}
+                                className="p-2 bg-secondary border border-border rounded-lg hover:bg-secondary/80"
+                                title="Selecionar Pasta"
+                            >
+                                <FolderInput className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={loadVideos}
+                                className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20"
+                                title="Recarregar"
+                            >
+                                <RefreshCcw className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-muted-foreground">Classe Positiva</label>
+                        <input
+                            value={positiveClass}
+                            onChange={(e) => setPositiveClass(e.target.value.toUpperCase())}
+                            className="w-24 bg-secondary/50 border border-border text-sm py-2 px-3 rounded-lg text-center"
+                        />
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-muted-foreground">Classe Negativa</label>
+                        <input
+                            value={negativeClass}
+                            onChange={(e) => setNegativeClass(e.target.value.toUpperCase())}
+                            className="w-24 bg-secondary/50 border border-border text-sm py-2 px-3 rounded-lg text-center"
+                        />
+                    </div>
+                </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
 
                 {/* 1. Lista de Vídeos (Esquerda) */}
                 <div className="lg:col-span-3 space-y-4">
@@ -226,7 +304,19 @@ export default function AnnotationPage() {
                     )}
                 </div>
             </div>
+
+            {/* File Explorer Modal */}
+            <FileExplorerModal
+                isOpen={explorerOpen}
+                onClose={() => setExplorerOpen(false)}
+                onSelect={(path) => {
+                    setInputPath(path);
+                    setExplorerOpen(false);
+                }}
+                initialPath={inputPath}
+                rootPath={roots.reidentificacoes}
+                title="Selecionar Pasta de ReID"
+            />
         </div>
     );
 }
-

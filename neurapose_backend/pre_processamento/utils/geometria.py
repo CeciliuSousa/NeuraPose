@@ -6,7 +6,7 @@
 
 import cv2
 import numpy as np
-from pre_processamento.configuracao.config import SIMCC_W, SIMCC_H
+from neurapose_backend.pre_processamento.configuracao.config import SIMCC_W, SIMCC_H
 
 
 def get_dir(src_point, rot_rad):

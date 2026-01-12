@@ -7,8 +7,6 @@ import {
     Pause,
     Square,
     FolderInput,
-    FolderOutput,
-    TerminalSquare,
     Loader2
 } from 'lucide-react';
 import { APIService } from '@/services/api';
@@ -18,19 +16,20 @@ export default function ProcessamentoPage() {
     // Form State
     const [config, setConfig] = useState({
         inputPath: '',
-        outputPath: '',
+        datasetName: '', // Nome do dataset de saída (sufixo -processado adicionado automaticamente)
         device: 'cuda', // 'cuda' ou 'cpu'
         showPreview: false,
     });
-
 
     // Processing State
     const [loading, setLoading] = useState(false);
     const [isPaused, setIsPaused] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
-    const [explorerTarget, setExplorerTarget] = useState<'input' | 'output' | null>(null);
+    const [explorerTarget, setExplorerTarget] = useState<'input' | null>(null);
+    const [roots, setRoots] = useState<Record<string, string>>({});
 
     const terminalRef = useRef<HTMLDivElement>(null);
+    const [autoScroll, setAutoScroll] = useState(true);
 
     // Logs & Health Polling
     useEffect(() => {
@@ -47,12 +46,12 @@ export default function ProcessamentoPage() {
         // 2. Inicializa paths padrões do backend
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
-                const { processing_input, processing_output } = res.data.paths;
+                const { videos } = res.data.paths;
+                setRoots(res.data.paths);
                 // Só atualiza se o campo estiver vazio
                 setConfig(prev => ({
                     ...prev,
-                    inputPath: prev.inputPath || processing_input,
-                    outputPath: prev.outputPath || processing_output
+                    inputPath: prev.inputPath || videos
                 }));
             }
         }).catch(err => console.error("Erro ao carregar caminhos do backend:", err));
@@ -95,16 +94,26 @@ export default function ProcessamentoPage() {
         localStorage.setItem('np_process_config', JSON.stringify(config));
     }, [config]);
 
-    // Auto-scroll terminal
+    // Auto-scroll terminal (apenas se autoScroll estiver ativo)
     useEffect(() => {
-        if (terminalRef.current) {
+        if (terminalRef.current && autoScroll) {
             terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
         }
-    }, [logs]);
+    }, [logs, autoScroll]);
+
+    // Detecta se o usuário scrollou manualmente
+    const handleTerminalScroll = () => {
+        if (terminalRef.current) {
+            const { scrollTop, scrollHeight, clientHeight } = terminalRef.current;
+            // Se estiver perto do final (10px de tolerância), ativa auto-scroll
+            const isAtBottom = scrollHeight - scrollTop - clientHeight < 10;
+            setAutoScroll(isAtBottom);
+        }
+    };
 
     const handleProcess = async () => {
-        if (!config.inputPath || !config.outputPath) {
-            alert("Por favor, selecione as pastas de entrada e saída.");
+        if (!config.inputPath) {
+            alert("Por favor, selecione a pasta de entrada.");
             return;
         }
 
@@ -114,7 +123,7 @@ export default function ProcessamentoPage() {
         try {
             await APIService.startProcessing({
                 input_path: config.inputPath,
-                output_path: config.outputPath,
+                dataset_name: config.datasetName,
                 device: config.device,
                 show_preview: config.showPreview
             });
@@ -142,12 +151,11 @@ export default function ProcessamentoPage() {
         } catch (e) { console.error(e); }
     };
 
-    const openExplorer = (target: 'input' | 'output') => setExplorerTarget(target);
+    const openExplorer = () => setExplorerTarget('input');
     const closeExplorer = () => setExplorerTarget(null);
 
     const handleSelectPath = (path: string) => {
-        if (explorerTarget === 'input') setConfig({ ...config, inputPath: path });
-        else if (explorerTarget === 'output') setConfig({ ...config, outputPath: path });
+        setConfig({ ...config, inputPath: path });
         closeExplorer();
     };
 
@@ -178,7 +186,7 @@ export default function ProcessamentoPage() {
                                         className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono"
                                     />
                                     <button
-                                        onClick={() => openExplorer('input')}
+                                        onClick={() => openExplorer()}
                                         className="px-3 py-2 bg-secondary rounded-md border border-border hover:bg-secondary/80 transition-colors"
                                     >
                                         <FolderInput className="w-4 h-4" />
@@ -187,22 +195,17 @@ export default function ProcessamentoPage() {
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-muted-foreground">Pasta de Saída</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={config.outputPath}
-                                        onChange={(e) => setConfig({ ...config, outputPath: e.target.value })}
-                                        placeholder="Ex: C:\Videos\Saida"
-                                        className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono"
-                                    />
-                                    <button
-                                        onClick={() => openExplorer('output')}
-                                        className="px-3 py-2 bg-secondary rounded-md border border-border hover:bg-secondary/80 transition-colors"
-                                    >
-                                        <FolderOutput className="w-4 h-4" />
-                                    </button>
-                                </div>
+                                <label className="text-sm font-medium text-muted-foreground">Nome do Dataset de Saída</label>
+                                <input
+                                    type="text"
+                                    value={config.datasetName}
+                                    onChange={(e) => setConfig({ ...config, datasetName: e.target.value })}
+                                    placeholder="Deixe vazio para usar o nome da pasta de entrada"
+                                    className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                                />
+                                <p className="text-xs text-muted-foreground italic">
+                                    Saída: resultados-processamentos/{config.datasetName || '[nome-da-pasta]'}-processado/
+                                </p>
                             </div>
 
                             <div className="space-y-2">
@@ -320,7 +323,8 @@ export default function ProcessamentoPage() {
                     </div>
                     <div
                         ref={terminalRef}
-                        className="flex-1 p-4 font-mono text-sm overflow-y-auto space-y-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
+                        onScroll={handleTerminalScroll}
+                        className="flex-1 p-4 font-mono text-sm overflow-y-auto space-y-1 max-h-[400px] scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
                     >
                         {logs.length === 0 && (
                             <div className="text-slate-700 italic flex items-center justify-center h-full">
@@ -364,8 +368,9 @@ export default function ProcessamentoPage() {
                 isOpen={explorerTarget !== null}
                 onClose={closeExplorer}
                 onSelect={handleSelectPath}
-                initialPath={explorerTarget === 'input' ? config.inputPath : config.outputPath}
-                title={explorerTarget === 'input' ? "Selecionar Pasta de Entrada" : "Selecionar Pasta de Saída"}
+                initialPath={config.inputPath}
+                rootPath={roots.videos}
+                title="Selecionar Pasta de Entrada (Vídeos)"
             />
         </div>
     );

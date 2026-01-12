@@ -9,7 +9,7 @@ const api = axios.create({
 
 export interface ProcessRequest {
     input_path: string;
-    output_path: string;
+    dataset_name?: string; // Nome do dataset (sufixo -processado adicionado automaticamente)
     onnx_path?: string;
     show_preview?: boolean;
     device?: string;

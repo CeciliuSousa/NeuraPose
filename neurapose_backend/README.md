@@ -5,26 +5,38 @@ API REST para automação do sistema NeuraPose usando FastAPI.
 ## Quick Start
 
 ```bash
-# Instalar dependências
-./NeuraPose-App/: uv sync --index-strategy unsafe-best-match
+# Instalar dependências (na raiz do projeto)
+uv sync --index-strategy unsafe-best-match
 
-# Executar (dev)
-uvicorn main:app --reload
+# Executar backend (dev)
+uv run uvicorn neurapose_backend.main:app --reload --port 8000
 
 # Acessar docs
 # http://localhost:8000/docs
 ```
 
-## Endpoints
+## Endpoints Principais
 
-| Grupo | Rota | Descrição |
-|-------|------|-----------|
-| Processing | `/api/v1/processing/videos` | Processar vídeos |
-| Annotation | `/api/v1/annotation/save` | Salvar anotações |
-| Dataset | `/api/v1/dataset/split` | Dividir dataset |
-| Training | `/api/v1/training/start` | Treinar modelo |
-| Testing | `/api/v1/testing/run` | Executar testes |
-| Config | `/api/v1/config` | Configurações |
+| Grupo | Rota | Método | Descrição |
+|-------|------|--------|-----------|
+| Sistema | `/` | GET | Status da API |
+| Sistema | `/health` | GET | Health check com status de processamento |
+| Sistema | `/logs` | GET | Logs do backend em tempo real |
+| Processamento | `/process` | POST | Processar vídeos com YOLO + RTMPose |
+| Processamento | `/process/stop` | POST | Parar processamento |
+| Processamento | `/process/pause` | POST | Pausar processamento |
+| Processamento | `/process/resume` | POST | Retomar processamento |
+| ReID | `/reid/list` | GET | Listar vídeos para re-identificação |
+| ReID | `/reid/{video_id}/apply` | POST | Aplicar correções de IDs |
+| Anotação | `/annotate/list` | GET | Listar vídeos para anotação |
+| Anotação | `/annotate/save` | POST | Salvar anotações |
+| Dataset | `/dataset/split` | POST | Dividir dataset em treino/teste |
+| Treinamento | `/train` | POST | Treinar modelo LSTM/TFT |
+| Teste | `/test` | POST | Testar modelo treinado |
+| Config | `/config` | GET | Obter configurações |
+| Config | `/config/update` | POST | Atualizar configurações |
+| Explorador | `/browse` | GET | Explorar diretórios |
+| Preview | `/video_feed` | GET | Stream de vídeo em tempo real |
 
 ## Docker
 
@@ -32,7 +44,9 @@ uvicorn main:app --reload
 docker-compose up -d
 ```
 
-## Documentação
+## Documentação Interativa
 
 - Swagger UI: http://localhost:8000/docs
-- Health: http://localhost:8000/health
+- ReDoc: http://localhost:8000/redoc
+- Health Check: http://localhost:8000/health
+

@@ -146,7 +146,7 @@ POSITIVE_CLASS_NAME = CLASS_NAMES[POSITIVE_CLASS_ID]
 # 3.1 DATASET
 #################################################################
 # CONFIGURACAO DE DATASETS POR PIPELINE
-#
+#n
 # Este projeto usa DIFERENTES datasets em cada etapa:
 #
 # [1] PRE-PROCESSAMENTO (processar.py):

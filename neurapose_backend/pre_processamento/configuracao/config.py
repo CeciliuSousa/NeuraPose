@@ -5,6 +5,7 @@
 # Importa TUDO do config_master.py
 from neurapose_backend.config_master import (
     # Parametros de processamento
+
     POSE_CONF_MIN,
     CLAMP_MARGIN,
     EMA_ALPHA,

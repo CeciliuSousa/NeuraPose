@@ -41,6 +41,20 @@ export default function TrainingPage() {
     });
 
     const [explorerOpen, setExplorerOpen] = useState(false);
+    const [roots, setRoots] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        APIService.getConfig().then(res => {
+            if (res.data.status === 'success') {
+                setRoots(res.data.paths);
+                setSplitConfig(prev => ({
+                    ...prev,
+                    inputDir: res.data.paths.reidentificacoes || ''
+                }));
+            }
+        });
+    }, []);
+
 
     // Polling de Logs
     useEffect(() => {
@@ -349,7 +363,8 @@ export default function TrainingPage() {
                     setExplorerOpen(false);
                 }}
                 initialPath={splitConfig.inputDir}
-                title="Selecionar Pasta de Resultados"
+                rootPath={roots.reidentificacoes}
+                title="Selecionar Pasta de Resultados (ReID)"
             />
         </div>
     );

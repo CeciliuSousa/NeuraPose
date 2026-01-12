@@ -15,10 +15,18 @@ export default function ConfigPage() {
     // File Explorer State
     const [explorerOpen, setExplorerOpen] = useState(false);
     const [activeKey, setActiveKey] = useState<string | null>(null);
+    const [roots, setRoots] = useState<Record<string, string>>({});
+
 
     useEffect(() => {
         loadConfig();
+        APIService.getConfig().then(res => {
+            if (res.data.status === 'success') {
+                setRoots(res.data.paths);
+            }
+        });
     }, []);
+
 
     const loadConfig = async () => {
         setLoading(true);
@@ -93,50 +101,73 @@ export default function ConfigPage() {
 
     const sections = [
         {
-            title: "Modelos Re-ID & YOLO",
+            title: "Modelos de IA",
+            description: "Modelos usados para detecção, pose e re-identificação.",
             items: [
+                { key: "YOLO_MODEL", label: "Modelo YOLO (Detecção)", type: "select", options: ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt"] },
                 { key: "OSNET_MODEL", label: "Modelo OSNet (Re-ID)", type: "path" },
-                { key: "YOLO_MODEL", label: "Modelo YOLO (Detecção)", type: "path" },
-                { key: "RTMPOSE_MODEL", label: "Modelo RTMPose", type: "path" },
-                { key: "TEMPORAL_MODEL", label: "Modelo Temporal (tft/lstm)", type: "select", options: ["tft", "lstm"] },
+                { key: "TEMPORAL_MODEL", label: "Modelo Temporal", type: "select", options: ["tft", "lstm"] },
             ]
         },
         {
-            title: "Diretórios e Dados",
+            title: "Classes de Detecção",
+            description: "Nomes das classes para classificação de comportamento.",
             items: [
-                { key: "PROCESSING_DATASET", label: "Dataset Ativo", type: "text" },
-                { key: "CLASSE1", label: "Nome Classe 1 (Negativa)", type: "text" },
-                { key: "CLASSE2", label: "Nome Classe 2 (Positiva)", type: "text" },
+                { key: "CLASSE1", label: "Classe Negativa (Normal)", type: "text" },
+                { key: "CLASSE2", label: "Classe Positiva (Anomalia)", type: "text" },
+                { key: "CLASSE2_THRESHOLD", label: "Threshold da Classe Positiva", type: "number", step: 0.01 },
             ]
         },
         {
-            title: "Configurações YOLO & Pose",
+            title: "Configurações YOLO",
+            description: "Parâmetros de detecção de pessoas.",
             items: [
                 { key: "DETECTION_CONF", label: "Confiança YOLO (0-1)", type: "number", step: 0.01 },
-                { key: "POSE_CONF_MIN", label: "Confiança Pose Min (0-1)", type: "number", step: 0.01 },
+                { key: "YOLO_IMGSZ", label: "Resolução de Entrada", type: "select", options: ["640", "1280", "1920"] },
+            ]
+        },
+        {
+            title: "Configurações de Pose",
+            description: "Parâmetros de extração de keypoints.",
+            items: [
+                { key: "POSE_CONF_MIN", label: "Confiança Mínima Keypoint", type: "number", step: 0.01 },
                 { key: "EMA_ALPHA", label: "Suavização EMA (Alpha)", type: "number", step: 0.01 },
-                { key: "CLASSE2_THRESHOLD", label: "Threshold CLASSE2 (Inferencia)", type: "number", step: 0.01 },
+                { key: "EMA_MIN_CONF", label: "Conf. Mínima para EMA", type: "number", step: 0.01 },
             ]
         },
         {
             title: "Rastreador (BoTSORT)",
+            description: "Parâmetros do tracker para manter IDs consistentes.",
             items: [
                 { key: "track_high_thresh", label: "Track High Thresh", type: "number", step: 0.05 },
                 { key: "track_low_thresh", label: "Track Low Thresh", type: "number", step: 0.05 },
+                { key: "new_track_thresh", label: "New Track Thresh", type: "number", step: 0.05 },
                 { key: "match_thresh", label: "Match (ReID) Thresh", type: "number", step: 0.05 },
                 { key: "track_buffer", label: "Track Buffer (Frames)", type: "number" },
+                { key: "proximity_thresh", label: "Proximity Thresh", type: "number", step: 0.05 },
+                { key: "appearance_thresh", label: "Appearance Thresh", type: "number", step: 0.05 },
             ]
         },
         {
             title: "Parâmetros de Treinamento",
+            description: "Hiperparâmetros usados no treinamento do modelo temporal.",
             items: [
                 { key: "TIME_STEPS", label: "Janela Temporal (Frames)", type: "number" },
                 { key: "BATCH_SIZE", label: "Tamanho do Lote (Batch)", type: "number" },
                 { key: "LEARNING_RATE", label: "Taxa de Aprendizado (LR)", type: "number", step: 0.0001 },
-                { key: "EPOCHS", label: "Épocas", type: "number" },
+                { key: "EPOCHS", label: "Épocas Padrão", type: "number" },
+            ]
+        },
+        {
+            title: "Parâmetros de Sequência",
+            description: "Configurações de frames para processamento de vídeos.",
+            items: [
+                { key: "MAX_FRAMES_PER_SEQUENCE", label: "Máx. Frames por Sequência", type: "number" },
+                { key: "MIN_FRAMES_PER_ID", label: "Mín. Frames por ID", type: "number" },
             ]
         }
     ];
+
 
     return (
         <div className="space-y-6 max-w-6xl mx-auto pb-20 px-4">
@@ -191,8 +222,12 @@ export default function ConfigPage() {
                     <div key={sidx} className="bg-card border border-border rounded-2xl overflow-hidden shadow-md flex flex-col">
                         <div className="px-6 py-5 bg-muted/20 border-b border-border">
                             <h2 className="font-bold text-xl tracking-wide">{section.title}</h2>
+                            {section.description && (
+                                <p className="text-xs text-muted-foreground mt-1">{section.description}</p>
+                            )}
                         </div>
                         <div className="p-6 space-y-6 flex-1">
+
                             {section.items.map((item) => (
                                 <div key={item.key} className="space-y-2.5">
                                     <div className="flex justify-between items-center">
@@ -247,8 +282,9 @@ export default function ConfigPage() {
                 isOpen={explorerOpen}
                 onClose={() => setExplorerOpen(false)}
                 onSelect={onPathSelect}
-                initialPath={activeKey ? config[activeKey] : undefined}
-                title={`Selecionar ${activeKey}`}
+                initialPath={activeKey ? config[activeKey] : ''}
+                rootPath={roots.root}
+                title="Selecionar Arquivo ou Pasta"
             />
 
             <div className="bg-primary/5 border border-primary/10 p-5 rounded-2xl text-xs text-muted-foreground leading-relaxed flex items-start gap-4">

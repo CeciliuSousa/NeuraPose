@@ -9,10 +9,11 @@ interface FileExplorerModalProps {
     onClose: () => void;
     onSelect: (path: string) => void;
     initialPath?: string;
+    rootPath?: string;
     title?: string;
 }
 
-export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, title = "Selecionar Pasta" }: FileExplorerModalProps) {
+export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, rootPath, title = "Selecionar Pasta" }: FileExplorerModalProps) {
     const [currentPath, setCurrentPath] = useState<string>(initialPath || '');
     const [data, setData] = useState<BrowseResponse | null>(null);
     const [loading, setLoading] = useState(false);
@@ -20,10 +21,13 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, titl
 
     useEffect(() => {
         if (isOpen) {
-            // Se o path estiver vazio, tenta carregar o config do backend para pegar um root padrão
-            if (!currentPath) {
+            // Se tiver rootPath e o path atual estiver fora dele ou vazio, usa rootPath
+            if (rootPath && (!currentPath || !currentPath.startsWith(rootPath))) {
+                loadPath(rootPath);
+            } else if (!currentPath) {
+                // Fallback para videos se nada for passado (segurança extra)
                 APIService.getConfig().then(res => {
-                    const defaultPath = res.data.paths?.processing_input || 'C:\\';
+                    const defaultPath = res.data.paths?.videos || 'C:\\';
                     loadPath(defaultPath);
                 }).catch(() => loadPath('C:\\'));
             } else {
@@ -33,6 +37,11 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, titl
     }, [isOpen]);
 
     const loadPath = async (path: string) => {
+        // Proteção extra: não deixa carregar nada acima do rootPath proativamente
+        if (rootPath && !path.startsWith(rootPath)) {
+            path = rootPath;
+        }
+
         setLoading(true);
         setError(null);
         try {
@@ -47,6 +56,9 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, titl
     };
 
     if (!isOpen) return null;
+
+    // Verifica se estamos na raiz permitida para desativar o botão de voltar
+    const isAtRoot = rootPath ? currentPath === rootPath || currentPath === rootPath + '\\' || currentPath === rootPath + '/' : false;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -63,7 +75,7 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, titl
                 <div className="p-3 bg-muted/30 flex items-center gap-2 border-b border-border">
                     <button
                         onClick={() => data?.parent && loadPath(data.parent)}
-                        disabled={!data?.parent || data.parent === data.current}
+                        disabled={!data?.parent || data.parent === data.current || isAtRoot}
                         className="p-1.5 hover:bg-secondary rounded-md disabled:opacity-30"
                     >
                         <ChevronLeft className="w-4 h-4" />
@@ -113,29 +125,9 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, titl
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-border flex justify-between items-center bg-muted/10">
-                    <button
-                        onClick={async () => {
-                            setLoading(true);
-                            try {
-                                const res = await APIService.pickFolder(currentPath);
-                                if (res.data.path) {
-                                    onSelect(res.data.path);
-                                }
-                            } catch (err) {
-                                console.error(err);
-                                setError("Erro ao abrir explorer nativo");
-                            } finally {
-                                setLoading(false);
-                            }
-                        }}
-                        className="px-4 py-2 text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md transition-all flex items-center gap-2"
-                    >
-                        <Folder className="w-4 h-4" />
-                        Abrir Explorer do Windows
-                    </button>
-
+                <div className="p-4 border-t border-border flex justify-end items-center bg-muted/10">
                     <div className="flex gap-3">
+
                         <button
                             onClick={onClose}
                             className="px-4 py-2 text-sm font-medium hover:bg-secondary rounded-md transition-colors"

@@ -8,15 +8,15 @@ from pathlib import Path
 from colorama import Fore, init as colorama_init
 
 # Importa configuracoes centralizadas
-from config_master import (
+from neurapose_backend.config_master import (
     PROCESSING_INPUT_DIR,
     PROCESSING_OUTPUT_DIR,
     RTMPOSE_PREPROCESSING_PATH,
 )
 
 
-from pre_processamento.utils.ferramentas import imprimir_banner, carregar_sessao_onnx
-from pre_processamento.pipeline.processador import processar_video
+from neurapose_backend.pre_processamento.utils.ferramentas import imprimir_banner, carregar_sessao_onnx
+from neurapose_backend.pre_processamento.pipeline.processador import processar_video
 
 
 import warnings
@@ -46,14 +46,17 @@ def main():
 
     if not args.input_video and not args.input_folder:
         print(Fore.RED + "[ERRO] Use --input-video ou --input-folder")
+        sys.stdout.flush()
         sys.exit(1)
 
     onnx_path = Path(args.onnx)
     out_root = Path(args.output_root)
     
     imprimir_banner(onnx_path)
+    sys.stdout.flush()
 
     sess, input_name = carregar_sessao_onnx(str(onnx_path))
+    sys.stdout.flush()
 
     if args.input_video:
         v = Path(args.input_video)
@@ -65,6 +68,7 @@ def main():
         already_processed = any(preds_dir.glob(f"{v.stem}*pose.mp4")) or any(json_dir.glob(f"{v.stem}*tracking.json"))
         if already_processed:
             print(Fore.YELLOW + f"[SKIP] Video já processado: {v.name}")
+            sys.stdout.flush()
             return
 
         processar_video(v, sess, input_name, out_root, show=args.show)
@@ -76,6 +80,7 @@ def main():
 
         videos = sorted(folder.glob("*.mp4"))
         print(Fore.CYAN + f"[INFO] Encontrados {len(videos)} videos em {folder}")
+        sys.stdout.flush()
         
         for v in videos:
             preds_dir = out_root / "predicoes"
@@ -90,6 +95,6 @@ def main():
 
 
 if __name__ == "__main__":
-    import neurapose_backend.config_master as cm
+    from neurapose_backend import config_master as cm
     cm.imprimir_configs_yolo_botsort()
     main()

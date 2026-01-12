@@ -20,7 +20,7 @@ import torch
 
 
 # Configuracoes centralizadas
-from neurapose_backend.config_master import (
+from config_master import (
     PROCESSING_DATASET,
     PROCESSING_JSONS_DIR,
     PROCESSING_ANNOTATIONS_DIR,
@@ -30,7 +30,8 @@ from neurapose_backend.config_master import (
     NUM_JOINTS,
     NUM_CHANNELS,
     CLASS_NAMES,
-)  
+)
+  
 
 # ------------------------------------------------------------
 # PATHS DERIVADOS DO CONFIG_MASTER

@@ -6,7 +6,7 @@
 import cv2
 import numpy as np
 import hashlib
-from pre_processamento.configuracao.config import PAIRS
+from neurapose_backend.pre_processamento.configuracao.config import PAIRS
 
 
 def _hash_to_color(i: int):

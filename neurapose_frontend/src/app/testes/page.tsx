@@ -30,6 +30,21 @@ export default function TestsPage() {
     });
 
     const [explorerTarget, setExplorerTarget] = useState<'model' | 'dataset' | null>(null);
+    const [roots, setRoots] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        APIService.getConfig().then(res => {
+            if (res.data.status === 'success') {
+                setRoots(res.data.paths);
+                setConfig(prev => ({
+                    ...prev,
+                    modelPath: prev.modelPath || res.data.paths.modelos,
+                    datasetPath: prev.datasetPath || res.data.paths.datasets
+                }));
+            }
+        });
+    }, []);
+
 
     // Polling de Logs
     useEffect(() => {
@@ -246,6 +261,7 @@ export default function TestsPage() {
                     setExplorerTarget(null);
                 }}
                 initialPath={explorerTarget === 'model' ? config.modelPath : config.datasetPath}
+                rootPath={explorerTarget === 'model' ? roots.modelos : roots.datasets}
                 title={explorerTarget === 'model' ? "Selecionar Modelo (.pt)" : "Selecionar Pasta do Dataset"}
             />
         </div>
