@@ -182,7 +182,7 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
 
         # Atualiza preview do site se disponivel
         if state_notifier:
-            state_notifier.update_frame(frame)
+            state_notifier.set_frame(frame)
 
         writer_pred.write(frame)
 
