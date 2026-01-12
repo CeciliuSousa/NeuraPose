@@ -170,6 +170,11 @@ def yolo_detector_botsort(videos_dir=None):
         tracker_yaml_path = save_temp_tracker_yaml()
         logging.getLogger("neurapose.tracker").info(f"Usando BoTSORT YAML: {tracker_yaml_path}")
 
+        print(f"[YOLO] Iniciando tracking em: {video.name}")
+        print(f"[YOLO] Isso pode demorar alguns minutos dependendo do tamanho do video e se esta usando GPU ou CPU...")
+        import sys
+        sys.stdout.flush()
+
         # Execucao do YOLO + tracking
         results = model.track(
             source=str(video),
@@ -181,6 +186,9 @@ def yolo_detector_botsort(videos_dir=None):
             classes=[YOLO_CLASS_PERSON],
             verbose=False
         )
+
+        print(f"[YOLO] Tracking concluido! {len(results)} frames processados.")
+        sys.stdout.flush()
 
         if not results or not hasattr(results[0], "boxes"):
             print("[ERRO] Sem resultados validos.")

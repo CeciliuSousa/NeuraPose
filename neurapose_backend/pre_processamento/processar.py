@@ -95,6 +95,6 @@ def main():
 
 
 if __name__ == "__main__":
-    from neurapose_backend import config_master as cm
-    cm.imprimir_configs_yolo_botsort()
+    # from neurapose_backend import config_master as cm
+    # cm.imprimir_configs_yolo_botsort()
     main()

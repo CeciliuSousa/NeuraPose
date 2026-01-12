@@ -10,15 +10,19 @@ class UserConfigManager:
     @staticmethod
     def load_config() -> Dict[str, Any]:
         """Carrega as configurações do arquivo JSON ou retorna as configurações do config_master."""
+        defaults = UserConfigManager.get_default_config()
+        
         if CONFIG_FILE.exists():
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    saved_config = json.load(f)
+                    # Merge: valores salvos sobrescrevem os padrões
+                    defaults.update(saved_config)
+                    return defaults
             except Exception as e:
                 print(f"[ERROR] Falha ao carregar user_settings.json: {e}")
         
-        # Se não existir ou falhar, retorna o que está no config_master (via RUNTIME_CONFIG se possível)
-        return UserConfigManager.get_default_config()
+        return defaults
 
     @staticmethod
     def save_config(config: Dict[str, Any]):
@@ -33,31 +37,49 @@ class UserConfigManager:
     @staticmethod
     def get_default_config() -> Dict[str, Any]:
         """Extrai as configurações padrão do config_master."""
-        # Esta lista deve ser mantida sincronizada com o que queremos expor no front
         return {
-            "DETECTION_CONF": cm.DETECTION_CONF,
-            "POSE_CONF_MIN": cm.POSE_CONF_MIN,
-            "EMA_ALPHA": cm.EMA_ALPHA,
-            "PROCESSING_DATASET": cm.PROCESSING_DATASET,
-            "OSNET_MODEL": cm.OSNET_MODEL,
+            # Modelos de IA
             "YOLO_MODEL": cm.YOLO_MODEL,
+            "OSNET_MODEL": cm.OSNET_MODEL,
             "RTMPOSE_MODEL": cm.RTMPOSE_MODEL,
-            "DEVICE": cm.DEVICE,
+            "TEMPORAL_MODEL": getattr(cm, "TEMPORAL_MODEL", "lstm"),
+            
+            # Classes de Detecção
             "CLASSE1": cm.CLASSE1,
             "CLASSE2": cm.CLASSE2,
             "CLASSE2_THRESHOLD": cm.CLASSE2_THRESHOLD,
-            "BATCH_SIZE": cm.BATCH_SIZE,
-            "EPOCHS": cm.EPOCHS,
-            "LEARNING_RATE": cm.LEARNING_RATE,
+            
+            # Configurações YOLO
+            "DETECTION_CONF": cm.DETECTION_CONF,
+            "YOLO_IMGSZ": getattr(cm, "YOLO_IMGSZ", "1280"),
+            
+            # Configurações de Pose
+            "POSE_CONF_MIN": cm.POSE_CONF_MIN,
+            "EMA_ALPHA": cm.EMA_ALPHA,
+            "EMA_MIN_CONF": getattr(cm, "EMA_MIN_CONF", 0.3),
+            
+            # BoTSORT - usando chaves minúsculas como o frontend espera
+            "track_high_thresh": cm.BOT_SORT_CONFIG.get("track_high_thresh", 0.5),
+            "track_low_thresh": cm.BOT_SORT_CONFIG.get("track_low_thresh", 0.1),
+            "new_track_thresh": cm.BOT_SORT_CONFIG.get("new_track_thresh", 0.6),
+            "match_thresh": cm.BOT_SORT_CONFIG.get("match_thresh", 0.8),
+            "track_buffer": cm.BOT_SORT_CONFIG.get("track_buffer", 30),
+            "proximity_thresh": cm.BOT_SORT_CONFIG.get("proximity_thresh", 0.5),
+            "appearance_thresh": cm.BOT_SORT_CONFIG.get("appearance_thresh", 0.25),
+            
+            # Parâmetros de Treinamento
             "TIME_STEPS": cm.TIME_STEPS,
-            # BotSORT
-            "TRACK_HIGH_THRESH": cm.BOT_SORT_CONFIG.get("track_high_thresh", 0.5),
-            "TRACK_LOW_THRESH": cm.BOT_SORT_CONFIG.get("track_low_thresh", 0.1),
-            "NEW_TRACK_THRESH": cm.BOT_SORT_CONFIG.get("new_track_thresh", 0.6),
-            "TRACK_BUFFER": cm.BOT_SORT_CONFIG.get("track_buffer", 30),
-            "MATCH_THRESH": cm.BOT_SORT_CONFIG.get("match_thresh", 0.8),
-            "PROXIMITY_THRESH": cm.BOT_SORT_CONFIG.get("proximity_thresh", 0.5),
-            "APPEARANCE_THRESH": cm.BOT_SORT_CONFIG.get("appearance_thresh", 0.25),
+            "BATCH_SIZE": cm.BATCH_SIZE,
+            "LEARNING_RATE": cm.LEARNING_RATE,
+            "EPOCHS": cm.EPOCHS,
+            
+            # Parâmetros de Sequência
+            "MAX_FRAMES_PER_SEQUENCE": getattr(cm, "MAX_FRAMES_PER_SEQUENCE", 1800),
+            "MIN_FRAMES_PER_ID": getattr(cm, "MIN_FRAMES_PER_ID", 30),
+            
+            # Outros
+            "DEVICE": cm.DEVICE,
+            "PROCESSING_DATASET": cm.PROCESSING_DATASET,
         }
 
     @staticmethod
