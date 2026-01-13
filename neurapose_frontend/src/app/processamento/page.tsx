@@ -30,6 +30,7 @@ export default function ProcessamentoPage() {
 
     const terminalRef = useRef<HTMLDivElement>(null);
     const [autoScroll, setAutoScroll] = useState(true);
+    const [progress, setProgress] = useState(0); // 0-100 para barra de progresso
 
     // Logs & Health Polling
     useEffect(() => {
@@ -67,6 +68,13 @@ export default function ProcessamentoPage() {
                     setLogs(newLogs);
                     localStorage.setItem('np_process_logs', JSON.stringify(newLogs));
 
+                    // Extrai progresso dos logs [PROGRESSO] XX%
+                    const progressLine = [...newLogs].reverse().find(l => l.includes('[PROGRESSO]'));
+                    if (progressLine) {
+                        const match = progressLine.match(/(\d+)%/);
+                        if (match) setProgress(parseInt(match[1]));
+                    }
+
                     // Checa também o status (pause/execução)
                     const health = await APIService.healthCheck();
                     setIsPaused(health.data.paused);
@@ -79,7 +87,7 @@ export default function ProcessamentoPage() {
                 } catch (e) {
                     console.error("Erro ao buscar status:", e);
                 }
-            }, 1000);
+            }, 2000); // Polling a cada 2 segundos (reduzido para performance)
         } else {
             localStorage.setItem('np_process_loading', 'false');
         }
@@ -304,8 +312,8 @@ export default function ProcessamentoPage() {
                 </div>
 
                 {/* Right: Terminal Output */}
-                <div className="flex flex-col h-full bg-slate-950 rounded-xl border border-border shadow-2xl overflow-hidden min-h-[500px] lg:min-h-0">
-                    <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-white/5">
+                <div className="flex flex-col bg-slate-950 rounded-xl border border-border shadow-2xl overflow-hidden h-[550px]">
+                    <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-white/5 shrink-0">
                         <div className="flex items-center gap-2">
                             <div className="flex gap-1.5">
                                 <div className="w-3 h-3 rounded-full bg-red-500/50" />
@@ -321,46 +329,72 @@ export default function ProcessamentoPage() {
                             Limpar
                         </button>
                     </div>
+
+                    {/* Barra de Progresso Visual */}
+                    {loading && progress > 0 && (
+                        <div className="px-4 py-2 bg-slate-900/50 border-b border-white/5 shrink-0">
+                            <div className="flex items-center gap-3">
+                                <div className="flex-1 h-2 bg-slate-800 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-gradient-to-r from-emerald-500 to-green-400 rounded-full transition-all duration-500 ease-out"
+                                        style={{ width: `${progress}%` }}
+                                    />
+                                </div>
+                                <span className="text-sm font-mono text-emerald-400 font-bold min-w-[50px] text-right">
+                                    {progress}%
+                                </span>
+                            </div>
+                        </div>
+                    )}
+
                     <div
                         ref={terminalRef}
                         onScroll={handleTerminalScroll}
-                        className="flex-1 p-4 font-mono text-sm overflow-y-auto space-y-1 max-h-[400px] scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
+                        className="flex-1 p-4 font-mono text-sm overflow-y-auto space-y-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent"
                     >
                         {logs.length === 0 && (
                             <div className="text-slate-700 italic flex items-center justify-center h-full">
                                 Aguardando início do processo...
                             </div>
                         )}
-                        {logs.map((log, i) => {
-                            const isError = log.includes('[ERRO]');
-                            const isInfo = log.includes('[INFO]');
-                            const isTqdm = log.includes('|') && log.includes('%');
+                        {logs
+                            .filter(log => !log.includes('[PROGRESSO]')) // Filtra linhas de progresso
+                            .map((log, i) => {
+                                const isError = log.includes('[ERRO]');
+                                const isOk = log.includes('[OK]');
+                                const isInfo = log.includes('[INFO]') || log.includes('[YOLO]');
+                                const isCmd = log.includes('[CMD]');
 
-                            return (
-                                <div key={i} className={`
+                                return (
+                                    <div key={i} className={`
                                     whitespace-pre-wrap break-all border-l-2 pl-3 py-0.5
                                     ${isError ? 'text-red-400 border-red-500 bg-red-500/5' :
-                                        isInfo ? 'text-blue-400 border-blue-500 bg-blue-500/5' :
-                                            isTqdm ? 'text-emerald-400 border-emerald-500/30' :
-                                                'text-slate-300 border-transparent'}
+                                            isOk ? 'text-green-400 border-green-500 bg-green-500/5' :
+                                                isCmd ? 'text-purple-400 border-purple-500 bg-purple-500/5' :
+                                                    isInfo ? 'text-blue-400 border-blue-500 bg-blue-500/5' :
+                                                        'text-slate-300 border-transparent'}
                                 `}>
-                                    {log}
-                                </div>
-                            );
-                        })}
+                                        {log}
+                                    </div>
+                                );
+                            })}
                     </div>
-                    {loading && (
-                        <div className="bg-slate-900 px-4 py-2 border-t border-white/5 flex items-center justify-between">
-                            <span className="text-[10px] text-slate-500 font-mono animate-pulse">
-                                {isPaused ? 'PROCESSO PAUSADO' : 'EXECUTANDO NO SERVIDOR...'}
-                            </span>
-                            <div className="flex gap-1">
-                                <div className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
-                                <div className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
-                                <div className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
-                            </div>
-                        </div>
-                    )}
+                    <div className="bg-slate-900 px-4 py-2 border-t border-white/5 flex items-center justify-between shrink-0 h-10">
+                        {loading ? (
+                            <>
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                    {isPaused ? 'PAUSADO' : progress > 0 ? `INFERÊNCIA RTMPose: ${progress}%` : 'EXECUTANDO...'}
+                                </span>
+                                <div className="flex gap-1">
+                                    <div className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
+                                    <div className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
+                                    <div className="w-1 h-1 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
+                                </div>
+                            </>
+                        ) : (
+                            <span className="text-[10px] text-slate-600 font-mono">PRONTO</span>
+                        )}
+                    </div>
                 </div>
             </div>
 

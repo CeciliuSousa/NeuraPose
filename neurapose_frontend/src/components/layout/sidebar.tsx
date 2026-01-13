@@ -13,9 +13,13 @@ import {
     TestTube2,
     Settings,
     Menu,
-    X
+    X,
+    Cpu,
+    MemoryStick,
+    MonitorPlay
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { APIService } from '@/services/api';
 
 const menuItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -29,9 +33,38 @@ const menuItems = [
     { name: 'Configurações', href: '/configuracao', icon: Settings },
 ];
 
+interface SystemInfo {
+    cpu_percent: number;
+    ram_used_gb: number;
+    ram_total_gb: number;
+    gpu_mem_used_gb: number;
+    gpu_name: string;
+}
+
 export function Sidebar() {
     const pathname = usePathname();
     const [isOpen, setIsOpen] = useState(false);
+    const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
+    const [isOnline, setIsOnline] = useState(false);
+
+    // Polling de informações do sistema
+    useEffect(() => {
+        const fetchSystemInfo = async () => {
+            try {
+                const res = await APIService.getSystemInfo();
+                setSystemInfo(res.data);
+                setIsOnline(true);
+            } catch {
+                setIsOnline(false);
+            }
+        };
+
+        fetchSystemInfo();
+        const interval = setInterval(fetchSystemInfo, 5000); // Atualiza a cada 5 segundos
+        return () => clearInterval(interval);
+    }, []);
+
+    const ramPercent = systemInfo ? (systemInfo.ram_used_gb / systemInfo.ram_total_gb) * 100 : 0;
 
     return (
         <>
@@ -83,11 +116,70 @@ export function Sidebar() {
                         </ul>
                     </nav>
 
+                    {/* Hardware Status */}
+                    {systemInfo && (
+                        <div className="px-4 py-3 border-t border-border space-y-2">
+                            <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-2">Hardware</div>
+
+                            {/* CPU */}
+                            <div className="flex items-center gap-2">
+                                <Cpu className="w-3.5 h-3.5 text-blue-400" />
+                                <div className="flex-1">
+                                    <div className="flex justify-between text-[10px]">
+                                        <span className="text-muted-foreground">CPU</span>
+                                        <span className="text-blue-400 font-mono">{systemInfo.cpu_percent.toFixed(0)}%</span>
+                                    </div>
+                                    <div className="h-1 bg-muted rounded-full mt-0.5 overflow-hidden">
+                                        <div
+                                            className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                                            style={{ width: `${systemInfo.cpu_percent}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* RAM */}
+                            <div className="flex items-center gap-2">
+                                <MemoryStick className="w-3.5 h-3.5 text-orange-400" />
+                                <div className="flex-1">
+                                    <div className="flex justify-between text-[10px]">
+                                        <span className="text-muted-foreground">RAM</span>
+                                        <span className={`font-mono ${ramPercent > 90 ? 'text-red-400' : 'text-orange-400'}`}>
+                                            {systemInfo.ram_used_gb.toFixed(1)}/{systemInfo.ram_total_gb.toFixed(0)}GB
+                                        </span>
+                                    </div>
+                                    <div className="h-1 bg-muted rounded-full mt-0.5 overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full transition-all duration-300 ${ramPercent > 90 ? 'bg-red-500' : 'bg-orange-500'}`}
+                                            style={{ width: `${ramPercent}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* GPU */}
+                            {systemInfo.gpu_name && (
+                                <div className="flex items-center gap-2">
+                                    <MonitorPlay className="w-3.5 h-3.5 text-green-400" />
+                                    <div className="flex-1">
+                                        <div className="flex justify-between text-[10px]">
+                                            <span className="text-muted-foreground">GPU</span>
+                                            <span className="text-green-400 font-mono">{systemInfo.gpu_mem_used_gb.toFixed(1)}GB</span>
+                                        </div>
+                                        <div className="text-[9px] text-muted-foreground truncate" title={systemInfo.gpu_name}>
+                                            {systemInfo.gpu_name.replace('NVIDIA GeForce ', '')}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Footer Status */}
                     <div className="p-4 border-t border-border">
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                            Backend: Online
+                            <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                            Backend: {isOnline ? 'Online' : 'Offline'}
                         </div>
                     </div>
                 </div>

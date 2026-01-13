@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  devIndicators: false, // Esconde o "N" do Next.js em dev
   async rewrites() {
     return [
       {

@@ -171,7 +171,7 @@ def yolo_detector_botsort(videos_dir=None):
         logging.getLogger("neurapose.tracker").info(f"Usando BoTSORT YAML: {tracker_yaml_path}")
 
         print(f"[YOLO] Iniciando tracking em: {video.name}")
-        print(f"[YOLO] Isso pode demorar alguns minutos dependendo do tamanho do video e se esta usando GPU ou CPU...")
+        # print(f"[YOLO] Isso pode demorar alguns minutos dependendo do tamanho do video e se esta usando GPU ou CPU...")
         import sys
         sys.stdout.flush()
 

@@ -15,9 +15,11 @@ import {
 import Link from 'next/link';
 
 interface SystemInfo {
-  cpu: { usage: number; cores: number };
-  ram: { total: number; available: number; used: number; percent: number };
-  gpu: { name: string; memory_total: number; memory_used: number; memory_free: number } | null;
+  cpu_percent: number;
+  ram_used_gb: number;
+  ram_total_gb: number;
+  gpu_mem_used_gb: number;
+  gpu_name: string;
 }
 
 interface SystemStatus {
@@ -58,6 +60,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
+  const ramPercent = sysInfo ? (sysInfo.ram_used_gb / sysInfo.ram_total_gb) * 100 : 0;
 
   return (
     <div className="space-y-8">
@@ -92,25 +95,25 @@ export default function Home() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           title="Uso de CPU"
-          value={`${sysInfo?.cpu.usage.toFixed(1) || '0'}%`}
+          value={`${sysInfo?.cpu_percent?.toFixed(1) || '0'}%`}
           icon={Cpu}
-          description={`${sysInfo?.cpu.cores || '-'} núcleos detectados`}
-          progress={sysInfo?.cpu.usage}
+          description={`20 núcleos detectados`}
+          progress={sysInfo?.cpu_percent}
         />
         <StatsCard
           title="Memória RAM"
-          value={`${sysInfo?.ram.used.toFixed(1) || '0'} GB`}
+          value={`${sysInfo?.ram_used_gb?.toFixed(1) || '0'} GB`}
           icon={HardDrive}
-          description={`De ${sysInfo?.ram.total.toFixed(1) || '-'} GB totais`}
-          progress={sysInfo?.ram.percent}
+          description={`De ${sysInfo?.ram_total_gb?.toFixed(1) || '-'} GB totais`}
+          progress={ramPercent}
         />
-        {sysInfo?.gpu ? (
+        {sysInfo?.gpu_name ? (
           <StatsCard
             title="Memória GPU"
-            value={`${sysInfo.gpu.memory_used.toFixed(1)} GB`}
+            value={`${sysInfo.gpu_mem_used_gb?.toFixed(1) || '0'} GB`}
             icon={Zap}
-            description={sysInfo.gpu.name}
-            progress={(sysInfo.gpu.memory_used / sysInfo.gpu.memory_total) * 100}
+            description={sysInfo.gpu_name}
+            progress={undefined}
           />
         ) : (
           <StatsCard

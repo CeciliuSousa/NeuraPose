@@ -52,6 +52,14 @@ def main():
     onnx_path = Path(args.onnx)
     out_root = Path(args.output_root)
     
+    # Limpa arquivo de preview antigo se existir
+    preview_file = Path(__file__).resolve().parent.parent / "temp_preview.jpg"
+    if preview_file.exists():
+        try:
+            preview_file.unlink()
+        except:
+            pass
+    
     imprimir_banner(onnx_path)
     sys.stdout.flush()
 
@@ -82,6 +90,10 @@ def main():
         print(Fore.CYAN + f"[INFO] Encontrados {len(videos)} videos em {folder}")
         sys.stdout.flush()
         
+        # Acumulador de tempos
+        total_times = {"yolo": 0, "rtmpose": 0, "total": 0}
+        videos_processados = 0
+        
         for v in videos:
             preds_dir = out_root / "predicoes"
             json_dir = out_root / "jsons"
@@ -91,7 +103,30 @@ def main():
                 print(Fore.YELLOW + f"[SKIP] Video já processado: {v.name}")
                 continue
 
-            processar_video(v, sess, input_name, out_root, show=args.show) 
+            times = processar_video(v, sess, input_name, out_root, show=args.show)
+            if times:
+                total_times["yolo"] += times["yolo"]
+                total_times["rtmpose"] += times["rtmpose"]
+                total_times["total"] += times["total"]
+                videos_processados += 1
+        
+        # Tabela final com soma de todos os vídeos
+        if videos_processados > 1:
+            print(Fore.MAGENTA + "\n" + "="*60)
+            print(Fore.MAGENTA + f"  TEMPO TOTAL - {videos_processados} VIDEOS PROCESSADOS")
+            print(Fore.MAGENTA + "="*60)
+            print(Fore.WHITE + f"  {'Etapa':<30} {'Tempo':>15}")
+            print(Fore.WHITE + "-"*60)
+            print(Fore.YELLOW + f"  {'YOLO + BoTSORT + OSNet':<30} {total_times['yolo']:>12.2f} seg")
+            print(Fore.YELLOW + f"  {'RTMPose (Inferencia)':<30} {total_times['rtmpose']:>12.2f} seg")
+            print(Fore.WHITE + "-"*60)
+            print(Fore.GREEN + f"  {'TEMPO TOTAL GERAL':<30} {total_times['total']:>12.2f} seg")
+            # Converte para minutos se maior que 60
+            if total_times['total'] > 60:
+                mins = total_times['total'] / 60
+                print(Fore.GREEN + f"  {'':<30} {mins:>12.2f} min")
+            print(Fore.MAGENTA + "="*60 + "\n")
+            sys.stdout.flush() 
 
 
 if __name__ == "__main__":

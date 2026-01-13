@@ -5,9 +5,9 @@
 import sys
 import cv2
 import json
+import time
 import numpy as np
 from pathlib import Path
-from tqdm import tqdm
 from colorama import Fore
 
 from neurapose_backend.detector.yolo_detector import yolo_detector_botsort
@@ -34,6 +34,25 @@ try:
     from neurapose_backend.app.state import state as state_notifier
 except:
     state_notifier = None
+
+# Arquivo compartilhado para preview entre subprocess e servidor
+PREVIEW_FILE = Path(__file__).resolve().parent.parent.parent / "temp_preview.jpg"
+
+
+def save_preview_frame(frame):
+    """Salva frame no arquivo compartilhado para o endpoint /video_feed."""
+    try:
+        # Redimensiona para economizar banda
+        h, w = frame.shape[:2]
+        if w > 640:
+            scale = 640 / w
+            new_size = (640, int(h * scale))
+            frame_small = cv2.resize(frame, new_size)
+        else:
+            frame_small = frame
+        cv2.imwrite(str(PREVIEW_FILE), frame_small, [cv2.IMWRITE_JPEG_QUALITY, 70])
+    except:
+        pass
 
 
 def calcular_deslocamento(p_inicial, p_final):
@@ -97,11 +116,13 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
 
     json_path = json_dir / f"{video_path.stem}_{int(fps_out)}fps.json"
 
+    # ================== TIMING: YOLO + BoTSORT ==================
     print(Fore.CYAN + f"[INFO] Iniciando deteccao YOLO + BoTSORT...")
     sys.stdout.flush()
-
-    # Executa detector
+    
+    time_yolo_start = time.time()
     res_list = yolo_detector_botsort(videos_dir=norm_path)
+    time_yolo = time.time() - time_yolo_start
 
     print(Fore.GREEN + f"[OK] Deteccao concluida. Processando resultados...")
     sys.stdout.flush()
@@ -114,7 +135,12 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     smoother = EmaSmoother()
 
     frame_idx = 1
-    pbar = tqdm(total=total_frames, desc=f"Inferencia {video_path.stem}")
+    last_progress = 0  # Para prints de progresso a cada 10%
+    
+    # ================== TIMING: RTMPose ==================
+    print(Fore.CYAN + f"[INFO] Iniciando inferencia RTMPose em {total_frames} frames...")
+    sys.stdout.flush()
+    time_rtmpose_start = time.time()
 
     while True:
         ok, frame = cap.read()
@@ -126,14 +152,17 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
         # Checa se ha deteccoes e IDs validos
         if regs is None or len(regs) == 0 or regs.id is None:
             writer_pred.write(frame)
-            if show:
-                frame_resized = cv2.resize(frame, (FRAME_DISPLAY_W, FRAME_DISPLAY_H))
-                cv2.imshow("Inferencia", frame_resized)
-                if cv2.waitKey(1) == ord("q"):
-                    break
+            # Envia frame para preview no frontend (via arquivo, a cada 5 frames)
+            if show and frame_idx % 5 == 0:
+                save_preview_frame(frame)
 
             frame_idx += 1
-            pbar.update(1)
+            # Print de progresso a cada 10%
+            progress = int((frame_idx / total_frames) * 100)
+            if progress >= last_progress + 10:
+                print(Fore.CYAN + f"[PROGRESSO] {progress}% ({frame_idx}/{total_frames} frames)")
+                sys.stdout.flush()
+                last_progress = progress
             continue
 
         boxes = regs.xyxy.cpu().numpy()
@@ -180,22 +209,24 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
                 "keypoints": kps.tolist()
             })
 
-        # Atualiza preview do site se disponivel
-        if state_notifier:
-            state_notifier.set_frame(frame)
+        # Atualiza preview do site (via arquivo, a cada 5 frames)
+        if show and frame_idx % 5 == 0:
+            save_preview_frame(frame)
 
         writer_pred.write(frame)
 
-        if show:
-            frame_resized = cv2.resize(frame, (FRAME_DISPLAY_W, FRAME_DISPLAY_H))
-            cv2.imshow("Inferencia", frame_resized)
-            if cv2.waitKey(1) == ord("q"):
-                break
-
         frame_idx += 1
-        pbar.update(1)
+        # Print de progresso a cada 10%
+        progress = int((frame_idx / total_frames) * 100)
+        if progress >= last_progress + 10:
+            print(Fore.CYAN + f"[PROGRESSO] {progress}% ({frame_idx}/{total_frames} frames)")
+            sys.stdout.flush()
+            last_progress = progress
 
-    pbar.close()
+    time_rtmpose = time.time() - time_rtmpose_start
+    
+    print(Fore.GREEN + f"[OK] Inferencia concluida: {total_frames} frames processados.")
+    sys.stdout.flush()
     cap.release()
     writer_pred.release()
 
@@ -280,8 +311,23 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     with open(tracking_path, "w", encoding="utf-8") as f:
         json.dump(tracking_analysis, f, indent=2, ensure_ascii=False)
 
-    print(Fore.GREEN + f"[OK] Processamento concluido: {video_path.name}")
+    # ================== TABELA DE TEMPOS ==================
+    time_total = time_yolo + time_rtmpose
+    
+    print(Fore.CYAN + "\n" + "="*60)
+    print(Fore.CYAN + f"  TEMPOS DE PROCESSAMENTO - {video_path.name}")
+    print(Fore.CYAN + "="*60)
+    print(Fore.WHITE + f"  {'Etapa':<30} {'Tempo':>15}")
+    print(Fore.WHITE + "-"*60)
+    print(Fore.YELLOW + f"  {'YOLO + BoTSORT + OSNet':<30} {time_yolo:>12.2f} seg")
+    print(Fore.YELLOW + f"  {'RTMPose (Inferencia)':<30} {time_rtmpose:>12.2f} seg")
+    print(Fore.WHITE + "-"*60)
+    print(Fore.GREEN + f"  {'TOTAL':<30} {time_total:>12.2f} seg")
+    print(Fore.CYAN + "="*60 + "\n")
     sys.stdout.flush()
 
-    if show:
-        cv2.destroyAllWindows()
+    print(Fore.GREEN + f"[OK] Processamento concluido: {video_path.name}")
+    sys.stdout.flush()
+    
+    # Retorna tempos para soma total
+    return {"yolo": time_yolo, "rtmpose": time_rtmpose, "total": time_total}
