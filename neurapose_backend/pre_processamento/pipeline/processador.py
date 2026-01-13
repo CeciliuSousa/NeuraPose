@@ -126,6 +126,14 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
 
     print(Fore.GREEN + f"[OK] Deteccao concluida. Processando resultados...")
     sys.stdout.flush()
+    
+    # Libera memória GPU após YOLO (evita fragmentação para RTMPose)
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except:
+        pass
 
     res = res_list[0]
     results = res["results"]

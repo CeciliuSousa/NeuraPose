@@ -29,6 +29,8 @@ Thumbs.db
 
 # Dados de usuario (usar volumes)
 # neurapose-backend/videos/*
+neurapose/*
+neurapose_frontend/*
 neurapose_backend/datasets/*
 neurapose_backend/meus-modelos-treinados/*
 neurapose_backend/resultado_processamento/*

@@ -10,6 +10,7 @@ wheels/
 
 # Modelos pesados (apenas na pasta neurapose)
 neurapose
+neurapose_frontend
 neurapose_backend/**/*.pt
 neurapose_backend/**/*.pth
 neurapose_backend/**/*.onnx

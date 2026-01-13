@@ -211,10 +211,11 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
     Executa o processamento via subprocess chamando:
     uv run python -m neurapose_backend.pre_processamento.processar --input-folder "..." [--show]
     
-    Captura stdout/stderr em tempo real para o LogBuffer.
+    Captura stdout/stderr em tempo real para o LogBuffer usando thread separada.
     """
     import subprocess
     import threading
+    import queue
     
     state.reset()
     state.is_running = True
@@ -235,35 +236,62 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
     log_buffer.write(f"[CMD] {' '.join(cmd)}")
     
     try:
-        # Executa o comando com encoding UTF-8 explícito para Windows
+        # Executa o comando - SEM bufsize=1 para evitar overhead de I/O
         process = subprocess.Popen(
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            bufsize=1,
             cwd=str(ROOT_DIR),
             encoding='utf-8',
-            errors='replace',  # Substitui caracteres inválidos ao invés de falhar
+            errors='replace',
             env={**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
         )
         
         state.add_process(process)
         
-        # Lê a saída em tempo real
-        for line in iter(process.stdout.readline, ''):
-            if state.stop_requested:
-                process.terminate()
-                log_buffer.write("[INFO] Processamento interrompido pelo usuário.")
-                break
-            
-            # Enquanto pausado, aguarda
-            while state.is_paused and not state.stop_requested:
-                import time
-                time.sleep(0.1)
-            
-            if line:
-                log_buffer.write(line.rstrip())
+        # Thread para ler output sem bloquear o processo
+        output_queue = queue.Queue()
+        
+        def read_output():
+            try:
+                for line in iter(process.stdout.readline, ''):
+                    if line:
+                        output_queue.put(line.rstrip())
+                    if process.poll() is not None:
+                        break
+            except:
+                pass
+            finally:
+                output_queue.put(None)  # Sinaliza fim
+        
+        reader_thread = threading.Thread(target=read_output, daemon=True)
+        reader_thread.start()
+        
+        # Processa output da queue sem bloquear o subprocess
+        while True:
+            try:
+                line = output_queue.get(timeout=0.1)
+                if line is None:  # Fim do output
+                    break
+                log_buffer.write(line)
+            except queue.Empty:
+                # Verifica se deve parar
+                if state.stop_requested:
+                    process.terminate()
+                    log_buffer.write("[INFO] Processamento interrompido pelo usuário.")
+                    break
+                # Verifica se processo terminou
+                if process.poll() is not None:
+                    # Drena output restante
+                    while not output_queue.empty():
+                        try:
+                            line = output_queue.get_nowait()
+                            if line:
+                                log_buffer.write(line)
+                        except:
+                            break
+                    break
         
         process.wait()
         
@@ -402,33 +430,25 @@ def health_check():
 
 @app.get("/system/info")
 def get_system_info():
-    """Retorna informações de uso de hardware (CPU, RAM, GPU)."""
+    """Retorna informações de uso de hardware (CPU, RAM, GPU).
+    
+    Usa PyTorch para GPU (instantâneo, não afeta processamento).
+    """
     cpu_usage = psutil.cpu_percent(interval=None)
     ram = psutil.virtual_memory()
     
     gpu_name = ""
     gpu_mem_used = 0.0
+    gpu_mem_total = 0.0
     
-    # Usa nvidia-smi via subprocess (mais confiável que pynvml)
+    # Usa PyTorch diretamente (instantâneo, não bloqueia GPU!)
     try:
-        import subprocess
-        result = subprocess.run(
-            ['nvidia-smi', '--query-gpu=name,memory.used', '--format=csv,noheader,nounits'],
-            capture_output=True, text=True, timeout=2
-        )
-        if result.returncode == 0:
-            parts = result.stdout.strip().split(', ')
-            if len(parts) >= 2:
-                gpu_name = parts[0].strip()
-                gpu_mem_used = float(parts[1].strip()) / 1024  # MB para GB
-    except Exception as e:
-        # Fallback para torch
-        try:
-            if torch.cuda.is_available():
-                gpu_name = torch.cuda.get_device_name(0)
-                gpu_mem_used = torch.cuda.memory_allocated(0) / (1024**3)
-        except:
-            pass
+        if torch.cuda.is_available():
+            gpu_name = torch.cuda.get_device_name(0)
+            gpu_mem_used = torch.cuda.memory_allocated(0) / (1024**3)  # Alocado pelo PyTorch
+            gpu_mem_total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+    except:
+        pass
     
     # Formato compatível com a sidebar
     return {
@@ -436,6 +456,7 @@ def get_system_info():
         "ram_used_gb": ram.used / (1024**3),
         "ram_total_gb": ram.total / (1024**3),
         "gpu_mem_used_gb": gpu_mem_used,
+        "gpu_mem_total_gb": gpu_mem_total,
         "gpu_name": gpu_name
     }
 

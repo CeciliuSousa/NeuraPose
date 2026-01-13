@@ -175,7 +175,7 @@ def yolo_detector_botsort(videos_dir=None):
         import sys
         sys.stdout.flush()
 
-        # Execucao do YOLO + tracking
+        # Execucao do YOLO + tracking (half=True para FP16 na GPU)
         results = model.track(
             source=str(video),
             imgsz=1280,
@@ -184,7 +184,8 @@ def yolo_detector_botsort(videos_dir=None):
             persist=True,
             tracker=str(tracker_yaml_path),
             classes=[YOLO_CLASS_PERSON],
-            verbose=False
+            verbose=False,
+            half=True  # FP16 para acelerar inferência na GPU
         )
 
         print(f"[YOLO] Tracking concluido! {len(results)} frames processados.")
