@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RotateCcw, FileVideo, FolderInput } from 'lucide-react';
 import { APIService, ReIDVideo, ReIDData } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
@@ -49,10 +49,25 @@ export default function ReidPage() {
 
     useEffect(() => {
         const savedInput = localStorage.getItem('np_reid_input');
-        const savedBatch = localStorage.getItem('np_reid_batch');
 
         if (savedInput) setInputPath(savedInput);
-        if (savedBatch) setBatchAnnotations(JSON.parse(savedBatch));
+
+        // Carrega agenda do arquivo JSON via API
+        APIService.getReidAgenda().then(res => {
+            if (res.data.agenda && res.data.agenda.videos) {
+                const batch: Record<string, any> = {};
+                for (const v of res.data.agenda.videos) {
+                    batch[v.video_id] = {
+                        video_id: v.video_id,
+                        rules: v.swaps?.map((s: any) => ({ src: s.src_id, tgt: s.tgt_id, start: s.frame_start, end: s.frame_end })) || [],
+                        deletions: v.deletions?.map((d: any) => ({ id: d.id, start: d.frame_start, end: d.frame_end })) || [],
+                        cuts: v.cuts?.map((c: any) => ({ start: c.frame_start, end: c.frame_end })) || [],
+                        action: v.action || 'process'
+                    };
+                }
+                setBatchAnnotations(batch);
+            }
+        }).catch(console.error);
 
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
@@ -68,9 +83,8 @@ export default function ReidPage() {
         }
     }, [inputPath]);
 
-    useEffect(() => {
-        localStorage.setItem('np_reid_batch', JSON.stringify(batchAnnotations));
-    }, [batchAnnotations]);
+    // Remover salvamento automático em localStorage - agora usa API
+    // useEffect(() => { localStorage.setItem('np_reid_batch', JSON.stringify(batchAnnotations)); }, [batchAnnotations]);
 
     const loadVideos = async () => {
         setLoading(true);
@@ -166,11 +180,31 @@ export default function ReidPage() {
         setCutForm({ start: '', end: '' });
     };
 
-    const handleSchedule = () => {
-        if (!selectedVideo) return;
-        saveToBatch(selectedVideo.id);
-        // Visual feedback
-        alert(`✅ Vídeo "${selectedVideo.id}" agendado!`);
+    const handleSchedule = async () => {
+        if (!selectedVideo || !inputPath) return;
+
+        // Monta objeto no formato esperado pela API
+        const videoEntry = {
+            video_id: selectedVideo.id,
+            action: isDeleted ? 'delete' : 'process',
+            swaps: swaps.map(s => ({ src_id: s.src, tgt_id: s.tgt, frame_start: s.start, frame_end: s.end })),
+            deletions: deletions.map(d => ({ id: d.id, frame_start: d.start, frame_end: d.end })),
+            cuts: cuts.map(c => ({ frame_start: c.start, frame_end: c.end }))
+        };
+
+        try {
+            const res = await APIService.saveToReidAgenda(inputPath, videoEntry);
+            if (res.data.status === 'success') {
+                // Atualiza estado local também
+                saveToBatch(selectedVideo.id);
+                alert(`✅ Vídeo "${selectedVideo.id}" agendado e salvo em reid.json!`);
+            } else {
+                alert('Erro ao salvar agenda.');
+            }
+        } catch (error) {
+            console.error('Erro ao salvar agenda:', error);
+            alert('Erro ao salvar agenda no servidor.');
+        }
     };
 
     const handleApplyBatch = async () => {

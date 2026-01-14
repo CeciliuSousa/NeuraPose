@@ -111,6 +111,11 @@ export const APIService = {
 
     startTesting: (data: TestRequest) => api.post('/test', data),
 
+    // ReID Agenda (persistência em arquivo JSON)
+    getReidAgenda: () => api.get<{ agenda: any }>('/reid/agenda'),
+    saveToReidAgenda: (sourceDataset: string, video: any) => api.post('/reid/agenda/save', { source_dataset: sourceDataset, video }),
+    removeFromReidAgenda: (videoId: string) => api.delete(`/reid/agenda/${videoId}`),
+
     batchApplyReID: (data: { videos: any[], root_path?: string, output_path?: string }) => api.post('/reid/batch-apply', data),
 };
 

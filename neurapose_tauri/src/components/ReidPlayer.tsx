@@ -1,5 +1,5 @@
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 
 interface ReidPlayerProps {
     src: string;
@@ -17,6 +17,40 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
     const [currentTime, setCurrentTime] = useState(0);
 
     const frameDuration = 1 / fps;
+
+    // ================================================
+    // OTIMIZAÇÃO: Pre-built lookup structures O(1)
+    // ================================================
+
+    // Set de frames cortados para lookup O(1) em vez de O(k) por frame
+    const cutFrameSet = useMemo(() => {
+        const set = new Set<number>();
+        cuts.forEach(cut => {
+            for (let f = cut.start; f <= cut.end; f++) set.add(f);
+        });
+        return set;
+    }, [cuts]);
+
+    // Map de (id, frame) -> true para deletions O(1) lookup
+    const deletionMap = useMemo(() => {
+        const map = new Map<string, boolean>();
+        deletions.forEach(d => {
+            for (let f = d.start; f <= d.end; f++) {
+                map.set(`${d.id}:${f}`, true);
+            }
+        });
+        return map;
+    }, [deletions]);
+
+    // Map de id -> lista de regras para swaps O(1) lookup por ID
+    const swapRulesMap = useMemo(() => {
+        const map = new Map<number, typeof swaps>();
+        swaps.forEach(s => {
+            if (!map.has(s.src)) map.set(s.src, []);
+            map.get(s.src)!.push(s);
+        });
+        return map;
+    }, [swaps]);
 
     // Synchronize Canvas Layout
     useEffect(() => {
@@ -70,8 +104,8 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
         const scaleX = canvasW / vidW;
         const scaleY = canvasH / vidH;
 
-        // 1. Draw CUT segments (Global Overlay)
-        const inCut = cuts.some(cut => currentFrame >= cut.start && currentFrame <= cut.end);
+        // 1. Draw CUT segments (Global Overlay) - O(1) lookup
+        const inCut = cutFrameSet.has(currentFrame);
         if (inCut) {
             ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
             ctx.fillRect(0, 0, canvasW, canvasH);
@@ -90,9 +124,15 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
                 const pid = item.id_persistente ?? item.botsort_id ?? item.id;
                 const [x1, y1, x2, y2] = item.bbox;
 
-                // Check rules
-                const isDeleted = deletions.some(d => d.id === pid && currentFrame >= d.start && currentFrame <= d.end);
-                const swapRule = swaps.find(s => s.src === pid && currentFrame >= s.start && currentFrame <= s.end);
+                // Check rules - O(1) lookups
+                const isDeleted = deletionMap.has(`${pid}:${currentFrame}`);
+
+                // Swap check: O(1) para buscar regras do ID, depois O(k) onde k = regras deste ID (tipicamente 1-2)
+                let swapRule = null;
+                const rulesForId = swapRulesMap.get(pid);
+                if (rulesForId) {
+                    swapRule = rulesForId.find(s => currentFrame >= s.start && currentFrame <= s.end);
+                }
 
                 let color = null;
                 let text = null;

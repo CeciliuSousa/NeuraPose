@@ -46,12 +46,47 @@ from pre_processamento.configuracao.config import POSE_CONF_MIN
 # 0. FUNÇÕES LÓGICAS DE CORTE E REGRAS
 # ==============================================================================
 
-def verificar_corte(frame_idx, cut_list):
-    """Retorna True se o frame estiver em uma área de corte."""
+def verificar_corte(frame_idx, cut_set):
+    """Retorna True se o frame estiver em uma área de corte. O(1) lookup."""
+    return frame_idx in cut_set
+
+
+def _build_cut_set(cut_list):
+    """Pré-constrói set de frames cortados para lookup O(1)."""
+    cut_set = set()
     for cut in cut_list:
-        if cut['start'] <= frame_idx <= cut['end']:
-            return True
-    return False
+        # Usa range para adicionar todos os frames no intervalo
+        cut_set.update(range(cut['start'], cut['end'] + 1))
+    return cut_set
+
+
+def _build_delete_map(delete_list):
+    """Pré-constrói dicionário de (id, frame) -> True para lookup O(1).
+    Para intervalos grandes, usa range sets por ID.
+    """
+    # Estrutura: {id: set(frames)} para O(1) lookup
+    delete_map = {}
+    for d in delete_list:
+        pid = d['id']
+        if pid not in delete_map:
+            delete_map[pid] = set()
+        # Adiciona todos os frames do intervalo
+        delete_map[pid].update(range(d['start'], d['end'] + 1))
+    return delete_map
+
+
+def _build_swap_rules_by_id(rules_list):
+    """Pré-constrói mapa de regras por ID para acesso O(1).
+    Estrutura: {src_id: [(start, end, tgt_id), ...]}
+    """
+    rules_map = {}
+    for rule in rules_list:
+        src = rule['src']
+        if src not in rules_map:
+            rules_map[src] = []
+        rules_map[src].append((rule['start'], rule['end'], rule['tgt']))
+    return rules_map
+
 
 def aplicar_processamento_completo(records, rules_list, delete_list, cut_list):
     """
@@ -59,32 +94,30 @@ def aplicar_processamento_completo(records, rules_list, delete_list, cut_list):
     1. Cortes (Remove frames e realinha a contagem dos frames restantes).
     2. Exclusões de ID.
     3. Trocas de ID.
-    """
-    processed_records = []
     
-    # Ordenar cortes para calcular o shift corretamente
-    # Ex: Cortar 1-10 e 20-30
-    cut_list.sort(key=lambda x: x['start'])
-
-    # Mapa de tradução de Frame Antigo -> Frame Novo
-    # Se frame foi cortado, map é None
-    max_frame = 0
-    if records:
-        max_frame = max(int(r['frame']) for r in records) + 100 # Margem segura
+    Otimizado: O(n) onde n = número de registros.
+    Usa pre-built lookup structures para evitar loops O(m) por registro.
+    """
+    # ====== PRÉ-PROCESSAMENTO: Construir estruturas O(1) ======
+    cut_list = sorted(cut_list, key=lambda x: x['start']) if cut_list else []
+    cut_set = _build_cut_set(cut_list)
+    delete_map = _build_delete_map(delete_list)
+    swap_rules = _build_swap_rules_by_id(rules_list)
+    
+    # ====== MAPA DE FRAMES: O(max_frame) ======
+    max_frame = max((int(r['frame']) for r in records), default=0) + 100 if records else 100
     
     frame_map = {}
-    current_shift = 0
     next_new_frame = 1
-    
-    # Criar mapa de frames frame-a-frame (método seguro)
-    # Simula a leitura do vídeo
     for f in range(1, max_frame + 1):
-        if verificar_corte(f, cut_list):
-            frame_map[f] = None # Frame será deletado
+        if f in cut_set:  # O(1) lookup
+            frame_map[f] = None
         else:
             frame_map[f] = next_new_frame
             next_new_frame += 1
-
+    
+    # ====== PROCESSAMENTO PRINCIPAL: O(n) ======
+    processed_records = []
     changed_ids = 0
     deleted_ids = 0
     cut_records = 0
@@ -93,35 +126,27 @@ def aplicar_processamento_completo(records, rules_list, delete_list, cut_list):
         old_frame = int(r.get("frame", -1))
         pid = int(r.get("id_persistente", -1))
         
-        # 1. Verifica Corte
+        # 1. Verifica Corte - O(1)
         new_frame = frame_map.get(old_frame)
         if new_frame is None:
             cut_records += 1
-            continue # Pula registro pois o frame foi cortado
-
-        # Atualiza o frame para o novo índice sequencial
+            continue
+        
         r["frame"] = new_frame
 
-        # 2. Verifica Exclusão de ID (usando frame original para lógica ou novo? 
-        # Geralmente a regra foi criada olhando o vídeo original, então usamos old_frame na condição, 
-        # mas cuidado: se o usuário define regra baseada no visual, é frame original)
-        should_delete = False
-        for d in delete_list:
-            if pid == d['id'] and d['start'] <= old_frame <= d['end']:
-                should_delete = True
-                break
-        
-        if should_delete:
+        # 2. Verifica Exclusão de ID - O(1)
+        if pid in delete_map and old_frame in delete_map[pid]:
             deleted_ids += 1
             continue
 
-        # 3. Verifica Troca de ID
-        for rule in rules_list:
-            if pid == rule['src'] and rule['start'] <= old_frame <= rule['end']:
-                if pid != rule['tgt']:
-                    r["id_persistente"] = rule['tgt']
-                    changed_ids += 1
-                break 
+        # 3. Verifica Troca de ID - O(k) onde k = regras para este ID específico (tipicamente 1-2)
+        if pid in swap_rules:
+            for start, end, tgt in swap_rules[pid]:
+                if start <= old_frame <= end:
+                    if pid != tgt:
+                        r["id_persistente"] = tgt
+                        changed_ids += 1
+                    break
         
         processed_records.append(r)
                 

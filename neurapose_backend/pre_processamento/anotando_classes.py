@@ -48,13 +48,20 @@ def encontrar_video_para_json(pred_dir: Path, stem: str):
 
 
 def carregar_pose_records(json_path: Path):
-    """Carrega registros de pose do JSON."""
+    """Carrega registros de pose do JSON.
+    
+    Complexidade: O(n) onde n = tamanho do arquivo JSON.
+    """
     with open(json_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 
 def indexar_por_frame(records):
-    """Indexa registros por frame e conta ocorrencias por ID."""
+    """Indexa registros por frame e conta ocorrências por ID.
+    
+    Complexidade: O(n) onde n = número de registros.
+    Usa defaultdict para append O(1) amortizado e Counter para contagem O(1).
+    """
     frames = defaultdict(list)
     id_counter = Counter()
 

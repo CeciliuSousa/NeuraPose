@@ -146,6 +146,99 @@ class TestRequest(BaseModel):
     dataset_path: Optional[str] = None
     device: str = "cuda"
 
+
+# ==============================================================
+# GPU MEMORY MANAGEMENT
+# ==============================================================
+import gc
+
+def get_gpu_memory_info() -> Dict[str, Any]:
+    """Retorna informações detalhadas sobre memória GPU."""
+    if not torch.cuda.is_available():
+        return {"available": False, "error": "CUDA não disponível"}
+    
+    try:
+        device = torch.cuda.current_device()
+        props = torch.cuda.get_device_properties(device)
+        
+        allocated = torch.cuda.memory_allocated(device)
+        reserved = torch.cuda.memory_reserved(device)
+        total = props.total_memory
+        free = total - reserved
+        
+        return {
+            "available": True,
+            "device_name": props.name,
+            "device_index": device,
+            "total_gb": round(total / (1024**3), 2),
+            "allocated_gb": round(allocated / (1024**3), 2),
+            "reserved_gb": round(reserved / (1024**3), 2),
+            "free_gb": round(free / (1024**3), 2),
+            "utilization_percent": round((allocated / total) * 100, 1),
+        }
+    except Exception as e:
+        return {"available": False, "error": str(e)}
+
+
+def cleanup_gpu_memory(force: bool = False) -> Dict[str, Any]:
+    """Libera memória GPU não utilizada.
+    
+    Args:
+        force: Se True, força limpeza agressiva incluindo cache do garbage collector
+    """
+    if not torch.cuda.is_available():
+        return {"success": False, "message": "CUDA não disponível"}
+    
+    before = get_gpu_memory_info()
+    
+    try:
+        # Limpa cache do PyTorch
+        torch.cuda.empty_cache()
+        
+        if force:
+            # Força coleta de lixo Python
+            gc.collect()
+            torch.cuda.empty_cache()
+            
+            # Sincroniza para garantir liberação
+            torch.cuda.synchronize()
+        
+        after = get_gpu_memory_info()
+        freed = before.get("reserved_gb", 0) - after.get("reserved_gb", 0)
+        
+        return {
+            "success": True,
+            "freed_gb": round(freed, 3),
+            "before": before,
+            "after": after,
+            "message": f"Liberado {freed:.3f} GB de memória GPU"
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def ensure_gpu_memory(required_gb: float = 2.0) -> bool:
+    """Verifica se há memória GPU suficiente, tentando liberar se necessário.
+    
+    Args:
+        required_gb: Quantidade mínima de memória livre necessária em GB
+    
+    Returns:
+        True se memória suficiente está disponível, False caso contrário
+    """
+    if not torch.cuda.is_available():
+        return False
+    
+    info = get_gpu_memory_info()
+    if info.get("free_gb", 0) >= required_gb:
+        return True
+    
+    # Tenta liberar memória
+    cleanup_gpu_memory(force=True)
+    
+    info = get_gpu_memory_info()
+    return info.get("free_gb", 0) >= required_gb
+
 # ==============================================================
 
 
@@ -312,6 +405,10 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
         log_buffer.write(f"[ERRO] {str(e)}")
     finally:
         state.reset()
+        # Limpa memória GPU após processamento
+        cleanup_result = cleanup_gpu_memory(force=True)
+        if cleanup_result.get("success"):
+            logger.info(f"Memória GPU liberada: {cleanup_result.get('freed_gb', 0):.2f} GB")
 
 
 # Mantém a função antiga para compatibilidade (pode ser removida futuramente)
@@ -590,6 +687,47 @@ def api_update_config(updates: Dict[str, Any]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ==============================================================
+# GPU MEMORY ENDPOINTS
+# ==============================================================
+
+@app.get("/gpu/info")
+def api_gpu_info():
+    """Retorna informações detalhadas sobre a memória GPU."""
+    return get_gpu_memory_info()
+
+
+@app.post("/gpu/cleanup")
+def api_gpu_cleanup(force: bool = True):
+    """Libera memória GPU não utilizada.
+    
+    Args:
+        force: Se True (padrão), força limpeza agressiva incluindo garbage collector.
+    """
+    return cleanup_gpu_memory(force=force)
+
+
+@app.post("/gpu/optimize")
+def api_gpu_optimize(required_gb: float = 2.0):
+    """Tenta garantir quantidade mínima de memória GPU disponível.
+    
+    Args:
+        required_gb: Quantidade mínima de memória livre necessária em GB (padrão: 2.0)
+    
+    Returns:
+        Status indicando se a memória necessária está disponível.
+    """
+    success = ensure_gpu_memory(required_gb=required_gb)
+    info = get_gpu_memory_info()
+    return {
+        "success": success,
+        "required_gb": required_gb,
+        "available_gb": info.get("free_gb", 0),
+        "message": "Memória suficiente disponível" if success else f"Não foi possível liberar {required_gb}GB"
+    }
+
+
 @app.post("/shutdown")
 def shutdown_server():
     """Finaliza o servidor e todos os processos filhos à força."""
@@ -821,6 +959,135 @@ def stream_video(video_id: str, root_path: Optional[str] = None):
         raise HTTPException(status_code=404, detail="Video not found")
         
     return FileResponse(v_final, media_type="video/mp4")
+
+
+# ==============================================================
+# REID AGENDA - Persistência em arquivo JSON
+# ==============================================================
+
+REID_AGENDA_DIR = CURRENT_DIR / "resultados-reidentificacoes" / "reid"
+REID_AGENDA_FILE = REID_AGENDA_DIR / "reid.json"
+
+class ReidSwapRule(BaseModel):
+    src_id: int
+    tgt_id: int
+    frame_start: int = 0
+    frame_end: int = 999999
+
+class ReidDeletionRule(BaseModel):
+    id: int
+    frame_start: int = 0
+    frame_end: int = 999999
+
+class ReidCutRule(BaseModel):
+    frame_start: int
+    frame_end: int
+
+class ReidVideoEntry(BaseModel):
+    video_id: str
+    action: str = "process"  # "process" ou "delete"
+    swaps: List[ReidSwapRule] = []
+    deletions: List[ReidDeletionRule] = []
+    cuts: List[ReidCutRule] = []
+
+class ReidAgendaRequest(BaseModel):
+    source_dataset: str
+    video: ReidVideoEntry
+
+
+@app.get("/reid/agenda")
+def get_reid_agenda():
+    """Carrega a agenda de ReID do arquivo JSON."""
+    if not REID_AGENDA_FILE.exists():
+        return {"agenda": None}
+    
+    try:
+        with open(REID_AGENDA_FILE, "r", encoding="utf-8") as f:
+            agenda = json.load(f)
+        return {"agenda": agenda}
+    except Exception as e:
+        logger.error(f"Erro ao ler agenda ReID: {e}")
+        return {"agenda": None, "error": str(e)}
+
+
+@app.post("/reid/agenda/save")
+def save_reid_agenda(request: ReidAgendaRequest):
+    """Salva/atualiza um vídeo na agenda de ReID."""
+    from datetime import datetime
+    
+    REID_AGENDA_DIR.mkdir(parents=True, exist_ok=True)
+    
+    # Carrega agenda existente ou cria nova
+    if REID_AGENDA_FILE.exists():
+        try:
+            with open(REID_AGENDA_FILE, "r", encoding="utf-8") as f:
+                agenda = json.load(f)
+        except:
+            agenda = None
+    else:
+        agenda = None
+    
+    if agenda is None:
+        agenda = {
+            "version": "1.0",
+            "source_dataset": request.source_dataset,
+            "created_at": datetime.now().isoformat(),
+            "updated_at": datetime.now().isoformat(),
+            "videos": []
+        }
+    
+    # Atualiza source_dataset se diferente
+    if agenda.get("source_dataset") != request.source_dataset:
+        agenda["source_dataset"] = request.source_dataset
+        agenda["videos"] = []  # Limpa vídeos se dataset mudou
+    
+    # Procura vídeo existente na agenda
+    video_data = request.video.model_dump()
+    existing_idx = None
+    for i, v in enumerate(agenda["videos"]):
+        if v["video_id"] == video_data["video_id"]:
+            existing_idx = i
+            break
+    
+    # Atualiza ou adiciona
+    if existing_idx is not None:
+        agenda["videos"][existing_idx] = video_data
+    else:
+        agenda["videos"].append(video_data)
+    
+    agenda["updated_at"] = datetime.now().isoformat()
+    
+    # Salva arquivo
+    try:
+        with open(REID_AGENDA_FILE, "w", encoding="utf-8") as f:
+            json.dump(agenda, f, ensure_ascii=False, indent=2)
+        return {"status": "success", "message": f"Vídeo '{request.video.video_id}' agendado com sucesso."}
+    except Exception as e:
+        logger.error(f"Erro ao salvar agenda ReID: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/reid/agenda/{video_id}")
+def remove_from_agenda(video_id: str):
+    """Remove um vídeo da agenda."""
+    if not REID_AGENDA_FILE.exists():
+        return {"status": "not_found"}
+    
+    try:
+        with open(REID_AGENDA_FILE, "r", encoding="utf-8") as f:
+            agenda = json.load(f)
+        
+        original_count = len(agenda.get("videos", []))
+        agenda["videos"] = [v for v in agenda.get("videos", []) if v["video_id"] != video_id]
+        
+        with open(REID_AGENDA_FILE, "w", encoding="utf-8") as f:
+            json.dump(agenda, f, ensure_ascii=False, indent=2)
+        
+        removed = original_count > len(agenda["videos"])
+        return {"status": "removed" if removed else "not_found"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/reid/batch-apply")
 async def batch_apply_reid(data: Dict[str, Any], background_tasks: BackgroundTasks):
