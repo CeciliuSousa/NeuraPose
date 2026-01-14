@@ -35,24 +35,6 @@ try:
 except:
     state_notifier = None
 
-# Arquivo compartilhado para preview entre subprocess e servidor
-PREVIEW_FILE = Path(__file__).resolve().parent.parent.parent / "temp_preview.jpg"
-
-
-def save_preview_frame(frame):
-    """Salva frame no arquivo compartilhado para o endpoint /video_feed."""
-    try:
-        # Redimensiona para economizar banda
-        h, w = frame.shape[:2]
-        if w > 640:
-            scale = 640 / w
-            new_size = (640, int(h * scale))
-            frame_small = cv2.resize(frame, new_size)
-        else:
-            frame_small = frame
-        cv2.imwrite(str(PREVIEW_FILE), frame_small, [cv2.IMWRITE_JPEG_QUALITY, 70])
-    except:
-        pass
 
 
 def calcular_deslocamento(p_inicial, p_final):
@@ -85,10 +67,21 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
 
     writer_norm = cv2.VideoWriter(
         str(norm_path),
-        cv2.VideoWriter_fourcc(*"mp4v"),
+        cv2.VideoWriter_fourcc(*"avc1"),
         fps_out,
         (W, H)
     )
+    if not writer_norm.isOpened():
+        print(Fore.RED + f"[ERRO] Falha ao iniciar VideoWriter com codec avc1. Tentando fallback para mp4v...")
+        writer_norm = cv2.VideoWriter(
+            str(norm_path),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            fps_out,
+            (W, H)
+        )
+        if not writer_norm.isOpened():
+             print(Fore.RED + f"[FATAL] Não foi possível criar o arquivo de vídeo: {norm_path}")
+             sys.exit(1)
 
     while True:
         ok, frame = cap_in.read()
@@ -109,10 +102,14 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     out_video = preds_dir / f"{video_path.stem}_{int(fps_out)}fps_pose.mp4"
     writer_pred = cv2.VideoWriter(
         str(out_video),
-        cv2.VideoWriter_fourcc(*"mp4v"),
+        cv2.VideoWriter_fourcc(*"avc1"),
         fps_out,
         (W, H)
     )
+    if not writer_pred.isOpened():
+        print(Fore.RED + f"[ERRO] Falha ao iniciar VideoWriter (Pred) com codec avc1.")
+        # Fallback?
+        sys.exit(1)
 
     json_path = json_dir / f"{video_path.stem}_{int(fps_out)}fps.json"
 
@@ -160,9 +157,6 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
         # Checa se ha deteccoes e IDs validos
         if regs is None or len(regs) == 0 or regs.id is None:
             writer_pred.write(frame)
-            # Envia frame para preview no frontend (via arquivo, a cada 5 frames)
-            if show and frame_idx % 5 == 0:
-                save_preview_frame(frame)
 
             frame_idx += 1
             # Print de progresso a cada 10%
@@ -217,9 +211,6 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
                 "keypoints": kps.tolist()
             })
 
-        # Atualiza preview do site (via arquivo, a cada 5 frames)
-        if show and frame_idx % 5 == 0:
-            save_preview_frame(frame)
 
         writer_pred.write(frame)
 

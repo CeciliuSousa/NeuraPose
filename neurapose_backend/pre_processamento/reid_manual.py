@@ -147,9 +147,14 @@ def renderizar_video_limpo(video_in, video_out, registros_processados, cut_list)
     
     writer = cv2.VideoWriter(
         str(video_out),
-        cv2.VideoWriter_fourcc(*"mp4v"),
+        cv2.VideoWriter_fourcc(*"avc1"),
         fps, (W, H)
     )
+    if not writer.isOpened():
+        print(Fore.RED + f"[ERRO] Falha ao iniciar VideoWriter (ReID) com codec avc1.")
+        # Como é interativo, talvez fallback?
+        # Mas para web precisa de avc1.
+        return
 
     # Indexa registros processados pelo NOVO número de frame
     frames_map = {}

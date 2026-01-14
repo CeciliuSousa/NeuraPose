@@ -310,7 +310,10 @@ export default function TreinoPage() {
                             <span className="text-xs font-mono font-bold text-slate-300">Console de Execução</span>
                         </div>
                         <button
-                            onClick={() => setLogs([])}
+                            onClick={async () => {
+                                setLogs([]);
+                                try { await APIService.clearLogs(); } catch (e) { console.error(e); }
+                            }}
                             className="text-[10px] uppercase font-bold text-slate-500 hover:text-white transition-colors"
                         >
                             Limpar

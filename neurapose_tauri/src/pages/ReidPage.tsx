@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
-import { ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RotateCcw, FileVideo, FolderInput, FolderOutput } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RotateCcw, FileVideo, FolderInput } from 'lucide-react';
 import { APIService, ReIDVideo, ReIDData } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { shortenPath } from '../lib/utils';
+import { ReidPlayer } from '../components/ReidPlayer';
 
 
 export default function ReidPage() {
@@ -11,54 +12,65 @@ export default function ReidPage() {
     const [selectedVideo, setSelectedVideo] = useState<ReIDVideo | null>(null);
     const [reidData, setReidData] = useState<ReIDData | null>(null);
     const [inputPath, setInputPath] = useState('');
-    const [outputPath, setOutputPath] = useState('');
 
-    // Anotações Atuais (Vídeo Selecionado)
+    // Output is handled by backend default now (resultados-reidentificacoes)
+
+    // Current Video Edits
     const [swaps, setSwaps] = useState<{ src: number; tgt: number; start: number; end: number }[]>([]);
     const [deletions, setDeletions] = useState<{ id: number; start: number; end: number }[]>([]);
     const [cuts, setCuts] = useState<{ start: number; end: number }[]>([]);
+    const [isDeleted, setIsDeleted] = useState(false); // New: Mark video for deletion
 
-    // Lote de Anotações (Todos os vídeos)
+    // Batch State
     const [batchAnnotations, setBatchAnnotations] = useState<Record<string, any>>({});
 
     // Forms
-    const [swapForm, setSwapForm] = useState({ src: '', tgt: '', range: '' });
-    const [delForm, setDelForm] = useState({ id: '', range: '' });
-    const [cutForm, setCutForm] = useState({ range: '' });
+    const [swapForm, setSwapForm] = useState({ src: '', tgt: '', start: '', end: '' });
+    const [delForm, setDelForm] = useState({ id: '', start: '', end: '' });
+    const [cutForm, setCutForm] = useState({ start: '', end: '' });
 
-    // FileExplorer state
-    const [explorerTarget, setExplorerTarget] = useState<'input' | 'output' | null>(null);
-    const [roots, setRoots] = useState<Record<string, string>>({});
+    // Explorer
+    const [explorerOpen, setExplorerOpen] = useState(false);
+
+    // Transform Data for Player - API returns 1-indexed frames
+    const playerReidData = useMemo(() => {
+        if (!reidData || !reidData.frames) return { frames: {} };
+
+        const frames: Record<string, any[]> = {};
+        // Convert 1-based keys from API to 0-based keys for Player
+        Object.entries(reidData.frames).forEach(([k, v]) => {
+            const frameIdx = parseInt(k) - 1;
+            frames[String(frameIdx)] = v;
+        });
+
+        return { frames };
+    }, [reidData]);
 
 
     useEffect(() => {
-        // Load settings
         const savedInput = localStorage.getItem('np_reid_input');
-        const savedOutput = localStorage.getItem('np_reid_output');
         const savedBatch = localStorage.getItem('np_reid_batch');
 
         if (savedInput) setInputPath(savedInput);
-        if (savedOutput) setOutputPath(savedOutput);
         if (savedBatch) setBatchAnnotations(JSON.parse(savedBatch));
 
-        // Load defaults if empty
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
-                const { processamentos, reidentificacoes } = res.data.paths;
-                setRoots(res.data.paths);
-                if (!savedInput) setInputPath(processamentos);
-                if (!savedOutput) setOutputPath(reidentificacoes);
+                if (!savedInput) setInputPath(res.data.paths.processamentos || '');
             }
         });
-
-        loadVideos();
     }, []);
 
     useEffect(() => {
-        localStorage.setItem('np_reid_input', inputPath);
-        localStorage.setItem('np_reid_output', outputPath);
+        if (inputPath) {
+            loadVideos();
+            localStorage.setItem('np_reid_input', inputPath);
+        }
+    }, [inputPath]);
+
+    useEffect(() => {
         localStorage.setItem('np_reid_batch', JSON.stringify(batchAnnotations));
-    }, [inputPath, outputPath, batchAnnotations]);
+    }, [batchAnnotations]);
 
     const loadVideos = async () => {
         setLoading(true);
@@ -73,365 +85,372 @@ export default function ReidPage() {
     };
 
     const handleSelectVideo = async (video: ReIDVideo) => {
-        if (selectedVideo && (swaps.length > 0 || deletions.length > 0 || cuts.length > 0)) {
-            // Auto-save current annotations to batch
+        // Save previous video state if modified
+        if (selectedVideo) {
             saveToBatch(selectedVideo.id);
         }
 
         setSelectedVideo(video);
         setReidData(null);
 
-        // Load from batch if exists
+        // Load annotations from batch if exists
         const saved = batchAnnotations[video.id];
-        setSwaps(saved?.rules || []);
-        setDeletions(saved?.deletions || []);
-        setCuts(saved?.cuts || []);
+        if (saved) {
+            setSwaps(saved.rules || []);
+            setDeletions(saved.deletions || []);
+            setCuts(saved.cuts || []);
+            setIsDeleted(saved.action === 'delete');
+        } else {
+            // Reset state for new video
+            setSwaps([]);
+            setDeletions([]);
+            setCuts([]);
+            setIsDeleted(false);
+        }
 
         try {
             const res = await APIService.getReIDData(video.id, inputPath || undefined);
             setReidData(res.data);
         } catch (error) {
-            console.error("Erro ao carregar dados do video", error);
+            console.error("Erro ao carregar dados", error);
         }
     };
 
     const saveToBatch = (videoId: string) => {
-        setBatchAnnotations(prev => ({
-            ...prev,
-            [videoId]: {
-                video_id: videoId,
-                rules: swaps,
-                deletions: deletions,
-                cuts: cuts
-            }
-        }));
+        // Only save if there are changes
+        const hasChanges = swaps.length > 0 || deletions.length > 0 || cuts.length > 0 || isDeleted;
+
+        if (hasChanges) {
+            setBatchAnnotations(prev => ({
+                ...prev,
+                [videoId]: {
+                    video_id: videoId,
+                    rules: swaps,
+                    deletions: deletions,
+                    cuts: cuts,
+                    action: isDeleted ? 'delete' : 'process'
+                }
+            }));
+        } else {
+            // Remove from batch if no changes (reset to yellow/pending)
+            setBatchAnnotations(prev => {
+                const copy = { ...prev };
+                delete copy[videoId];
+                return copy;
+            });
+        }
     };
 
-    const parseRange = (rangeStr: string): [number, number] => {
-        if (!rangeStr.trim()) return [0, 999999];
-        const parts = rangeStr.split('-');
-        if (parts.length === 2) {
-            return [parseInt(parts[0]), parseInt(parts[1])];
-        }
-        if (parts.length === 1 && !isNaN(parseInt(parts[0]))) {
-            const f = parseInt(parts[0]);
-            return [f, f];
-        }
-        return [0, 999999];
-    };
 
     const addSwap = () => {
-        const [start, end] = parseRange(swapForm.range);
+        if (!swapForm.src || !swapForm.tgt) return;
+        const start = swapForm.start ? parseInt(swapForm.start) : 0;
+        const end = swapForm.end ? parseInt(swapForm.end) : 999999;
         setSwaps([...swaps, { src: parseInt(swapForm.src), tgt: parseInt(swapForm.tgt), start, end }]);
-        setSwapForm({ src: '', tgt: '', range: '' });
+        setSwapForm({ src: '', tgt: '', start: '', end: '' });
     };
 
     const addDeletion = () => {
-        const [start, end] = parseRange(delForm.range);
+        if (!delForm.id) return;
+        const start = delForm.start ? parseInt(delForm.start) : 0;
+        const end = delForm.end ? parseInt(delForm.end) : 999999;
         setDeletions([...deletions, { id: parseInt(delForm.id), start, end }]);
-        setDelForm({ id: '', range: '' });
+        setDelForm({ id: '', start: '', end: '' });
     };
 
     const addCut = () => {
-        const [start, end] = parseRange(cutForm.range);
+        if (!cutForm.start && !cutForm.end) return;
+        const start = cutForm.start ? parseInt(cutForm.start) : 0;
+        const end = cutForm.end ? parseInt(cutForm.end) : 999999;
         setCuts([...cuts, { start, end }]);
-        setCutForm({ range: '' });
+        setCutForm({ start: '', end: '' });
     };
+
+    const handleSchedule = () => {
+        if (!selectedVideo) return;
+        saveToBatch(selectedVideo.id);
+        // Visual feedback
+        alert(`✅ Vídeo "${selectedVideo.id}" agendado!`);
+    };
+
     const handleApplyBatch = async () => {
-        // Save current one first
-        if (selectedVideo) {
-            const currentAnnotations = {
-                video_id: selectedVideo.id,
-                rules: swaps,
-                deletions: deletions,
-                cuts: cuts
-            };
-            const updatedBatch = { ...batchAnnotations, [selectedVideo.id]: currentAnnotations };
+        // Save current open video first
+        if (selectedVideo) saveToBatch(selectedVideo.id);
 
-            const list = Object.values(updatedBatch).filter((v: any) =>
-                v.rules.length > 0 || v.deletions.length > 0 || v.cuts.length > 0
-            );
-
-            if (list.length === 0) {
-                alert("Nenhuma anotação pendente para salvar.");
-                return;
-            }
-
-            if (!confirm(`Deseja processar ${list.length} vídeos agora? Saída em: ${outputPath}`)) return;
-
-            setLoading(true);
-            try {
-                await APIService.batchApplyReID({
-                    videos: list,
-                    root_path: inputPath,
-                    output_path: outputPath
-                });
-                alert("Processamento em lote iniciado no backend!");
-                setBatchAnnotations({}); // Clear after starting
-            } catch (error) {
-                console.error(error);
-                alert('Erro ao iniciar processamento em lote.');
-            } finally {
-                setLoading(false);
-            }
+        const list = Object.values(batchAnnotations);
+        if (list.length === 0) {
+            alert("Nenhuma alteração agendada.");
+            return;
         }
+
+        if (!confirm(`Processar ${list.length} vídeos? \nIsso aplicará cortes, trocas e EXCLUSÕES permanentemente.`)) return;
+
+        setLoading(true);
+        try {
+            await APIService.batchApplyReID({
+                videos: list,
+                root_path: inputPath,
+            });
+            alert("Processamento finalizado/iniciado com sucesso!");
+            setBatchAnnotations({});
+            loadVideos(); // Refresh list to remove deleted videos
+            setSelectedVideo(null);
+        } catch (error) {
+            console.error(error);
+            alert("Erro ao processar lote.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Status Color Helper
+    const getVideoStatusColor = (vid: string) => {
+        const saved = batchAnnotations[vid];
+        if (!saved) return 'border-l-4 border-yellow-500/50 opacity-80'; // Pending (Yellowish)
+        if (saved.action === 'delete') return 'border-l-4 border-red-500 bg-red-500/10'; // Delete (Red)
+        return 'border-l-4 border-green-500 bg-green-500/10'; // Modified (Green)
     };
 
     return (
         <div className="h-[calc(100vh-8rem)] flex flex-col space-y-4">
-            {/* Barra de Configuração Compacta */}
-            <div className="bg-card border border-border rounded-xl p-4">
-                <div className="flex flex-wrap items-center gap-4">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-primary/10 rounded-lg">
-                            <ScanFace className="w-5 h-5 text-primary" />
-                        </div>
-                        <div>
-                            <h1 className="text-lg font-bold">Re-identificação Manual</h1>
-                            <p className="text-xs text-muted-foreground">Corrija IDs, remova ruídos e corte trechos.</p>
-                        </div>
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-border pb-4">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                        <ScanFace className="w-6 h-6 text-primary" />
                     </div>
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight">Re-identificação Manual</h1>
+                        <p className="text-sm text-muted-foreground">Corrija identidades e limpe o dataset.</p>
+                    </div>
+                </div>
 
-                    <div className="flex-1" />
-
-                    <div className="flex items-end gap-3">
-                        <div className="space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-muted-foreground">Entrada</label>
-                            <div className="flex gap-1">
-                                <input
-                                    value={shortenPath(inputPath)}
-                                    onChange={(e) => setInputPath(e.target.value)}
-                                    title={inputPath}
-                                    className="w-48 bg-secondary/50 border border-border text-xs py-2 px-3 rounded-lg"
-                                    placeholder="resultados-processamentos/"
-                                />
-                                <button
-                                    onClick={() => setExplorerTarget('input')}
-                                    className="p-2 bg-secondary border border-border rounded-lg hover:bg-secondary/80"
-                                    title="Selecionar Pasta"
-                                >
-                                    <FolderInput className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] uppercase font-bold text-muted-foreground">Saída</label>
-                            <div className="flex gap-1">
-                                <input
-                                    value={shortenPath(outputPath)}
-                                    onChange={(e) => setOutputPath(e.target.value)}
-                                    title={outputPath}
-                                    className="w-48 bg-secondary/50 border border-border text-xs py-2 px-3 rounded-lg"
-                                    placeholder="resultados-reidentificacoes/"
-                                />
-                                <button
-                                    onClick={() => setExplorerTarget('output')}
-                                    className="p-2 bg-secondary border border-border rounded-lg hover:bg-secondary/80"
-                                    title="Selecionar Pasta"
-                                >
-                                    <FolderOutput className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </div>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 bg-muted/30 p-1.5 rounded-lg border border-border">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground px-2">Entrada</span>
+                        <div className="h-4 w-px bg-border"></div>
                         <button
-                            onClick={loadVideos}
-                            className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20"
-                            title="Recarregar Vídeos"
+                            onClick={() => setExplorerOpen(true)}
+                            className="text-xs flex items-center gap-2 hover:text-primary transition-colors px-2 font-mono"
+                            title={inputPath}
                         >
-                            <RotateCcw className="w-4 h-4" />
+                            {shortenPath(inputPath) || "Selecionar Pasta..."} <FolderInput className="w-3.5 h-3.5" />
                         </button>
                     </div>
+                    <button
+                        onClick={loadVideos}
+                        className="p-2 hover:bg-muted rounded-md transition-colors border border-transparent hover:border-border"
+                        title="Recarregar Lista"
+                    >
+                        <RotateCcw className={`w-4 h-4 text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
+                    </button>
                 </div>
             </div>
 
             <div className="grid grid-cols-12 gap-6 flex-1 overflow-hidden">
-                {/* Sidebar: Video List */}
-                <div className="col-span-3 border-r border-border pr-6 overflow-y-auto">
-                    <h3 className="font-semibold mb-4 text-sm text-muted-foreground uppercase tracking-wider">Vídeos Disponíveis</h3>
-                    <div className="space-y-2">
-                        {videos.map(v => (
-                            <div
-                                key={v.id}
-                                onClick={() => handleSelectVideo(v)}
-                                className={`
-                                    p-3 rounded-lg border transition-all cursor-pointer flex items-center gap-3
-                                    ${selectedVideo?.id === v.id
-                                        ? 'bg-primary/10 border-primary text-primary'
-                                        : 'bg-card border-border hover:border-primary/50'}
-                                `}
-                            >
-                                <FileVideo className="w-5 h-5 shrink-0" />
-                                <div className="truncate">
-                                    <p className="font-medium text-sm truncate">{v.id}</p>
-                                    <p className="text-xs text-muted-foreground truncate">{v.video_path ? 'Pronto' : 'Vídeo ausente'}</p>
-                                </div>
-                            </div>
-                        ))}
-                        {videos.length === 0 && !loading && (
-                            <p className="text-sm text-muted-foreground italic">Nenhum vídeo com JSON encontrado.</p>
-                        )}
-                        {loading && (
-                            <p className="text-sm text-primary animate-pulse">Carregando...</p>
-                        )}
+                {/* LISTA DE VÍDEOS (Sidebar) */}
+                <div className="col-span-3 border-r border-border pr-4 overflow-y-auto space-y-2">
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-xs font-bold uppercase text-muted-foreground">Fila de Processamento</h3>
+                        <span className="text-[10px] text-muted-foreground font-mono">{videos.length} vídeos</span>
                     </div>
+
+                    {videos.map(v => (
+                        <div
+                            key={v.id}
+                            onClick={() => handleSelectVideo(v)}
+                            className={`
+                                p-3 rounded-lg border transition-all cursor-pointer flex items-center justify-between
+                                ${getVideoStatusColor(v.id)}
+                                ${selectedVideo?.id === v.id ? 'ring-2 ring-primary' : 'border-border'}
+                            `}
+                        >
+                            <div className="truncate flex-1">
+                                <p className="font-bold text-sm truncate">{v.id}</p>
+                                <p className="text-[10px] text-muted-foreground">
+                                    {batchAnnotations[v.id]?.action === 'delete' ? '⛔ PARA EXCLUIR' :
+                                        batchAnnotations[v.id] ? '✅ PRONTO PARA SALVAR' : '⚠️ PENDENTE'}
+                                </p>
+                            </div>
+                            {batchAnnotations[v.id]?.action === 'delete' && <Trash2 className="w-4 h-4 text-red-500" />}
+                        </div>
+                    ))}
+                    {videos.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">Nenhum vídeo encontrado.</p>}
                 </div>
 
-                {/* Main: Editor */}
-                <div className="col-span-9 flex flex-col overflow-y-auto">
+                {/* ÁREA DE EDIÇÃO */}
+                <div className="col-span-9 flex flex-col h-full overflow-y-auto pr-2 pb-10">
                     {selectedVideo ? (
-                        <div className="space-y-6">
-                            {/* Video Player Area */}
-                            <div className="bg-black aspect-video rounded-xl overflow-hidden relative group">
-                                <video
+                        <div className="flex flex-col space-y-6">
+                            {/* Toolbar de Ações Rápidas */}
+                            <div className="flex items-center justify-between p-2 bg-muted/20 rounded-lg border border-border">
+                                <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                    <span className="font-bold text-foreground">{selectedVideo.id}</span>
+                                    <span>|</span>
+                                    <span>{reidData?.id_counts ? Object.keys(reidData.id_counts).length + ' IDs únicos detectados' : 'Carregando stats...'}</span>
+                                </div>
+                                <button
+                                    onClick={() => setIsDeleted(!isDeleted)}
+                                    className={`
+                                        px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-all
+                                        ${isDeleted
+                                            ? 'bg-muted text-foreground hover:bg-muted/80'
+                                            : 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20'}
+                                    `}
+                                >
+                                    {isDeleted ? <><RotateCcw className="w-3 h-3" /> Restaurar Vídeo</> : <><Trash2 className="w-3 h-3" /> EXCLUIR VÍDEO INTEIRO</>}
+                                </button>
+                            </div>
+
+                            {/* Player Wrapper */}
+                            <div className={`
+                                relative rounded-xl border-2 bg-black shrink-0
+                                ${isDeleted ? 'border-red-500 opacity-50 grayscale pointer-events-none' : 'border-transparent'}
+                            `}>
+                                <ReidPlayer
                                     src={`http://localhost:8000/reid/video/${selectedVideo.id}?root_path=${encodeURIComponent(inputPath)}`}
-                                    controls
-                                    className="w-full h-full object-contain"
+                                    reidData={playerReidData}
+                                    swaps={swaps}
+                                    deletions={deletions}
+                                    cuts={cuts}
+                                    fps={30}
                                 />
+                                {isDeleted && (
+                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
+                                        <div className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold text-2xl shadow-xl transform -rotate-12 border-4 border-white">
+                                            MARCADO PARA EXCLUSÃO
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
-                            {/* ID Stats */}
-                            <div className="p-4 bg-muted/20 rounded-lg border border-border">
-                                <h4 className="font-semibold text-sm mb-2">IDs Mais Frequentes</h4>
-                                <div className="flex flex-wrap gap-2">
-                                    {reidData && Object.entries(reidData.id_counts).slice(0, 15).map(([id, count]) => (
-                                        <span key={id} className="text-xs bg-secondary px-2 py-1 rounded border border-border">
-                                            ID {id}: {count} frames
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
 
-                            {/* Actions / Logic Area */}
-                            <div className="grid md:grid-cols-3 gap-4">
-                                {/* Swap Card */}
-                                <div className="p-4 bg-card rounded-xl border border-border space-y-3">
-                                    <div className="flex items-center gap-2 font-medium text-blue-400">
-                                        <ArrowRightLeft className="w-4 h-4" /> Trocar ID
-                                    </div>
-                                    <div className="space-y-2 text-sm">
-                                        <input
-                                            placeholder="ID Original"
-                                            className="w-full bg-secondary p-2 rounded"
-                                            value={swapForm.src} onChange={e => setSwapForm({ ...swapForm, src: e.target.value })}
-                                        />
-                                        <input
-                                            placeholder="ID Novo"
-                                            className="w-full bg-secondary p-2 rounded"
-                                            value={swapForm.tgt} onChange={e => setSwapForm({ ...swapForm, tgt: e.target.value })}
-                                        />
-                                        <input
-                                            placeholder="Frame Range (ex: 1-100)"
-                                            className="w-full bg-secondary p-2 rounded"
-                                            value={swapForm.range} onChange={e => setSwapForm({ ...swapForm, range: e.target.value })}
-                                        />
-                                        <button onClick={addSwap} className="w-full bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 py-2 rounded">Adicionar Troca</button>
-                                    </div>
-                                    <ul className="text-xs space-y-1 text-muted-foreground">
-                                        {swaps.map((s, i) => (
-                                            <li key={i}>{s.src} → {s.tgt} ({s.start}-{s.end})</li>
-                                        ))}
-                                    </ul>
-                                </div>
+                            {!isDeleted && (
+                                <div className="space-y-6">
+                                    {/* Ferramentas de Edição */}
+                                    <div className="grid grid-cols-3 gap-4">
+                                        {/* Trocas */}
+                                        <div className="space-y-3 p-4 bg-blue-500/5 border border-blue-500/20 rounded-xl">
+                                            <h4 className="font-bold text-blue-400 text-xs uppercase flex items-center gap-2">
+                                                <ArrowRightLeft className="w-4 h-4" /> Corrigir IDs
+                                            </h4>
+                                            <div className="space-y-2">
+                                                <div className="flex gap-2">
+                                                    <input placeholder="De (ID)" className="w-1/2 p-2 text-xs bg-background/50 rounded border border-border" value={swapForm.src} onChange={e => setSwapForm({ ...swapForm, src: e.target.value })} />
+                                                    <input placeholder="Para (ID)" className="w-1/2 p-2 text-xs bg-background/50 rounded border border-border" value={swapForm.tgt} onChange={e => setSwapForm({ ...swapForm, tgt: e.target.value })} />
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <input placeholder="Início" type="number" className="w-1/2 p-2 text-xs bg-background/50 rounded border border-border" value={swapForm.start} onChange={e => setSwapForm({ ...swapForm, start: e.target.value })} />
+                                                    <input placeholder="Fim" type="number" className="w-1/2 p-2 text-xs bg-background/50 rounded border border-border" value={swapForm.end} onChange={e => setSwapForm({ ...swapForm, end: e.target.value })} />
+                                                </div>
+                                                <button onClick={addSwap} className="w-full py-2 bg-blue-500 text-white text-xs font-bold rounded hover:bg-blue-600">Adicionar Regra</button>
+                                            </div>
+                                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                                                {swaps.map((s, i) => (
+                                                    <div key={i} className="text-[10px] bg-background p-1.5 rounded border border-border flex justify-between">
+                                                        <span>{s.src} ➔ {s.tgt} ({s.start}-{s.end})</span>
+                                                        <button onClick={() => setSwaps(swaps.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-red-400">×</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
 
-                                {/* Delete Card */}
-                                <div className="p-4 bg-card rounded-xl border border-border space-y-3">
-                                    <div className="flex items-center gap-2 font-medium text-red-400">
-                                        <Trash2 className="w-4 h-4" /> Excluir ID
-                                    </div>
-                                    <div className="space-y-2 text-sm">
-                                        <input
-                                            placeholder="ID para apagar"
-                                            className="w-full bg-secondary p-2 rounded"
-                                            value={delForm.id} onChange={e => setDelForm({ ...delForm, id: e.target.value })}
-                                        />
-                                        <input
-                                            placeholder="Frame Range (vazio=tudo)"
-                                            className="w-full bg-secondary p-2 rounded"
-                                            value={delForm.range} onChange={e => setDelForm({ ...delForm, range: e.target.value })}
-                                        />
-                                        <button onClick={addDeletion} className="w-full bg-red-500/10 text-red-500 hover:bg-red-500/20 py-2 rounded">Adicionar Exclusão</button>
-                                    </div>
-                                    <ul className="text-xs space-y-1 text-muted-foreground">
-                                        {deletions.map((d, i) => (
-                                            <li key={i}>ID {d.id} ({d.start}-{d.end})</li>
-                                        ))}
-                                    </ul>
-                                </div>
+                                        {/* Exclusão de ID */}
+                                        <div className="space-y-3 p-4 bg-orange-500/5 border border-orange-500/20 rounded-xl">
+                                            <h4 className="font-bold text-orange-400 text-xs uppercase flex items-center gap-2">
+                                                <Trash2 className="w-4 h-4" /> Apagar ID (Ruído)
+                                            </h4>
+                                            <div className="space-y-2">
+                                                <input placeholder="ID para remover" className="w-full p-2 text-xs bg-background/50 rounded border border-border" value={delForm.id} onChange={e => setDelForm({ ...delForm, id: e.target.value })} />
+                                                <div className="flex gap-2">
+                                                    <input placeholder="Início" type="number" className="w-1/2 p-2 text-xs bg-background/50 rounded border border-border" value={delForm.start} onChange={e => setDelForm({ ...delForm, start: e.target.value })} />
+                                                    <input placeholder="Fim (vazio=tudo)" type="number" className="w-1/2 p-2 text-xs bg-background/50 rounded border border-border" value={delForm.end} onChange={e => setDelForm({ ...delForm, end: e.target.value })} />
+                                                </div>
+                                                <button onClick={addDeletion} className="w-full py-2 bg-orange-500 text-white text-xs font-bold rounded hover:bg-orange-600">Adicionar Exclusão</button>
+                                            </div>
+                                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                                                {deletions.map((d, i) => (
+                                                    <div key={i} className="text-[10px] bg-background p-1.5 rounded border border-border flex justify-between">
+                                                        <span>ID {d.id} ({d.start}-{d.end})</span>
+                                                        <button onClick={() => setDeletions(deletions.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-red-400">×</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
 
-                                {/* Cut Card */}
-                                <div className="p-4 bg-card rounded-xl border border-border space-y-3">
-                                    <div className="flex items-center gap-2 font-medium text-amber-400">
-                                        <Scissors className="w-4 h-4" /> Cortar Vídeo
+                                        {/* Cortes */}
+                                        <div className="space-y-3 p-4 bg-purple-500/5 border border-purple-500/20 rounded-xl">
+                                            <h4 className="font-bold text-purple-400 text-xs uppercase flex items-center gap-2">
+                                                <Scissors className="w-4 h-4" /> Cortar Vídeo
+                                            </h4>
+                                            <div className="space-y-2">
+                                                <div className="flex gap-2">
+                                                    <input placeholder="Início" type="number" className="w-1/2 p-2 text-xs bg-background/50 rounded border border-border" value={cutForm.start} onChange={e => setCutForm({ ...cutForm, start: e.target.value })} />
+                                                    <input placeholder="Fim" type="number" className="w-1/2 p-2 text-xs bg-background/50 rounded border border-border" value={cutForm.end} onChange={e => setCutForm({ ...cutForm, end: e.target.value })} />
+                                                </div>
+                                                <button onClick={addCut} className="w-full py-2 bg-purple-500 text-white text-xs font-bold rounded hover:bg-purple-600">Cortar Trecho</button>
+                                            </div>
+                                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                                                {cuts.map((c, i) => (
+                                                    <div key={i} className="text-[10px] bg-background p-1.5 rounded border border-border flex justify-between">
+                                                        <span>Cut {c.start}-{c.end}</span>
+                                                        <button onClick={() => setCuts(cuts.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-red-400">×</button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="space-y-2 text-sm">
-                                        <input
-                                            placeholder="Frame Range (ex: 0-100)"
-                                            className="w-full bg-secondary p-2 rounded"
-                                            value={cutForm.range} onChange={e => setCutForm({ ...cutForm, range: e.target.value })}
-                                        />
-                                        <button onClick={addCut} className="w-full bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 py-2 rounded">Adicionar Corte</button>
-                                    </div>
-                                    <ul className="text-xs space-y-1 text-muted-foreground">
-                                        {cuts.map((c, i) => (
-                                            <li key={i}>Cut: {c.start}-{c.end}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            </div>
 
-                            <div className="pt-4 pb-10 flex gap-4">
-                                <button
-                                    onClick={() => selectedVideo && saveToBatch(selectedVideo.id)}
-                                    className="flex-1 py-4 bg-secondary text-foreground font-semibold rounded-xl hover:bg-muted transition-colors flex items-center justify-center gap-2"
-                                >
-                                    Agendar para Lote
-                                </button>
-                                <button
-                                    onClick={handleApplyBatch}
-                                    disabled={loading}
-                                    className="flex-[2] py-4 bg-primary text-primary-foreground font-bold rounded-xl hover:brightness-110 flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
-                                >
-                                    <Save className="w-5 h-5" />
-                                    {loading ? 'Processando Lote...' : 'Salvar Reidentificações (Lote)'}
-                                </button>
-                            </div>
+                                    {/* Agendar Button */}
+                                    <button
+                                        onClick={handleSchedule}
+                                        className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all shadow-lg shadow-green-600/20 flex items-center justify-center gap-3 text-lg"
+                                    >
+                                        <Save className="w-5 h-5" />
+                                        AGENDAR ALTERAÇÕES DESTE VÍDEO
+                                    </button>
+
+                                    {/* Action Bar / Stats (Moved from Footer) */}
+                                    <div className="p-4 bg-secondary/30 border border-border rounded-xl flex items-center justify-between">
+                                        <div className="flex gap-4 text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow shadow-green-500/50"></span>
+                                                <span className="text-muted-foreground">Processar: <b className="text-foreground text-lg">{Object.values(batchAnnotations).filter((v: any) => v.action !== 'delete').length}</b></span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow shadow-red-500/50"></span>
+                                                <span className="text-muted-foreground">Excluir: <b className="text-foreground text-lg">{Object.values(batchAnnotations).filter((v: any) => v.action === 'delete').length}</b></span>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            onClick={handleApplyBatch}
+                                            disabled={Object.keys(batchAnnotations).length === 0 || loading}
+                                            className="px-8 py-3 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-primary/10 flex items-center gap-2 transition-all"
+                                        >
+                                            <Save className="w-4 h-4" />
+                                            {loading ? "Processando..." : "Salvar Alterações"}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50 space-y-4">
-                            <ScanFace className="w-20 h-20" />
-                            <div className="text-center">
-                                <p className="text-xl font-semibold">Nenhum vídeo selecionado</p>
-                                <p className="text-sm">Selecione um vídeo na lateral para iniciar as anotações.</p>
-                            </div>
-                            {Object.keys(batchAnnotations).length > 0 && (
-                                <button
-                                    onClick={handleApplyBatch}
-                                    className="mt-8 px-6 py-3 bg-primary/20 text-primary border border-primary/30 rounded-lg hover:bg-primary/30 transition-all font-bold"
-                                >
-                                    Processar {Object.keys(batchAnnotations).length} vídeos pendentes
-                                </button>
-                            )}
+                        <div className="flex flex-col items-center justify-center h-full text-muted-foreground opacity-50">
+                            <FileVideo className="w-16 h-16 mb-4" />
+                            <p>Selecione um vídeo da lista ao lado</p>
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* File Explorer Modal */}
             <FileExplorerModal
-                isOpen={explorerTarget !== null}
-                onClose={() => setExplorerTarget(null)}
-                onSelect={(path) => {
-                    if (explorerTarget === 'input') {
-                        setInputPath(path);
-                        loadVideos();
-                    } else if (explorerTarget === 'output') {
-                        setOutputPath(path);
-                    }
-                    setExplorerTarget(null);
-                }}
-                initialPath={explorerTarget === 'input' ? inputPath : outputPath}
-                rootPath={explorerTarget === 'input' ? roots.processamentos : roots.reidentificacoes}
-                title={explorerTarget === 'input' ? 'Selecionar Pasta de Entrada' : 'Selecionar Pasta de Saída'}
+                isOpen={explorerOpen}
+                onClose={() => setExplorerOpen(false)}
+                onSelect={(path) => { setInputPath(path); setExplorerOpen(false); }}
+                initialPath={inputPath}
+                title="Selecionar Pasta de Vídeos/Predições"
+                filterFn={(item) => !['jsons', 'videos'].includes(item.name)}
             />
         </div>
     );

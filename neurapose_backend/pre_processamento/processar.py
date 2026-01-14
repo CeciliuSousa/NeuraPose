@@ -52,14 +52,6 @@ def main():
     onnx_path = Path(args.onnx)
     out_root = Path(args.output_root)
     
-    # Limpa arquivo de preview antigo se existir
-    preview_file = Path(__file__).resolve().parent.parent / "temp_preview.jpg"
-    if preview_file.exists():
-        try:
-            preview_file.unlink()
-        except:
-            pass
-    
     imprimir_banner(onnx_path)
     sys.stdout.flush()
 

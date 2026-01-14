@@ -312,7 +312,11 @@ export default function ProcessamentoPage() {
                             <span className="text-xs font-mono text-slate-400 ml-2">Terminal</span>
                         </div>
                         <button
-                            onClick={() => setLogs([])}
+                            onClick={async () => {
+                                setLogs([]);
+                                localStorage.removeItem('np_process_logs');
+                                try { await APIService.clearLogs(); } catch (e) { console.error(e); }
+                            }}
                             className="text-[10px] uppercase font-bold text-slate-500 hover:text-white transition-colors"
                         >
                             Limpar

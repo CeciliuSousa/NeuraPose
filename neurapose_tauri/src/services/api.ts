@@ -87,6 +87,7 @@ export const APIService = {
     applyReIDChanges: (videoId: string, data: any, rootPath?: string) => api.post(`/reid/${videoId}/apply`, data, { params: { root_path: rootPath } }),
 
     getLogs: () => api.get<{ logs: string[] }>('/logs'),
+    clearLogs: () => api.delete('/logs'),
 
     pickFolder: (initialDir?: string) => api.get<{ path: string | null }>('/pick-folder', { params: { initial_dir: initialDir } }),
 

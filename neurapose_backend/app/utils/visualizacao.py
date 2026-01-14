@@ -153,10 +153,13 @@ def gerar_video_predicao(
 
     writer = cv2.VideoWriter(
         str(video_out_path),
-        cv2.VideoWriter_fourcc(*"mp4v"),
+        cv2.VideoWriter_fourcc(*"avc1"),
         fps,
         (W, H),
     )
+    if not writer.isOpened():
+        print(f"[ERRO] Falha ao iniciar VideoWriter (Visualizacao) com avc1.")
+        return
 
     # Agrupa registros por frame
     registros_por_frame = {}

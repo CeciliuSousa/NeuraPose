@@ -9,9 +9,10 @@ interface FileExplorerModalProps {
     initialPath?: string;
     rootPath?: string;
     title?: string;
+    filterFn?: (item: { name: string, is_dir: boolean, path: string }) => boolean;
 }
 
-export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, rootPath, title = "Selecionar Pasta" }: FileExplorerModalProps) {
+export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, rootPath, title = "Selecionar Pasta", filterFn }: FileExplorerModalProps) {
     const [currentPath, setCurrentPath] = useState<string>(initialPath || '');
     const [data, setData] = useState<BrowseResponse | null>(null);
     const [loading, setLoading] = useState(false);
@@ -91,24 +92,26 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, root
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 gap-1">
-                            {data?.items.map((item) => (
-                                <button
-                                    key={item.path}
-                                    onClick={() => item.is_dir ? loadPath(item.path) : onSelect(item.path)}
-                                    className={`
+                            {data?.items
+                                .filter(item => filterFn ? filterFn(item) : true)
+                                .map((item) => (
+                                    <button
+                                        key={item.path}
+                                        onClick={() => item.is_dir ? loadPath(item.path) : onSelect(item.path)}
+                                        className={`
                                         flex items-center gap-3 p-2.5 rounded-md text-sm text-left transition-colors
                                         hover:bg-primary/10 cursor-pointer
                                     `}
-                                >
-                                    {item.is_dir ? (
-                                        <Folder className="w-4 h-4 text-blue-400 fill-blue-400/20" />
-                                    ) : (
-                                        <File className="w-4 h-4 text-emerald-400" />
-                                    )}
-                                    <span className="truncate flex-1 font-mono text-xs">{item.name}</span>
-                                </button>
+                                    >
+                                        {item.is_dir ? (
+                                            <Folder className="w-4 h-4 text-blue-400 fill-blue-400/20" />
+                                        ) : (
+                                            <File className="w-4 h-4 text-emerald-400" />
+                                        )}
+                                        <span className="truncate flex-1 font-mono text-xs">{item.name}</span>
+                                    </button>
 
-                            ))}
+                                ))}
                             {data?.items.length === 0 && (
                                 <div className="text-center py-10 text-muted-foreground italic">
                                     Pasta vazia

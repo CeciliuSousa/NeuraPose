@@ -222,9 +222,20 @@ export default function DatasetsPage() {
                 {/* Terminal / Stats Panel */}
                 <div className="space-y-4">
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
-                        <div className="px-4 py-3 bg-muted/30 border-b border-border flex items-center gap-2">
-                            <TerminalIcon className="w-4 h-4 text-muted-foreground" />
-                            <span className="font-medium text-sm">Logs</span>
+                        <div className="px-4 py-3 bg-muted/30 border-b border-border flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <TerminalIcon className="w-4 h-4 text-muted-foreground" />
+                                <span className="font-medium text-sm">Logs</span>
+                            </div>
+                            <button
+                                onClick={async () => {
+                                    setLogs([]);
+                                    try { await APIService.clearLogs(); } catch (e) { console.error(e); }
+                                }}
+                                className="text-[10px] uppercase font-bold text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                                Limpar
+                            </button>
                         </div>
                         <div
                             ref={terminalRef}

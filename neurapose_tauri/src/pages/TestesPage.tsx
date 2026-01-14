@@ -216,7 +216,10 @@ export default function TestesPage() {
                             <span className="text-xs font-mono font-bold text-slate-300">Resumo de Validação</span>
                         </div>
                         <button
-                            onClick={() => setLogs([])}
+                            onClick={async () => {
+                                setLogs([]);
+                                try { await APIService.clearLogs(); } catch (e) { console.error(e); }
+                            }}
                             className="text-[10px] uppercase font-bold text-slate-500 hover:text-white transition-colors"
                         >
                             Limpar

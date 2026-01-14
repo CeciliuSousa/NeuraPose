@@ -127,6 +127,7 @@ class ReIDApplyRequest(BaseModel):
     rules: List[ReIDRule] = []
     deletions: List[ReIDDelete] = []
     cuts: List[ReIDCut] = []
+    action: str = "process" # 'process' or 'delete'
 
 class AnnotationRequest(BaseModel):
     video_stem: str
@@ -420,6 +421,12 @@ def get_logs():
     """Retorna logs do backend."""
     return {"logs": LogBuffer().get_logs()}
 
+@app.delete("/logs")
+def clear_logs():
+    """Limpa o buffer de logs do servidor."""
+    LogBuffer().clear()
+    return {"status": "logs cleared"}
+
 @app.get("/health")
 def health_check():
     """Ultra-fast health check - sem I/O."""
@@ -604,50 +611,9 @@ def shutdown_server():
     threading.Thread(target=kill_me).start()
     return {"status": "shutting_down"}
 
-@app.get("/video_feed")
-def video_feed():
-    # Caminho do arquivo de preview compartilhado
-    preview_file = CURRENT_DIR / "temp_preview.jpg"
-    
-    def generate():
-        import time
-        # Limite de tempo sem frame para encerrar o stream (evita loop infinito)
-        no_frame_count = 0
-        max_no_frame = 100  # 10 segundos sem frame = encerra
-        last_mtime = 0
-        
-        while True:
-            # Verifica se deve parar
-            if state.stop_requested:
-                break
-            
-            try:
-                # Verifica se o arquivo existe e foi modificado
-                if preview_file.exists():
-                    mtime = preview_file.stat().st_mtime
-                    if mtime > last_mtime:
-                        last_mtime = mtime
-                        no_frame_count = 0  # Reset counter
-                        # Lê o arquivo JPEG diretamente
-                        with open(preview_file, 'rb') as f:
-                            frame_bytes = f.read()
-                        if len(frame_bytes) > 0:
-                            yield (b'--frame\r\n'
-                                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-                    else:
-                        no_frame_count += 1
-                else:
-                    no_frame_count += 1
-            except:
-                no_frame_count += 1
-                
-            # Se não há processamento ativo e não há frames, encerra após timeout
-            if not state.is_running and no_frame_count > max_no_frame:
-                break
-            # Small delay to not consume CPU
-            time.sleep(0.05)  # 20 FPS max
-            
-    return StreamingResponse(generate(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+# Endpoint /video_feed removido - preview via temp_preview.jpg foi descontinuado
+
 
 @app.post("/process/stop")
 def stop_process():
@@ -729,6 +695,10 @@ def list_reid_candidates(root_path: Optional[str] = None):
             root = Path(root_path).resolve()
         else:
             root = cm.PROCESSING_OUTPUT_DIR
+
+        # Se usuário selecionou pasta 'predicoes', sobe um nível
+        if root.name == "predicoes" or root.name == "jsons" or root.name == "videos":
+            root = root.parent
             
         json_dir = root / "jsons"
         
@@ -759,55 +729,109 @@ def list_reid_candidates(root_path: Optional[str] = None):
 @app.get("/reid/{video_id}/data")
 def get_reid_data(video_id: str, root_path: Optional[str] = None):
     """Retorna dados de poses para o editor."""
-    root = Path(root_path) if root_path else cm.PROCESSING_OUTPUT_DIR
-    json_path = root / "jsons" / f"{video_id}.json"
+    root = Path(root_path).resolve() if root_path else cm.PROCESSING_OUTPUT_DIR
+    if root.name in ["predicoes", "jsons", "videos"]: root = root.parent
+    
+    # Prioriza _tracking.json (com IDs persistentes corretos) sobre o .json (keypoints)
+    tracking_path = root / "jsons" / f"{video_id}_tracking.json"
+    keypoints_path = root / "jsons" / f"{video_id}.json"
+    
+    # Decide qual arquivo usar
+    use_tracking = tracking_path.exists()
+    json_path = tracking_path if use_tracking else keypoints_path
     
     if not json_path.exists():
         raise HTTPException(status_code=404, detail="JSON not found")
     
-    records = carregar_pose_records(json_path)
+    raw_data = carregar_pose_records(json_path)
+    
+    # Handle tracking.json format (object with tracking_by_frame)
+    if use_tracking and isinstance(raw_data, dict) and "tracking_by_frame" in raw_data:
+        # Converte o formato tracking para lista de records para reusar indexar_por_frame_e_contar_ids
+        records = []
+        for frame_idx, detections in raw_data["tracking_by_frame"].items():
+            for det in detections:
+                records.append({
+                    "frame": int(frame_idx),
+                    "id_persistente": det.get("id_persistente", det.get("botsort_id", -1)),
+                    "bbox": det.get("bbox", [0,0,0,0]),
+                    "confidence": det.get("confidence", 0)
+                })
+        
+        # Use id_map for accurate unique ID count
+        id_map = raw_data.get("id_map", {})
+        unique_persistent_ids = set(id_map.values()) if id_map else set()
+    else:
+        records = raw_data
+        unique_persistent_ids = None  # Will be calculated from records
+    
     frames_index, id_counter = indexar_por_frame_e_contar_ids(records)
     
     # Converte frames_index para formato JSON-friendly
-    # Dict keys must be strings in JSON
     frames_clean = {}
     for f, items in frames_index.items():
         frames_clean[str(f)] = []
         for bbox, gid in items:
             frames_clean[str(f)].append({"bbox": bbox, "id": gid})
+    
+    # For tracking files, use id_map count; otherwise use counter
+    if unique_persistent_ids is not None:
+        id_counts = {str(pid): id_counter.get(pid, 0) for pid in unique_persistent_ids}
+    else:
+        id_counts = dict(id_counter.most_common(100))
             
     return {
         "video_id": video_id,
         "frames": frames_clean,
-        "id_counts": dict(id_counter.most_common(100))
+        "id_counts": id_counts
     }
 
 @app.get("/reid/video/{video_id}")
 def stream_video(video_id: str, root_path: Optional[str] = None):
     """Serve o arquivo de video."""
-    root = Path(root_path) if root_path else cm.PROCESSING_OUTPUT_DIR
+    root = Path(root_path).resolve() if root_path else cm.PROCESSING_OUTPUT_DIR
+    if root.name in ["predicoes", "jsons", "videos"]: root = root.parent
     
-    # Tenta achar o video original
-    v_raw = root / "videos" / f"{video_id.replace('_pose', '')}.mp4"
-    if not v_raw.exists():
-        # Tenta com nome direto
-        v_raw = root / "videos" / f"{video_id}.mp4"
-        
-    if not v_raw.exists():
-        # Tenta achar na pasta de predicoes se nao tiver original?
-        v_pred = root / "predicoes" / f"{video_id}_pose.mp4"
-        if v_pred.exists():
-            v_raw = v_pred
-        else:
-            raise HTTPException(status_code=404, detail="Video not found")
+    # Prioridade: Vídeo com correções/marcações (_pose.mp4 na pasta predicoes)
+    v_final = None
+    
+    # 1. Tenta achar na pasta de predicoes (com esqueleto)
+    possible_preds = [
+        root / "predicoes" / f"{video_id}_pose.mp4",
+        root / "predicoes" / f"{video_id}.mp4"
+    ]
+    
+    for p in possible_preds:
+        if p.exists():
+            v_final = p
+            break
             
-    return FileResponse(v_raw, media_type="video/mp4")
+    # 2. Se não achar, tenta o original (fallback, mas sem marcações)
+    if not v_final:
+        possible_sources = [
+            root / "videos" / f"{video_id.replace('_pose', '')}.mp4",
+            root / "videos" / f"{video_id}.mp4"
+        ]
+        for p in possible_sources:
+            if p.exists():
+                v_final = p
+                break
+                
+    if not v_final or not v_final.exists():
+        raise HTTPException(status_code=404, detail="Video not found")
+        
+    return FileResponse(v_final, media_type="video/mp4")
 
 @app.post("/reid/batch-apply")
 async def batch_apply_reid(data: Dict[str, Any], background_tasks: BackgroundTasks):
     """Aplica mudanças em vários vídeos em lote."""
     videos = data.get("videos", []) # Lista de {video_id, rules, deletions, cuts}
     root_path = data.get("root_path")
+    if root_path:
+        r = Path(root_path).resolve()
+        if r.name in ["predicoes", "jsons", "videos"]: 
+            root_path = str(r.parent)
+            
     output_path = data.get("output_path")
     
     if not videos:
@@ -837,6 +861,29 @@ def apply_reid_changes(video_id: str, req: ReIDApplyRequest, root_path: Optional
     try:
         root = Path(root_path) if root_path else cm.PROCESSING_OUTPUT_DIR
         
+        # Lógica de EXCLUSÃO DA FONTE
+        if req.action == 'delete':
+            deleted_files = []
+            
+            # Paths originais para deletar
+            files_to_delete = [
+                root / "jsons" / f"{video_id}.json",
+                root / "videos" / f"{video_id.replace('_pose', '')}.mp4",
+                root / "videos" / f"{video_id}.mp4",
+                root / "predicoes" / f"{video_id}_pose.mp4",
+                root / "predicoes" / f"{video_id}_tracking.mp4"
+            ]
+            
+            for f in files_to_delete:
+                if f.exists():
+                    try:
+                        os.remove(f)
+                        deleted_files.append(f.name)
+                    except Exception as e:
+                        logger.error(f"Failed to delete {f}: {e}")
+            
+            return {"status": "deleted", "video_id": video_id, "deleted_files": deleted_files}
+
         if output_path:
             out_root = Path(output_path)
         else:
