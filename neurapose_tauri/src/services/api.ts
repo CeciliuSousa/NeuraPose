@@ -112,7 +112,7 @@ export const APIService = {
     startTesting: (data: TestRequest) => api.post('/test', data),
 
     // ReID Agenda (persistência em arquivo JSON)
-    getReidAgenda: () => api.get<{ agenda: any }>('/reid/agenda'),
+    getReidAgenda: (rootPath?: string) => api.get<{ agenda: any, stats?: any }>('/reid/agenda', { params: { root_path: rootPath } }),
     saveToReidAgenda: (sourceDataset: string, video: any) => api.post('/reid/agenda/save', { source_dataset: sourceDataset, video }),
     removeFromReidAgenda: (videoId: string) => api.delete(`/reid/agenda/${videoId}`),
 

@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
-import { ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RotateCcw, FileVideo, FolderInput } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RotateCcw, FileVideo, FolderInput, ChevronDown, Pencil } from 'lucide-react';
 import { APIService, ReIDVideo, ReIDData } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { shortenPath } from '../lib/utils';
@@ -12,6 +12,8 @@ export default function ReidPage() {
     const [selectedVideo, setSelectedVideo] = useState<ReIDVideo | null>(null);
     const [reidData, setReidData] = useState<ReIDData | null>(null);
     const [inputPath, setInputPath] = useState('');
+    const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'processed' | 'excluded'>('all');
+    const [filterMenuOpen, setFilterMenuOpen] = useState(false);
 
     // Output is handled by backend default now (resultados-reidentificacoes)
 
@@ -47,13 +49,38 @@ export default function ReidPage() {
     }, [reidData]);
 
 
-    useEffect(() => {
-        const savedInput = localStorage.getItem('np_reid_input');
 
-        if (savedInput) setInputPath(savedInput);
+    // Stats & Filtering
+    const stats = useMemo(() => {
+        let pending = 0;
+        let processed = 0;
+        let excluded = 0;
 
-        // Carrega agenda do arquivo JSON via API
-        APIService.getReidAgenda().then(res => {
+        videos.forEach(v => {
+            const entry = batchAnnotations[v.id];
+            if (!entry) pending++;
+            else if (entry.action === 'delete') excluded++;
+            else processed++;
+        });
+
+        return { pending, processed, excluded, total: videos.length };
+    }, [videos, batchAnnotations]);
+
+    const displayVideos = useMemo(() => {
+        if (filterStatus === 'all') return videos;
+        return videos.filter(v => {
+            const entry = batchAnnotations[v.id];
+            if (filterStatus === 'pending') return !entry;
+            if (filterStatus === 'excluded') return entry?.action === 'delete';
+            if (filterStatus === 'processed') return entry && entry.action !== 'delete';
+            return true;
+        });
+    }, [videos, batchAnnotations, filterStatus]);
+
+    const loadAgenda = async () => {
+        if (!inputPath) return;
+        try {
+            const res = await APIService.getReidAgenda(inputPath);
             if (res.data.agenda && res.data.agenda.videos) {
                 const batch: Record<string, any> = {};
                 for (const v of res.data.agenda.videos) {
@@ -66,12 +93,21 @@ export default function ReidPage() {
                     };
                 }
                 setBatchAnnotations(batch);
+            } else {
+                setBatchAnnotations({});
             }
-        }).catch(console.error);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    useEffect(() => {
+        const savedInput = localStorage.getItem('np_reid_input');
+        if (savedInput) setInputPath(savedInput);
 
         APIService.getConfig().then(res => {
-            if (res.data.status === 'success') {
-                if (!savedInput) setInputPath(res.data.paths.processamentos || '');
+            if (res.data.status === 'success' && !savedInput) {
+                setInputPath(res.data.paths.processamentos || '');
             }
         });
     }, []);
@@ -79,6 +115,7 @@ export default function ReidPage() {
     useEffect(() => {
         if (inputPath) {
             loadVideos();
+            loadAgenda();
             localStorage.setItem('np_reid_input', inputPath);
         }
     }, [inputPath]);
@@ -283,33 +320,108 @@ export default function ReidPage() {
 
             <div className="grid grid-cols-12 gap-6 flex-1 overflow-hidden">
                 {/* LISTA DE VÍDEOS (Sidebar) */}
-                <div className="col-span-3 border-r border-border pr-4 overflow-y-auto space-y-2">
-                    <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-xs font-bold uppercase text-muted-foreground">Fila de Processamento</h3>
-                        <span className="text-[10px] text-muted-foreground font-mono">{videos.length} vídeos</span>
+                <div className="col-span-3 border-r border-border pr-4 overflow-y-auto space-y-4">
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-bold uppercase text-muted-foreground">Fila de Vídeos</h3>
+                            <span className="text-[10px] text-muted-foreground font-mono">{displayVideos.length} / {videos.length}</span>
+                        </div>
+
+                        {/* Filtros Dropdown */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setFilterMenuOpen(!filterMenuOpen)}
+                                className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all group ${filterStatus === 'all' ? 'bg-muted/30 border-border text-muted-foreground hover:bg-muted hover:text-foreground' :
+                                    filterStatus === 'pending' ? 'bg-yellow-500/10 border-yellow-500 text-yellow-500' :
+                                        filterStatus === 'processed' ? 'bg-green-500/10 border-green-500 text-green-500' :
+                                            'bg-red-500/10 border-red-500 text-red-500'
+                                    }`}
+                            >
+                                <div className="flex flex-1 items-center justify-between mr-4">
+                                    <span className="text-xs font-bold uppercase tracking-wider opacity-90 truncate">
+                                        {filterStatus === 'all' ? 'Todos os Vídeos' :
+                                            filterStatus === 'pending' ? 'Pendentes' :
+                                                filterStatus === 'processed' ? 'Processados' : 'Excluídos'}
+                                    </span>
+                                    <span className="text-2xl font-black leading-none">
+                                        {filterStatus === 'all' ? videos.length :
+                                            filterStatus === 'pending' ? stats.pending :
+                                                filterStatus === 'processed' ? stats.processed : stats.excluded}
+                                    </span>
+                                </div>
+                                <ChevronDown className={`w-5 h-5 transition-transform ${filterMenuOpen ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {filterMenuOpen && (
+                                <div className="absolute top-full left-0 right-0 z-50 mt-2 bg-popover/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl p-1.5 space-y-1 animate-in fade-in slide-in-from-top-2">
+                                    <button
+                                        onClick={() => { setFilterStatus('all'); setFilterMenuOpen(false); }}
+                                        className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
+                                    >
+                                        <span className="text-sm font-medium">Todos os Vídeos</span>
+                                        <span className="text-xs font-mono opacity-50">{videos.length}</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => { setFilterStatus('pending'); setFilterMenuOpen(false); }}
+                                        className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-yellow-500/10 hover:text-yellow-500 transition-colors text-left"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-yellow-500 shadow-sm" />
+                                            <span className="text-sm font-medium">Pendentes</span>
+                                        </div>
+                                        <span className="text-xs font-mono font-bold">{stats.pending}</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => { setFilterStatus('processed'); setFilterMenuOpen(false); }}
+                                        className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-green-500/10 hover:text-green-500 transition-colors text-left"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-green-500 shadow-sm" />
+                                            <span className="text-sm font-medium">Processados</span>
+                                        </div>
+                                        <span className="text-xs font-mono font-bold">{stats.processed}</span>
+                                    </button>
+
+                                    <button
+                                        onClick={() => { setFilterStatus('excluded'); setFilterMenuOpen(false); }}
+                                        className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors text-left"
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-red-500 shadow-sm" />
+                                            <span className="text-sm font-medium">Excluídos</span>
+                                        </div>
+                                        <span className="text-xs font-mono font-bold">{stats.excluded}</span>
+                                    </button>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
-                    {videos.map(v => (
-                        <div
-                            key={v.id}
-                            onClick={() => handleSelectVideo(v)}
-                            className={`
+                    <div className="space-y-2">
+                        {displayVideos.map(v => (
+                            <div
+                                key={v.id}
+                                onClick={() => handleSelectVideo(v)}
+                                className={`
                                 p-3 rounded-lg border transition-all cursor-pointer flex items-center justify-between
                                 ${getVideoStatusColor(v.id)}
                                 ${selectedVideo?.id === v.id ? 'ring-2 ring-primary' : 'border-border'}
                             `}
-                        >
-                            <div className="truncate flex-1">
-                                <p className="font-bold text-sm truncate">{v.id}</p>
-                                <p className="text-[10px] text-muted-foreground">
-                                    {batchAnnotations[v.id]?.action === 'delete' ? '⛔ PARA EXCLUIR' :
-                                        batchAnnotations[v.id] ? '✅ PRONTO PARA SALVAR' : '⚠️ PENDENTE'}
-                                </p>
+                            >
+                                <div className="truncate flex-1">
+                                    <p className="font-bold text-sm truncate">{v.id}</p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                        {batchAnnotations[v.id]?.action === 'delete' ? '⛔ PARA EXCLUIR' :
+                                            batchAnnotations[v.id] ? '✅ PRONTO PARA SALVAR' : '⚠️ PENDENTE'}
+                                    </p>
+                                </div>
+                                {batchAnnotations[v.id]?.action === 'delete' && <Trash2 className="w-4 h-4 text-red-500" />}
                             </div>
-                            {batchAnnotations[v.id]?.action === 'delete' && <Trash2 className="w-4 h-4 text-red-500" />}
-                        </div>
-                    ))}
-                    {videos.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">Nenhum vídeo encontrado.</p>}
+                        ))}
+                        {videos.length === 0 && <p className="text-center text-sm text-muted-foreground py-8">Nenhum vídeo encontrado.</p>}
+                    </div>
                 </div>
 
                 {/* ÁREA DE EDIÇÃO */}
@@ -381,9 +493,12 @@ export default function ReidPage() {
                                             </div>
                                             <div className="space-y-1 max-h-32 overflow-y-auto">
                                                 {swaps.map((s, i) => (
-                                                    <div key={i} className="text-[10px] bg-background p-1.5 rounded border border-border flex justify-between">
-                                                        <span>{s.src} ➔ {s.tgt} ({s.start}-{s.end})</span>
-                                                        <button onClick={() => setSwaps(swaps.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-red-400">×</button>
+                                                    <div key={i} className="text-[10px] bg-background p-1.5 rounded border border-border flex justify-between items-center group">
+                                                        <span className="font-mono">{s.src} ➔ {s.tgt} ({s.start}-{s.end})</span>
+                                                        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={() => { setSwapForm({ src: s.src.toString(), tgt: s.tgt.toString(), start: s.start.toString(), end: s.end.toString() }); setSwaps(swaps.filter((_, idx) => idx !== i)); }} className="p-1 hover:bg-blue-500/20 text-blue-500 rounded"><Pencil className="w-3 h-3" /></button>
+                                                            <button onClick={() => setSwaps(swaps.filter((_, idx) => idx !== i))} className="p-1 hover:bg-red-500/20 text-red-500 rounded"><Trash2 className="w-3 h-3" /></button>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
@@ -404,9 +519,12 @@ export default function ReidPage() {
                                             </div>
                                             <div className="space-y-1 max-h-32 overflow-y-auto">
                                                 {deletions.map((d, i) => (
-                                                    <div key={i} className="text-[10px] bg-background p-1.5 rounded border border-border flex justify-between">
-                                                        <span>ID {d.id} ({d.start}-{d.end})</span>
-                                                        <button onClick={() => setDeletions(deletions.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-red-400">×</button>
+                                                    <div key={i} className="text-[10px] bg-background p-1.5 rounded border border-border flex justify-between items-center group">
+                                                        <span className="font-mono">ID {d.id} ({d.start}-{d.end === 999999 ? 'fim' : d.end})</span>
+                                                        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={() => { setDelForm({ id: d.id.toString(), start: d.start.toString(), end: d.end === 999999 ? '' : d.end.toString() }); setDeletions(deletions.filter((_, idx) => idx !== i)); }} className="p-1 hover:bg-orange-500/20 text-orange-500 rounded"><Pencil className="w-3 h-3" /></button>
+                                                            <button onClick={() => setDeletions(deletions.filter((_, idx) => idx !== i))} className="p-1 hover:bg-red-500/20 text-red-500 rounded"><Trash2 className="w-3 h-3" /></button>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
@@ -426,9 +544,12 @@ export default function ReidPage() {
                                             </div>
                                             <div className="space-y-1 max-h-32 overflow-y-auto">
                                                 {cuts.map((c, i) => (
-                                                    <div key={i} className="text-[10px] bg-background p-1.5 rounded border border-border flex justify-between">
-                                                        <span>Cut {c.start}-{c.end}</span>
-                                                        <button onClick={() => setCuts(cuts.filter((_, idx) => idx !== i))} className="text-red-500 hover:text-red-400">×</button>
+                                                    <div key={i} className="text-[10px] bg-background p-1.5 rounded border border-border flex justify-between items-center group">
+                                                        <span className="font-mono">Cut {c.start}-{c.end}</span>
+                                                        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button onClick={() => { setCutForm({ start: c.start.toString(), end: c.end.toString() }); setCuts(cuts.filter((_, idx) => idx !== i)); }} className="p-1 hover:bg-purple-500/20 text-purple-500 rounded"><Pencil className="w-3 h-3" /></button>
+                                                            <button onClick={() => setCuts(cuts.filter((_, idx) => idx !== i))} className="p-1 hover:bg-red-500/20 text-red-500 rounded"><Trash2 className="w-3 h-3" /></button>
+                                                        </div>
                                                     </div>
                                                 ))}
                                             </div>
@@ -447,6 +568,10 @@ export default function ReidPage() {
                                     {/* Action Bar / Stats (Moved from Footer) */}
                                     <div className="p-4 bg-secondary/30 border border-border rounded-xl flex items-center justify-between">
                                         <div className="flex gap-4 text-sm">
+                                            <div className="flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 shadow shadow-yellow-500/50"></span>
+                                                <span className="text-muted-foreground">Pendentes: <b className="text-foreground text-lg">{stats.pending}</b></span>
+                                            </div>
                                             <div className="flex items-center gap-2">
                                                 <span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow shadow-green-500/50"></span>
                                                 <span className="text-muted-foreground">Processar: <b className="text-foreground text-lg">{Object.values(batchAnnotations).filter((v: any) => v.action !== 'delete').length}</b></span>

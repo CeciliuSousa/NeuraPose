@@ -2,6 +2,8 @@ import sys
 import os
 from pathlib import Path
 import logging
+import json
+import shutil
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 
@@ -995,32 +997,111 @@ class ReidAgendaRequest(BaseModel):
     video: ReidVideoEntry
 
 
-@app.get("/reid/agenda")
-def get_reid_agenda():
-    """Carrega a agenda de ReID do arquivo JSON."""
-    if not REID_AGENDA_FILE.exists():
-        return {"agenda": None}
+
+# Helper para caminhos dinâmicos
+def get_reid_paths_from_source(source_path_str: str):
+    source = Path(source_path_str)
+    # Se terminar em 'predicoes', sobe um nível para pegar o nome do dataset
+    if source.name == 'predicoes':
+        dataset_dir = source.parent
+    else:
+        dataset_dir = source
     
-    try:
-        with open(REID_AGENDA_FILE, "r", encoding="utf-8") as f:
-            agenda = json.load(f)
-        return {"agenda": agenda}
-    except Exception as e:
-        logger.error(f"Erro ao ler agenda ReID: {e}")
-        return {"agenda": None, "error": str(e)}
+    # Define novo nome: dataset-reidentificado
+    new_dataset_name = f"{dataset_dir.name}-reidentificado"
+    
+    # Salva em resultados-reidentificacoes/[dataset]-reidentificado
+    output_root = CURRENT_DIR / "resultados-reidentificacoes" / new_dataset_name
+    
+    return {
+        "root": output_root,
+        "reid_dir": output_root / "reid",
+        "agenda_file": output_root / "reid" / "reid.json",
+        "videos_dir": output_root / "videos",
+        "predictions_dir": output_root / "predicoes",
+        "jsons_dir": output_root / "jsons"
+    }
+
+@app.get("/reid/agenda")
+def get_reid_agenda(root_path: Optional[str] = None):
+    """Carrega a agenda de ReID e calcula estatísticas de pendência."""
+    target_file = None
+    agenda = None
+    
+    if root_path:
+        paths = get_reid_paths_from_source(root_path)
+        target_file = paths["agenda_file"]
+    else:
+        target_file = REID_AGENDA_FILE
+
+    # Tenta carregar agenda se existir
+    if target_file and target_file.exists():
+        try:
+            with open(target_file, "r", encoding="utf-8") as f:
+                agenda = json.load(f)
+        except Exception as e:
+            logger.error(f"Erro ao ler agenda ReID: {e}")
+            return {"agenda": None, "error": str(e)}
+
+    # Calcula estatísticas
+    stats = {"total": 0, "processed": 0, "pending": 0}
+    
+    if root_path:
+        try:
+            src_path = Path(root_path)
+            if src_path.name == 'predicoes':
+                src_root = src_path.parent
+            else:
+                src_root = src_path
+            
+            src_videos_dir = src_root / "videos"
+            if src_videos_dir.exists():
+                # Conta vídeos source (extensões válidas)
+                valid_exts = {'.mp4', '.avi', '.mov', '.mkv'}
+                # Glob recursivo ou simples? Simples.
+                total_videos = sum(1 for f in src_videos_dir.glob("*") if f.suffix.lower() in valid_exts)
+                stats["total"] = total_videos
+                
+                processed_count = 0
+                excluded_count = 0
+                if agenda and "videos" in agenda:
+                    for v in agenda["videos"]:
+                        act = v.get("action", "process")
+                        if act == "delete":
+                            excluded_count += 1
+                        else:
+                            processed_count += 1
+                
+                stats["processed"] = processed_count
+                stats["excluded"] = excluded_count
+                stats["pending"] = max(0, total_videos - (processed_count + excluded_count))
+        except Exception as e:
+            logger.warning(f"Erro ao calcular stats de ReID: {e}")
+
+    return {"agenda": agenda, "stats": stats}
 
 
 @app.post("/reid/agenda/save")
 def save_reid_agenda(request: ReidAgendaRequest):
-    """Salva/atualiza um vídeo na agenda de ReID."""
+    """Salva/atualiza um vídeo na agenda de ReID com caminho dinâmico."""
     from datetime import datetime
     
-    REID_AGENDA_DIR.mkdir(parents=True, exist_ok=True)
+    # Determina caminhos baseados no source_dataset
+    if request.source_dataset:
+        paths = get_reid_paths_from_source(request.source_dataset)
+        target_dir = paths["reid_dir"]
+        target_file = paths["agenda_file"]
+    else:
+        # Fallback para padrão
+        target_dir = REID_AGENDA_DIR
+        target_file = REID_AGENDA_FILE
+    
+    target_dir.mkdir(parents=True, exist_ok=True)
     
     # Carrega agenda existente ou cria nova
-    if REID_AGENDA_FILE.exists():
+    if target_file.exists():
         try:
-            with open(REID_AGENDA_FILE, "r", encoding="utf-8") as f:
+            with open(target_file, "r", encoding="utf-8") as f:
                 agenda = json.load(f)
         except:
             agenda = None
@@ -1059,7 +1140,7 @@ def save_reid_agenda(request: ReidAgendaRequest):
     
     # Salva arquivo
     try:
-        with open(REID_AGENDA_FILE, "w", encoding="utf-8") as f:
+        with open(target_file, "w", encoding="utf-8") as f:
             json.dump(agenda, f, ensure_ascii=False, indent=2)
         return {"status": "success", "message": f"Vídeo '{request.video.video_id}' agendado com sucesso."}
     except Exception as e:
@@ -1338,6 +1419,114 @@ async def split_dataset(req: SplitRequest, background_tasks: BackgroundTasks):
                 
     background_tasks.add_task(run_split_task)
     return {"status": "started", "message": f"Split iniciado para o dataset {req.dataset_name}"}
+
+
+# Models e Endpoints ReID Batch
+class ReidBatchApplyRequest(BaseModel):
+    videos: Optional[List[Any]] = None
+    root_path: str
+    output_path: Optional[str] = None
+
+def run_reid_batch_processing(source_dataset: str):
+    logger.info(f"Iniciando Batch Process ReID: {source_dataset}")
+    with CaptureOutput():
+        try:
+            paths = get_reid_paths_from_source(source_dataset)
+            
+            # 1. Cria diretórios
+            for k in ["videos_dir", "predictions_dir", "jsons_dir"]:
+                paths[k].mkdir(parents=True, exist_ok=True)
+                
+            # 2. Verifica Agenda
+            if not paths["agenda_file"].exists():
+                logger.error(f"Agenda não encontrada: {paths['agenda_file']}")
+                return
+                
+            with open(paths["agenda_file"], "r", encoding="utf-8") as f:
+                agenda = json.load(f)
+                
+            # 3. Define Origem
+            src_path = Path(source_dataset)
+            # Se apontar para .../predicoes, ajusta para root do dataset
+            if src_path.name == 'predicoes':
+                ds_root = src_path.parent
+            else:
+                ds_root = src_path
+                
+            src_videos = ds_root / "videos"
+            src_jsons = ds_root / "jsons"
+            
+            # 4. Copia Vídeos Originais
+            logger.info("Copiando vídeos base...")
+            if src_videos.exists():
+                for vfile in src_videos.glob("*"):
+                    if vfile.suffix.lower() in [".mp4", ".avi", ".mov", ".mkv"]:
+                        dst = paths["videos_dir"] / vfile.name
+                        if not dst.exists():
+                            shutil.copy2(vfile, dst)
+                            
+            # 5. Processa Vídeos da Agenda
+            for vid_entry in agenda.get("videos", []):
+                vid_id = vid_entry["video_id"]
+                action = vid_entry.get("action", "process")
+                
+                if action == "delete":
+                    continue 
+                    
+                # Mapeia regras
+                swaps = [
+                    {"src": s["src_id"], "tgt": s["tgt_id"], "start": s["frame_start"], "end": s["frame_end"]}
+                    for s in vid_entry.get("swaps", [])
+                ]
+                deletions = [
+                    {"id": d["id"], "start": d["frame_start"], "end": d["frame_end"]}
+                    for d in vid_entry.get("deletions", [])
+                ]
+                cuts = [
+                    {"start": c["frame_start"], "end": c["frame_end"]}
+                    for c in vid_entry.get("cuts", [])
+                ]
+                
+                # Carrega JSON original
+                json_in = src_jsons / f"{vid_id}.json"
+                if not json_in.exists():
+                    logger.warning(f"JSON input não achado: {json_in}")
+                    continue
+                    
+                with open(json_in, "r", encoding="utf-8") as f:
+                    records = json.load(f)
+                    
+                # Aplica Lógica (Otimizada)
+                processed, _, _, _ = aplicar_processamento_completo(records, swaps, deletions, cuts)
+                
+                # Salva JSON Filtrado
+                json_out = paths["jsons_dir"] / f"{vid_id}.json"
+                with open(json_out, "w", encoding="utf-8") as f:
+                    json.dump(processed, f, ensure_ascii=False, indent=2)
+                    
+                # Gera Vídeo Anotado
+                vid_in = paths["videos_dir"] / f"{vid_id}.mp4"
+                if not vid_in.exists():
+                    candidates = list(paths["videos_dir"].glob(f"{vid_id}.*"))
+                    if candidates: vid_in = candidates[0]
+                    
+                if vid_in.exists():
+                    vid_out = paths["predictions_dir"] / f"{vid_id}.mp4"
+                    logger.info(f"Gerando vídeo anotado: {vid_out}")
+                    renderizar_video_limpo(str(vid_in), str(vid_out), processed, cuts)
+                else:
+                    logger.warning(f"Vídeo base não achado: {vid_id}")
+                    
+            logger.info("Batch ReID finalizado.")
+
+        except Exception as e:
+            logger.error(f"Erro critical batch reid: {e}")
+
+@app.post("/reid/batch-apply")
+def batch_apply_reid(request: ReidBatchApplyRequest, background_tasks: BackgroundTasks):
+    """Executa o processamento em massa das correções de ReID."""
+    background_tasks.add_task(run_reid_batch_processing, request.root_path)
+    return {"status": "started", "message": "Iniciando processamento ReID em background."}
 
 
 if __name__ == "__main__":

@@ -1,9 +1,10 @@
 
-import { useRef, useEffect, useState, useMemo } from 'react';
+import { useRef, useEffect, useState } from 'react';
+import { RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Play, Pause } from 'lucide-react';
 
 interface ReidPlayerProps {
     src: string;
-    reidData: any; // The full JSON data with frames/bboxes
+    reidData: any;
     swaps: { src: number; tgt: number; start: number; end: number }[];
     deletions: { id: number; start: number; end: number }[];
     cuts: { start: number; end: number }[];
@@ -15,42 +16,13 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
+    const [editingFrame, setEditingFrame] = useState(false);
+    const [frameInputValue, setFrameInputValue] = useState('');
 
     const frameDuration = 1 / fps;
 
-    // ================================================
-    // OTIMIZAÇÃO: Pre-built lookup structures O(1)
-    // ================================================
-
-    // Set de frames cortados para lookup O(1) em vez de O(k) por frame
-    const cutFrameSet = useMemo(() => {
-        const set = new Set<number>();
-        cuts.forEach(cut => {
-            for (let f = cut.start; f <= cut.end; f++) set.add(f);
-        });
-        return set;
-    }, [cuts]);
-
-    // Map de (id, frame) -> true para deletions O(1) lookup
-    const deletionMap = useMemo(() => {
-        const map = new Map<string, boolean>();
-        deletions.forEach(d => {
-            for (let f = d.start; f <= d.end; f++) {
-                map.set(`${d.id}:${f}`, true);
-            }
-        });
-        return map;
-    }, [deletions]);
-
-    // Map de id -> lista de regras para swaps O(1) lookup por ID
-    const swapRulesMap = useMemo(() => {
-        const map = new Map<number, typeof swaps>();
-        swaps.forEach(s => {
-            if (!map.has(s.src)) map.set(s.src, []);
-            map.get(s.src)!.push(s);
-        });
-        return map;
-    }, [swaps]);
+    // Calculate current frame from video time
+    const currentFrame = videoRef.current ? Math.round(currentTime * fps) : 0;
 
     // Synchronize Canvas Layout
     useEffect(() => {
@@ -58,14 +30,18 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
             if (videoRef.current && canvasRef.current) {
                 canvasRef.current.width = videoRef.current.clientWidth;
                 canvasRef.current.height = videoRef.current.clientHeight;
-                renderOverlay(); // Force render on resize
+                renderOverlay();
             }
         };
         window.addEventListener('resize', syncSize);
-        // Also sync when video loads metadata
+
         const v = videoRef.current;
         if (v) {
-            v.addEventListener('loadedmetadata', syncSize);
+            v.addEventListener('loadedmetadata', () => {
+                syncSize();
+                // Slow playback for frame-by-frame viewing
+                v.playbackRate = 0.25;
+            });
             v.addEventListener('timeupdate', () => {
                 setCurrentTime(v.currentTime);
                 renderOverlay();
@@ -78,110 +54,148 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
 
     // Draw Overlay Loop
     const renderOverlay = () => {
-        const v = videoRef.current;
-        const c = canvasRef.current;
-        if (!v || !c || !reidData) return;
+        try {
+            const v = videoRef.current;
+            const c = canvasRef.current;
+            if (!v || !c) return;
 
-        const ctx = c.getContext('2d');
-        if (!ctx) return;
+            const ctx = c.getContext('2d');
+            if (!ctx) return;
 
-        // Clear
-        ctx.clearRect(0, 0, c.width, c.height);
+            // Clear
+            ctx.clearRect(0, 0, c.width, c.height);
 
-        // Frame Calc
-        const currentFrame = Math.round(v.currentTime * fps);
+            // Frame Calc
+            const frame = Math.round(v.currentTime * fps);
 
-        // Scaling factors
-        // Video might be scaled in UI. Coordinates in JSON are relative to original video size.
-        // We need original video dimensions.
-        const vidW = v.videoWidth;
-        const vidH = v.videoHeight;
-        const canvasW = c.width;
-        const canvasH = c.height;
+            // Scaling factors
+            const vidW = v.videoWidth;
+            const vidH = v.videoHeight;
+            const canvasW = c.width;
+            const canvasH = c.height;
 
-        if (vidW === 0 || vidH === 0) return;
+            if (vidW === 0 || vidH === 0) return;
 
-        const scaleX = canvasW / vidW;
-        const scaleY = canvasH / vidH;
+            const scaleX = canvasW / vidW;
+            const scaleY = canvasH / vidH;
 
-        // 1. Draw CUT segments (Global Overlay) - O(1) lookup
-        const inCut = cutFrameSet.has(currentFrame);
-        if (inCut) {
-            ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';
-            ctx.fillRect(0, 0, canvasW, canvasH);
+            // 1. Draw CUT segments - DARK overlay (not bright red)
+            const inCut = cuts.some(cut => frame >= cut.start && frame <= cut.end);
+            if (inCut) {
+                // Dark semi-transparent overlay
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+                ctx.fillRect(0, 0, canvasW, canvasH);
 
-            ctx.fillStyle = 'red';
-            ctx.font = 'bold 24px monospace';
-            ctx.fillText(`CORTADO (Frame ${currentFrame})`, 20, 40);
+                // Text label
+                ctx.fillStyle = '#ff6b6b';
+                ctx.font = 'bold 20px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(`⚠ TRECHO CORTADO (Frame ${frame})`, canvasW / 2, 35);
+                ctx.textAlign = 'left';
+            }
+
+            // 2. Draw BBoxes for ALL detections in frame
+            if (reidData?.frames) {
+                const frameData = reidData.frames[String(frame)];
+                if (frameData && Array.isArray(frameData)) {
+                    frameData.forEach((item: any) => {
+                        if (!item) return;
+
+                        const pid = item.id_persistente ?? item.botsort_id ?? item.id;
+                        if (pid === undefined || pid === null) return;
+
+                        // Handle bbox as array or object
+                        let x1: number, y1: number, x2: number, y2: number;
+                        if (Array.isArray(item.bbox) && item.bbox.length >= 4) {
+                            [x1, y1, x2, y2] = item.bbox;
+                        } else if (item.bbox && typeof item.bbox === 'object') {
+                            x1 = item.bbox.x1;
+                            y1 = item.bbox.y1;
+                            x2 = item.bbox.x2;
+                            y2 = item.bbox.y2;
+                        } else {
+                            return;
+                        }
+
+                        // Check rules
+                        const itemIsDeleted = deletions.some(d => d.id === pid && frame >= d.start && frame <= d.end);
+                        const swapRule = swaps.find(s => s.src === pid && frame >= s.start && frame <= s.end);
+
+                        // Determine color and label
+                        let strokeColor: string | null = null;
+                        let bgColor: string | null = null;
+                        let textColor = 'white';
+                        let label: string | null = null;
+
+                        if (itemIsDeleted) {
+                            // RED for deleted IDs
+                            strokeColor = '#ef4444'; // red-500
+                            bgColor = 'rgba(239, 68, 68, 0.9)';
+                            textColor = 'white';
+                            label = `❌ ID ${pid}`;
+                        } else if (swapRule) {
+                            // YELLOW for swapped IDs
+                            strokeColor = '#fbbf24'; // amber-400
+                            bgColor = 'rgba(251, 191, 36, 0.9)';
+                            textColor = 'black';
+                            label = `${pid} → ${swapRule.tgt}`;
+                        }
+
+                        // Draw if has rule
+                        if (strokeColor && label && bgColor) {
+                            const sx1 = x1 * scaleX;
+                            const sy1 = y1 * scaleY;
+                            const w = (x2 - x1) * scaleX;
+                            const h = (y2 - y1) * scaleY;
+
+                            // Draw box
+                            ctx.strokeStyle = strokeColor;
+                            ctx.lineWidth = 3;
+                            ctx.strokeRect(sx1, sy1, w, h);
+
+                            // Draw label background
+                            ctx.font = 'bold 12px sans-serif';
+                            const textWidth = ctx.measureText(label).width + 12;
+                            const labelHeight = 22;
+
+                            ctx.fillStyle = bgColor;
+                            ctx.fillRect(sx1, sy1 - labelHeight, textWidth, labelHeight);
+
+                            // Draw label text
+                            ctx.fillStyle = textColor;
+                            ctx.fillText(label, sx1 + 6, sy1 - 6);
+                        }
+                    });
+                }
+            }
+
+        } catch (err) {
+            console.error('Error rendering overlay:', err);
         }
-
-        // 2. Draw BBoxes for Swaps/Deletions
-        // reidData.frames[str(frame)] = list of {bbox: [x1,y1,x2,y2], id: int}
-        const frameData = reidData.frames[String(currentFrame)];
-        if (frameData) {
-            frameData.forEach((item: any) => {
-                // Prioritize id_persistente (backend standard) -> botsort_id -> id
-                const pid = item.id_persistente ?? item.botsort_id ?? item.id;
-                const [x1, y1, x2, y2] = item.bbox;
-
-                // Check rules - O(1) lookups
-                const isDeleted = deletionMap.has(`${pid}:${currentFrame}`);
-
-                // Swap check: O(1) para buscar regras do ID, depois O(k) onde k = regras deste ID (tipicamente 1-2)
-                let swapRule = null;
-                const rulesForId = swapRulesMap.get(pid);
-                if (rulesForId) {
-                    swapRule = rulesForId.find(s => currentFrame >= s.start && currentFrame <= s.end);
-                }
-
-                let color = null;
-                let text = null;
-
-                if (isDeleted) {
-                    color = 'red';
-                    text = `DEL ${pid}`;
-                } else if (swapRule) {
-                    color = '#00ff00'; // Lime green
-                    text = `${pid} -> ${swapRule.tgt}`;
-                }
-
-                // If modified, draw box
-                if (color) {
-                    const sx1 = x1 * scaleX;
-                    const sy1 = y1 * scaleY;
-                    const w = (x2 - x1) * scaleX;
-                    const h = (y2 - y1) * scaleY;
-
-                    ctx.strokeStyle = color;
-                    ctx.lineWidth = 3;
-                    ctx.strokeRect(sx1, sy1, w, h);
-
-                    if (text) {
-                        ctx.fillStyle = color;
-                        ctx.fillRect(sx1, sy1 - 20, ctx.measureText(text).width + 10, 20);
-                        ctx.fillStyle = 'black';
-                        ctx.font = 'bold 12px monospace';
-                        ctx.fillText(text, sx1 + 5, sy1 - 5);
-                    }
-                }
-            });
-        }
-
-        // Stats in corner
-        ctx.fillStyle = 'white';
-        ctx.font = '12px monospace';
-        ctx.fillText(`Frame: ${currentFrame}`, canvasW - 100, 20);
     };
 
-    // Re-render when data changes (even if paused)
+    // Re-render when data changes
     useEffect(() => {
         renderOverlay();
-    }, [swaps, deletions, cuts, reidData]);
+    }, [swaps, deletions, cuts, reidData, currentTime]);
 
-    const stepFrame = (dir: 1 | -1) => {
+    // Navigation functions
+    const goToFrame = (frame: number) => {
         if (videoRef.current) {
-            videoRef.current.currentTime += dir * frameDuration;
+            const newTime = Math.max(0, frame * frameDuration);
+            videoRef.current.currentTime = newTime;
         }
+    };
+
+    const stepFrame = (delta: number) => {
+        if (videoRef.current) {
+            const newFrame = Math.max(0, currentFrame + delta);
+            goToFrame(newFrame);
+        }
+    };
+
+    const resetVideo = () => {
+        goToFrame(0);
     };
 
     const togglePlay = () => {
@@ -191,8 +205,25 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
         }
     };
 
+    const handleFrameInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter' || e.key === 'Escape') {
+            const frame = parseInt(frameInputValue);
+            if (e.key === 'Enter' && !isNaN(frame) && frame >= 0) {
+                goToFrame(frame);
+            }
+            setEditingFrame(false);
+            setFrameInputValue('');
+        }
+    };
+
+    const startEditingFrame = () => {
+        setFrameInputValue(String(currentFrame));
+        setEditingFrame(true);
+    };
+
     return (
-        <div className="flex flex-col space-y-2 select-none">
+        <div className="flex flex-col space-y-3 select-none">
+            {/* Video Container */}
             <div className="relative rounded-lg overflow-hidden bg-black aspect-video border border-border group">
                 <video
                     ref={videoRef}
@@ -205,56 +236,110 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
                 />
             </div>
 
-            {/* Custom Controls Bar - Modern Design */}
-            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-secondary/40 via-secondary/20 to-secondary/40 rounded-xl border border-border/50 backdrop-blur-sm">
-                {/* Left spacer for centering */}
-                <div className="w-28"></div>
+            {/* Controls Bar */}
+            <div className="relative h-16 flex items-center justify-center p-3 bg-gradient-to-r from-secondary/40 via-secondary/20 to-secondary/40 rounded-xl border border-border/50 backdrop-blur-sm">
 
-                {/* Center: Play Controls */}
-                <div className="flex items-center gap-3">
+                {/* Left: Reset Button */}
+                <div className="absolute left-4">
                     <button
-                        onClick={() => stepFrame(-1)}
-                        className="w-10 h-10 flex items-center justify-center border border-border/50 rounded-xl hover:bg-white/10 active:scale-95 transition-all"
-                        title="Frame anterior"
+                        onClick={resetVideo}
+                        className="w-9 h-9 flex items-center justify-center border border-border/50 rounded-lg hover:bg-white/10 active:scale-95 transition-all"
+                        title="Voltar ao início (Frame 0)"
                     >
-                        <svg className="w-5 h-5 text-white/70 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-                        </svg>
-                    </button>
-
-                    <button
-                        onClick={togglePlay}
-                        className="w-14 h-14 flex items-center justify-center border-2 border-white/30 rounded-2xl hover:bg-white/10 active:scale-95 transition-all"
-                    >
-                        {isPlaying ? (
-                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                <rect x="6" y="5" width="4" height="14" rx="1" />
-                                <rect x="14" y="5" width="4" height="14" rx="1" />
-                            </svg>
-                        ) : (
-                            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M6 4l15 8-15 8V4z" />
-                            </svg>
-                        )}
-                    </button>
-
-                    <button
-                        onClick={() => stepFrame(1)}
-                        className="w-10 h-10 flex items-center justify-center border border-border/50 rounded-xl hover:bg-white/10 active:scale-95 transition-all"
-                        title="Próximo frame"
-                    >
-                        <svg className="w-5 h-5 text-white/70 hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                        </svg>
+                        <RotateCcw className="w-4 h-4 text-white/70 hover:text-white" />
                     </button>
                 </div>
 
-                {/* Right: Frame Counter */}
-                <div className="w-28 flex justify-end">
-                    <div className="text-sm font-mono bg-background/60 px-4 py-2 rounded-lg border border-border/50">
-                        <span className="text-muted-foreground">Frame </span>
-                        <span className="text-foreground font-bold text-base">{videoRef.current ? Math.round(currentTime * fps) : 0}</span>
+                {/* Center: Navigation Controls */}
+                <div className="flex items-center gap-2">
+                    {/* Skip -10 */}
+                    <button
+                        onClick={() => stepFrame(-10)}
+                        className="w-9 h-9 flex items-center justify-center border border-border/50 rounded-lg hover:bg-white/10 active:scale-95 transition-all"
+                        title="Recuar 10 frames"
+                    >
+                        <ChevronsLeft className="w-5 h-5 text-white/70 hover:text-white" />
+                    </button>
+
+                    {/* Step -1 */}
+                    <button
+                        onClick={() => stepFrame(-1)}
+                        className="w-9 h-9 flex items-center justify-center border border-border/50 rounded-lg hover:bg-white/10 active:scale-95 transition-all"
+                        title="Frame anterior"
+                    >
+                        <ChevronLeft className="w-5 h-5 text-white/70 hover:text-white" />
+                    </button>
+
+                    {/* Play/Pause */}
+                    <button
+                        onClick={togglePlay}
+                        className="w-12 h-12 flex items-center justify-center border-2 border-white/30 rounded-xl hover:bg-white/10 active:scale-95 transition-all"
+                        title={isPlaying ? 'Pausar' : 'Reproduzir'}
+                    >
+                        {isPlaying ? (
+                            <Pause className="w-5 h-5 text-white" />
+                        ) : (
+                            <Play className="w-5 h-5 text-white ml-0.5" />
+                        )}
+                    </button>
+
+                    {/* Step +1 */}
+                    <button
+                        onClick={() => stepFrame(1)}
+                        className="w-9 h-9 flex items-center justify-center border border-border/50 rounded-lg hover:bg-white/10 active:scale-95 transition-all"
+                        title="Próximo frame"
+                    >
+                        <ChevronRight className="w-5 h-5 text-white/70 hover:text-white" />
+                    </button>
+
+                    {/* Skip +10 */}
+                    <button
+                        onClick={() => stepFrame(10)}
+                        className="w-9 h-9 flex items-center justify-center border border-border/50 rounded-lg hover:bg-white/10 active:scale-95 transition-all"
+                        title="Avançar 10 frames"
+                    >
+                        <ChevronsRight className="w-5 h-5 text-white/70 hover:text-white" />
+                    </button>
+                </div>
+
+                {/* Right: Frame Display with Inline Editing */}
+                <div className="absolute right-4">
+                    <div
+                        className="w-32 h-9 flex items-center justify-between px-3 text-sm font-mono bg-background/60 rounded-lg border border-border/50 cursor-pointer hover:border-primary/50 transition-colors"
+                        onClick={!editingFrame ? startEditingFrame : undefined}
+                        title="Clique para editar o frame"
+                    >
+                        <span className="text-muted-foreground text-xs">Frame</span>
+                        {editingFrame ? (
+                            <input
+                                type="number"
+                                autoFocus
+                                value={frameInputValue}
+                                onChange={(e) => setFrameInputValue(e.target.value)}
+                                onKeyDown={handleFrameInputKeyDown}
+                                onBlur={() => setEditingFrame(false)}
+                                className="w-12 bg-transparent text-foreground font-bold outline-none border-b border-primary text-center [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                        ) : (
+                            <span className="text-foreground font-bold">{currentFrame}</span>
+                        )}
                     </div>
+                </div>
+            </div>
+
+            {/* Legend */}
+            <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-sm bg-red-500"></div>
+                    <span>ID Excluído</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-sm bg-amber-400"></div>
+                    <span>ID Trocado</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-sm bg-black/60 border border-border/50"></div>
+                    <span>Trecho Cortado</span>
                 </div>
             </div>
         </div>
