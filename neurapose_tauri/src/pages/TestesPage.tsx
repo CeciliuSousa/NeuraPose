@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
+import { shortenPath } from '../lib/utils';
 
 export default function TestesPage() {
     const [loading, setLoading] = useState(false);
@@ -46,7 +47,7 @@ export default function TestesPage() {
 
     // Polling de Logs
     useEffect(() => {
-        let interval: NodeJS.Timeout;
+        let interval: any;
         if (loading) {
             interval = setInterval(async () => {
                 try {
@@ -118,7 +119,8 @@ export default function TestesPage() {
                                         <input
                                             type="text"
                                             className="w-full pl-11 pr-4 py-3 rounded-xl bg-background border border-border text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 truncate"
-                                            value={config.modelPath}
+                                            value={shortenPath(config.modelPath)}
+                                            title={config.modelPath}
                                             readOnly
                                             placeholder="Selecione o arquivo do modelo..."
                                         />
@@ -143,7 +145,8 @@ export default function TestesPage() {
                                         <input
                                             type="text"
                                             className="w-full pl-11 pr-4 py-3 rounded-xl bg-background border border-border text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 truncate"
-                                            value={config.datasetPath}
+                                            value={shortenPath(config.datasetPath)}
+                                            title={config.datasetPath}
                                             readOnly
                                             placeholder="Selecione a pasta do dataset..."
                                         />

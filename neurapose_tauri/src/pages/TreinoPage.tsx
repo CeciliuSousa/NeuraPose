@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
+import { shortenPath } from '../lib/utils';
 
 export default function TreinoPage() {
     const [activeTab, setActiveTab] = useState<'train' | 'split'>('train');
@@ -55,7 +56,7 @@ export default function TreinoPage() {
 
     // Polling de Logs
     useEffect(() => {
-        let interval: NodeJS.Timeout;
+        let interval: any;
         if (loading) {
             interval = setInterval(async () => {
                 try {
@@ -241,7 +242,8 @@ export default function TreinoPage() {
                                         <input
                                             type="text"
                                             className="flex-1 px-4 py-3 rounded-xl bg-background border border-border text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40"
-                                            value={splitConfig.inputDir}
+                                            value={shortenPath(splitConfig.inputDir)}
+                                            title={splitConfig.inputDir}
                                             onChange={e => setSplitConfig({ ...splitConfig, inputDir: e.target.value })}
                                             placeholder="Caminho para pasta resultados-reidentificacoes"
                                         />

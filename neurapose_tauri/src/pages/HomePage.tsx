@@ -53,7 +53,8 @@ export default function HomePage() {
         };
 
         fetchData();
-        const interval = setInterval(fetchData, 10000);
+        // 5s interval - equilibra performance e UX
+        const interval = setInterval(fetchData, 5000);
         return () => clearInterval(interval);
     }, []);
 

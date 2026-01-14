@@ -85,6 +85,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Compressão GZIP para respostas mais rápidas
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=500)
+
 # ==============================================================
 # MODELS
 # ==============================================================
@@ -418,40 +422,55 @@ def get_logs():
 
 @app.get("/health")
 def health_check():
+    """Ultra-fast health check - sem I/O."""
     return {
         "status": "healthy",
         "system": "NeuraPose API",
         "version": "1.0.0",
         "device": "gpu" if cm.DEVICE == "cuda" else "cpu",
-        "neurapose_root": str(ROOT_DIR),
         "processing": state.is_running,
         "paused": state.is_paused
     }
+
+# Cache para system info (evita chamadas pesadas)
+_system_info_cache = {"data": None, "timestamp": 0}
+_CACHE_TTL = 2  # segundos
 
 @app.get("/system/info")
 def get_system_info():
     """Retorna informações de uso de hardware (CPU, RAM, GPU).
     
-    Usa PyTorch para GPU (instantâneo, não afeta processamento).
+    Usa PyTorch para GPU e cache de 2s para otimização.
     """
-    cpu_usage = psutil.cpu_percent(interval=None)
+    import time
+    
+    # Verifica cache
+    now = time.time()
+    if _system_info_cache["data"] and (now - _system_info_cache["timestamp"]) < _CACHE_TTL:
+        return _system_info_cache["data"]
+    
+    # CPU sem interval (instantâneo, usa cache interno do psutil)
+    cpu_usage = psutil.cpu_percent(interval=0)
     ram = psutil.virtual_memory()
     
     gpu_name = ""
     gpu_mem_used = 0.0
     gpu_mem_total = 0.0
     
-    # Usa PyTorch diretamente (instantâneo, não bloqueia GPU!)
+    # GPU - usa mem_get_info para uso GLOBAL da GPU (não apenas PyTorch)
     try:
         if torch.cuda.is_available():
             gpu_name = torch.cuda.get_device_name(0)
-            gpu_mem_used = torch.cuda.memory_allocated(0) / (1024**3)  # Alocado pelo PyTorch
-            gpu_mem_total = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-    except:
+            # mem_get_info retorna (free, total) em bytes
+            free_mem, total_mem = torch.cuda.mem_get_info(0)
+            
+            gpu_mem_total = total_mem / (1024**3)
+            # Uso real = Total - Livre
+            gpu_mem_used = (total_mem - free_mem) / (1024**3)
+    except Exception:
         pass
     
-    # Formato compatível com a sidebar
-    return {
+    result = {
         "cpu_percent": cpu_usage,
         "ram_used_gb": ram.used / (1024**3),
         "ram_total_gb": ram.total / (1024**3),
@@ -459,6 +478,12 @@ def get_system_info():
         "gpu_mem_total_gb": gpu_mem_total,
         "gpu_name": gpu_name
     }
+    
+    # Atualiza cache
+    _system_info_cache["data"] = result
+    _system_info_cache["timestamp"] = now
+    
+    return result
 
 
 

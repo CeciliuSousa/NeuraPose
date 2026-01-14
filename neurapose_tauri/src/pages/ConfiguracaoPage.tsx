@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { Settings, Save, RotateCcw, ShieldAlert, FolderOpen } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
+import { shortenPath } from '../lib/utils';
 
 export default function ConfiguracaoPage() {
     const [config, setConfig] = useState<any>(null);
@@ -235,7 +236,8 @@ export default function ConfiguracaoPage() {
                                         <div className="flex gap-2">
                                             <input
                                                 type="text"
-                                                value={config[item.key] || ''}
+                                                value={shortenPath(config[item.key] || '')}
+                                                title={config[item.key] || ''}
                                                 onChange={(e) => setConfig({ ...config, [item.key]: e.target.value })}
                                                 className="flex-1 bg-background border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/40 transition-all text-xs font-mono"
                                             />

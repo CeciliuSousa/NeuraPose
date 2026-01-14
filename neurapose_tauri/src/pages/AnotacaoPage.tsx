@@ -14,6 +14,7 @@ import {
 import { APIService } from '../services/api';
 import { PageHeader } from '../components/ui/PageHeader';
 import { FileExplorerModal } from '../components/FileExplorerModal';
+import { shortenPath } from '../lib/utils';
 
 
 export default function AnotacaoPage() {
@@ -120,7 +121,8 @@ export default function AnotacaoPage() {
                         <label className="text-[10px] uppercase font-bold text-muted-foreground">Pasta de Entrada (ReID)</label>
                         <div className="flex gap-2">
                             <input
-                                value={inputPath}
+                                value={shortenPath(inputPath)}
+                                title={inputPath}
                                 onChange={(e) => setInputPath(e.target.value)}
                                 className="flex-1 bg-secondary/50 border border-border text-sm py-2 px-3 rounded-lg"
                                 placeholder="resultados-reidentificacoes/..."

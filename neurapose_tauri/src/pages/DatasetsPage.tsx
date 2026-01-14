@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
+import { shortenPath } from '../lib/utils';
 
 export default function DatasetsPage() {
     const [loading, setLoading] = useState(false);
@@ -57,7 +58,7 @@ export default function DatasetsPage() {
 
     // Polling logs
     useEffect(() => {
-        let interval: NodeJS.Timeout;
+        let interval: any;
         if (loading) {
             interval = setInterval(async () => {
                 try {
@@ -125,7 +126,8 @@ export default function DatasetsPage() {
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
-                                        value={config.inputDir}
+                                        value={shortenPath(config.inputDir)}
+                                        title={config.inputDir}
                                         onChange={(e) => setConfig(prev => ({ ...prev, inputDir: e.target.value }))}
                                         className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm"
                                         placeholder="resultados-reidentificacoes/meus-videos"
@@ -157,7 +159,8 @@ export default function DatasetsPage() {
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
-                                        value={config.outputRoot}
+                                        value={shortenPath(config.outputRoot)}
+                                        title={config.outputRoot}
                                         onChange={(e) => setConfig(prev => ({ ...prev, outputRoot: e.target.value }))}
                                         className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm"
                                         placeholder="datasets/"

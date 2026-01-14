@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
+import { shortenPath } from '../lib/utils';
 
 export default function ProcessamentoPage() {
     // Form State
@@ -51,7 +52,7 @@ export default function ProcessamentoPage() {
             }
         }).catch(err => console.error("Erro ao carregar caminhos do backend:", err));
 
-        let interval: NodeJS.Timeout;
+        let interval: any;
 
         if (loading) {
             localStorage.setItem('np_process_loading', 'true');
@@ -175,8 +176,9 @@ export default function ProcessamentoPage() {
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
-                                        value={config.inputPath}
+                                        value={shortenPath(config.inputPath)}
                                         onChange={(e) => setConfig({ ...config, inputPath: e.target.value })}
+                                        title={config.inputPath} // Show full path on hover
                                         placeholder="Ex: C:\Videos\Entrada"
                                         className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono"
                                     />
@@ -307,7 +309,7 @@ export default function ProcessamentoPage() {
                                 <div className="w-3 h-3 rounded-full bg-orange-500/50" />
                                 <div className="w-3 h-3 rounded-full bg-green-500/50" />
                             </div>
-                            <span className="text-xs font-mono text-slate-400 ml-2">Terminal Output</span>
+                            <span className="text-xs font-mono text-slate-400 ml-2">Terminal</span>
                         </div>
                         <button
                             onClick={() => setLogs([])}

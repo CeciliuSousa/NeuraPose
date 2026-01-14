@@ -46,20 +46,25 @@ export function Sidebar() {
     const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
     const [isOnline, setIsOnline] = useState(false);
 
-    // Polling de informações do sistema
+    // Polling de informações do sistema - otimizado
     useEffect(() => {
+        let errorCount = 0;
+
         const fetchSystemInfo = async () => {
             try {
                 const res = await APIService.getSystemInfo();
                 setSystemInfo(res.data);
                 setIsOnline(true);
+                errorCount = 0; // Reset error count on success
             } catch {
                 setIsOnline(false);
+                errorCount++;
             }
         };
 
         fetchSystemInfo();
-        const interval = setInterval(fetchSystemInfo, 5000);
+        // 3s interval (alinhado com cache do backend de 2s)
+        const interval = setInterval(fetchSystemInfo, 3000);
         return () => clearInterval(interval);
     }, []);
 

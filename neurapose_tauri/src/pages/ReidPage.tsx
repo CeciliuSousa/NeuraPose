@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RotateCcw, FileVideo, FolderInput, FolderOutput } from 'lucide-react';
 import { APIService, ReIDVideo, ReIDData } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
+import { shortenPath } from '../lib/utils';
 
 
 export default function ReidPage() {
@@ -198,8 +199,9 @@ export default function ReidPage() {
                             <label className="text-[10px] uppercase font-bold text-muted-foreground">Entrada</label>
                             <div className="flex gap-1">
                                 <input
-                                    value={inputPath}
+                                    value={shortenPath(inputPath)}
                                     onChange={(e) => setInputPath(e.target.value)}
+                                    title={inputPath}
                                     className="w-48 bg-secondary/50 border border-border text-xs py-2 px-3 rounded-lg"
                                     placeholder="resultados-processamentos/"
                                 />
@@ -216,8 +218,9 @@ export default function ReidPage() {
                             <label className="text-[10px] uppercase font-bold text-muted-foreground">Saída</label>
                             <div className="flex gap-1">
                                 <input
-                                    value={outputPath}
+                                    value={shortenPath(outputPath)}
                                     onChange={(e) => setOutputPath(e.target.value)}
+                                    title={outputPath}
                                     className="w-48 bg-secondary/50 border border-border text-xs py-2 px-3 rounded-lg"
                                     placeholder="resultados-reidentificacoes/"
                                 />
