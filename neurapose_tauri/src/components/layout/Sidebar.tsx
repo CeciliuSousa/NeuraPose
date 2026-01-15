@@ -23,7 +23,7 @@ const menuItems = [
     { name: 'Processar Vídeo', href: '/processamento', icon: Video },
     { name: 'Re-identificação', href: '/reid', icon: ScanFace },
     { name: 'Anotação', href: '/anotacao', icon: PenTool },
-    { name: 'Gerenciador', href: '/datasets', icon: FolderOpen },
+    { name: 'Splits', href: '/datasets', icon: FolderOpen },
     { name: 'Converter .pt', href: '/converter', icon: FileOutput },
     { name: 'Treinamento', href: '/treino', icon: Dumbbell },
     { name: 'Testes', href: '/testes', icon: TestTube2 },
