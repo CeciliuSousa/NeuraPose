@@ -32,8 +32,6 @@ export default function DatasetsPage() {
 
     // Load defaults
     useEffect(() => {
-        const savedInput = localStorage.getItem('np_split_input');
-        const savedOutput = localStorage.getItem('np_split_output');
         const savedName = localStorage.getItem('np_split_name');
 
         APIService.getConfig().then(res => {
@@ -41,18 +39,18 @@ export default function DatasetsPage() {
                 setRoots(res.data.paths);
                 setConfig(prev => ({
                     ...prev,
-                    inputDir: savedInput || res.data.paths.reidentificacoes || '',
-                    outputRoot: savedOutput || res.data.paths.datasets || '',
+                    inputDir: res.data.paths.reidentificacoes || '', // Ignora savedInput
+                    outputRoot: res.data.paths.datasets || '', // Ignora savedOutput
                     datasetName: savedName || 'meu-dataset'
                 }));
             }
         });
     }, []);
 
-    // Persist settings
+    // Persist settings (inputDir e outputRoot removidos para evitar persistência)
     useEffect(() => {
-        if (config.inputDir) localStorage.setItem('np_split_input', config.inputDir);
-        if (config.outputRoot) localStorage.setItem('np_split_output', config.outputRoot);
+        // if (config.inputDir) localStorage.setItem('np_split_input', config.inputDir); // Desativado
+        // if (config.outputRoot) localStorage.setItem('np_split_output', config.outputRoot); // Desativado
         if (config.datasetName) localStorage.setItem('np_split_name', config.datasetName);
     }, [config]);
 
@@ -270,7 +268,7 @@ export default function DatasetsPage() {
                     if (explorerTarget === 'output') setConfig({ ...config, outputRoot: path });
                     setExplorerTarget(null);
                 }}
-                initialPath={explorerTarget === 'input' ? config.inputDir : config.outputRoot}
+                initialPath={explorerTarget === 'input' ? roots.reidentificacoes : roots.datasets}
                 rootPath={explorerTarget === 'input' ? roots.reidentificacoes : roots.datasets}
                 title={explorerTarget === 'input' ? "Selecionar Pasta de ReID" : "Selecionar Pasta Raiz de Datasets"}
             />

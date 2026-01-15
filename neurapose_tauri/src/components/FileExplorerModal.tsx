@@ -9,7 +9,7 @@ interface FileExplorerModalProps {
     initialPath?: string;
     rootPath?: string;
     title?: string;
-    filterFn?: (item: { name: string, is_dir: boolean, path: string }) => boolean;
+    filterFn?: (item: { name: string, is_dir: boolean, path: string, currentPath?: string }) => boolean;
 }
 
 export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, rootPath, title = "Selecionar Pasta", filterFn }: FileExplorerModalProps) {
@@ -20,7 +20,13 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, root
 
     useEffect(() => {
         if (isOpen) {
-            if (rootPath && (!currentPath || !currentPath.startsWith(rootPath))) {
+            // Se initialPath for fornecido, usa-o para resetar a navegação
+            if (initialPath) {
+                setCurrentPath(initialPath);
+                loadPath(initialPath);
+            }
+            // Se não, usa rootPath ou default
+            else if (rootPath && (!currentPath || !currentPath.startsWith(rootPath))) {
                 loadPath(rootPath);
             } else if (!currentPath) {
                 APIService.getConfig().then(res => {
@@ -31,11 +37,18 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, root
                 loadPath(currentPath);
             }
         }
-    }, [isOpen]);
+    }, [isOpen, initialPath]);
 
     const loadPath = async (path: string) => {
-        if (rootPath && !path.startsWith(rootPath)) {
-            path = rootPath;
+        // Normaliza paths para comparação simples (Windows/Linux)
+        const normalize = (p: string) => p.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
+
+        if (rootPath) {
+            const normRoot = normalize(rootPath);
+            const normPath = normalize(path);
+            if (!normPath.startsWith(normRoot)) {
+                path = rootPath;
+            }
         }
 
         setLoading(true);
@@ -53,7 +66,9 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, root
 
     if (!isOpen) return null;
 
-    const isAtRoot = rootPath ? currentPath === rootPath || currentPath === rootPath + '\\' || currentPath === rootPath + '/' : false;
+    // Check if we are at root to disable back button
+    const normalize = (p: string) => p.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
+    const isAtRoot = rootPath ? normalize(currentPath) === normalize(rootPath) : false;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -93,7 +108,7 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, root
                     ) : (
                         <div className="grid grid-cols-1 gap-1">
                             {data?.items
-                                .filter(item => filterFn ? filterFn(item) : true)
+                                .filter(item => filterFn ? filterFn({ ...item, currentPath }) : true)
                                 .map((item) => (
                                     <button
                                         key={item.path}

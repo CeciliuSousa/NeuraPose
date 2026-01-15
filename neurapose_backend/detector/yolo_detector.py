@@ -14,7 +14,7 @@ from ultralytics import YOLO
 from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomReID, save_temp_tracker_yaml
 
 # Importa nome do modelo YOLO e ROOT do config centralizado
-from neurapose_backend.config_master import YOLO_PATH, YOLO_MODEL, ROOT, DETECTION_CONF, YOLO_CLASS_PERSON, DEVICE
+from neurapose_backend.config_master import YOLO_PATH, YOLO_MODEL, ROOT, DETECTION_CONF, YOLO_CLASS_PERSON, DEVICE, YOLO_IMGSZ
 
 logging.getLogger("ultralytics").setLevel(logging.ERROR)
 os.environ["YOLO_VERBOSE"] = "False"
@@ -178,7 +178,7 @@ def yolo_detector_botsort(videos_dir=None):
         # Execucao do YOLO + tracking (half=True para FP16 na GPU)
         results = model.track(
             source=str(video),
-            imgsz=1280,
+            imgsz=YOLO_IMGSZ,
             conf=DETECTION_CONF,
             device=DEVICE,
             persist=True,

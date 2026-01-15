@@ -134,7 +134,7 @@ class ReIDApplyRequest(BaseModel):
 class AnnotationRequest(BaseModel):
     video_stem: str
     annotations: Dict[str, str]  # { "id_persistente": "classe" }
-    output_path: Optional[str] = None
+    root_path: str  # Pasta raiz do dataset
 
 class SplitRequest(BaseModel):
     input_dir_process: str
@@ -609,8 +609,13 @@ def api_get_config():
             "reidentificacoes": str(cm.REID_OUTPUT_DIR),
             "datasets": str(cm.ROOT / "datasets"),
             "modelos": str(cm.TRAINED_MODELS_DIR),
-            "anotacoes": str(cm.PROCESSING_ANNOTATIONS_DIR),
+            "anotacoes": str(cm.ANNOTATIONS_OUTPUT_DIR),
             "root": str(cm.ROOT)
+        },
+        "classes": {
+            "classe1": cm.CLASSE1,
+            "classe2": cm.CLASSE2,
+            "class_names": cm.CLASS_NAMES
         }
     }
 
@@ -1149,59 +1154,36 @@ def save_reid_agenda(request: ReidAgendaRequest):
 
 
 @app.delete("/reid/agenda/{video_id}")
-def remove_from_agenda(video_id: str):
-    """Remove um vídeo da agenda."""
-    if not REID_AGENDA_FILE.exists():
-        return {"status": "not_found"}
+def remove_from_agenda(video_id: str, root_path: Optional[str] = None):
+    """Remove um vídeo da agenda, aceitando root_path dinâmico."""
+    target_file = None
+    if root_path:
+        paths = get_reid_paths_from_source(root_path)
+        target_file = paths["agenda_file"]
+    else:
+        target_file = REID_AGENDA_FILE
+        
+    if not target_file.exists():
+        return {"status": "not_found", "detail": "Agenda file not found"}
     
     try:
-        with open(REID_AGENDA_FILE, "r", encoding="utf-8") as f:
+        with open(target_file, "r", encoding="utf-8") as f:
             agenda = json.load(f)
         
         original_count = len(agenda.get("videos", []))
         agenda["videos"] = [v for v in agenda.get("videos", []) if v["video_id"] != video_id]
         
-        with open(REID_AGENDA_FILE, "w", encoding="utf-8") as f:
+        with open(target_file, "w", encoding="utf-8") as f:
             json.dump(agenda, f, ensure_ascii=False, indent=2)
         
         removed = original_count > len(agenda["videos"])
         return {"status": "removed" if removed else "not_found"}
     except Exception as e:
+        logger.error(f"Erro ao remover da agenda: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/reid/batch-apply")
-async def batch_apply_reid(data: Dict[str, Any], background_tasks: BackgroundTasks):
-    """Aplica mudanças em vários vídeos em lote."""
-    videos = data.get("videos", []) # Lista de {video_id, rules, deletions, cuts}
-    root_path = data.get("root_path")
-    if root_path:
-        r = Path(root_path).resolve()
-        if r.name in ["predicoes", "jsons", "videos"]: 
-            root_path = str(r.parent)
-            
-    output_path = data.get("output_path")
-    
-    if not videos:
-        return {"status": "error", "message": "Nenhum vídeo fornecido."}
-        
-    def run_batch():
-        state.is_running = True
-        with CaptureOutput():
-            try:
-                for item in videos:
-                    v_id = item["video_id"]
-                    req = ReIDApplyRequest(**item)
-                    logger.info(f"Processando ReID em lote para: {v_id}")
-                    apply_reid_changes(v_id, req, root_path=root_path, output_path=output_path)
-                logger.info("Processamento em lote concluído.")
-            except Exception as e:
-                logger.error(f"Erro no processamento em lote: {e}")
-            finally:
-                state.reset()
-                
-    background_tasks.add_task(run_batch)
-    return {"status": "started", "count": len(videos)}
+# Endpoint duplicado removido - usar /reid/batch-apply abaixo (linha ~1527)
 
 @app.post("/reid/{video_id}/apply")
 def apply_reid_changes(video_id: str, req: ReIDApplyRequest, root_path: Optional[str] = None, output_path: Optional[str] = None):
@@ -1301,40 +1283,67 @@ def apply_reid_changes(video_id: str, req: ReIDApplyRequest, root_path: Optional
 
 @app.get("/annotate/list")
 def list_videos_to_annotate(root_path: Optional[str] = None):
-    """Lista vídeos disponíveis para anotação em resultados-reidentificacoes."""
-    from pre_processamento.anotando_classes import listar_jsons, encontrar_video_para_json
+    """Lista vídeos disponíveis para anotação.
     
+    Busca vídeos em predicoes/ e verifica labels em {root}/anotacoes/labels.json
+    """
     root = Path(root_path).resolve() if root_path else cm.REID_OUTPUT_DIR
-    json_dir = root / "jsons"
-    pred_dir = root / "predicoes"
-    labels_path = cm.PROCESSING_ANNOTATIONS_DIR / "labels.json"
     
-    if not json_dir.exists():
-        return {"videos": []}
-        
+    # Ajusta se usuário selecionou subpasta
+    if root.name in ["predicoes", "jsons", "videos", "reid", "anotacoes"]:
+        root = root.parent
+    
+    # Pastas de origem
+    pred_dir = root / "predicoes"
+    json_dir = root / "jsons"
+    videos_dir = root / "videos"
+    
+    # Labels na pasta do dataset
+    labels_path = root / "anotacoes" / "labels.json"
+    
+    # Carrega labels existentes
     labels_existentes = {}
     if labels_path.exists():
         try:
             with open(labels_path, "r", encoding="utf-8") as f:
                 labels_existentes = json.load(f) or {}
-        except: pass
-        
-    json_files = listar_jsons(json_dir)
+        except: 
+            pass
+    
     result = []
     
-    for j in json_files:
-        stem = j.stem
-        v_path = encontrar_video_para_json(pred_dir, stem)
-        status = "anotado" if stem in labels_existentes else "pendente"
-        
-        result.append({
-            "video_id": stem,
-            "status": status,
-            "has_video": v_path is not None and v_path.exists(),
-            "creation_time": j.stat().st_mtime
-        })
-        
-    return {"videos": sorted(result, key=lambda x: x["creation_time"], reverse=True)}
+    # Lista vídeos de predicoes ou videos (preferência para predicoes)
+    source_dir = pred_dir if pred_dir.exists() else videos_dir
+    
+    if source_dir.exists():
+        valid_exts = {'.mp4', '.avi', '.mov', '.mkv'}
+        for vfile in source_dir.glob("*"):
+            if vfile.suffix.lower() not in valid_exts:
+                continue
+                
+            stem = vfile.stem.replace("_pose", "")
+            
+            # Verifica se tem JSON correspondente
+            json_path = json_dir / f"{stem}.json"
+            if not json_path.exists():
+                json_path = json_dir / f"{vfile.stem}.json"
+            
+            status = "anotado" if stem in labels_existentes else "pendente"
+            
+            result.append({
+                "video_id": stem,
+                "video_name": vfile.name,
+                "status": status,
+                "has_json": json_path.exists(),
+                "creation_time": vfile.stat().st_mtime
+            })
+    
+    # Ordena por data de criação (mais recente primeiro)
+    return {
+        "videos": sorted(result, key=lambda x: x["creation_time"], reverse=True),
+        "root": str(root),
+        "labels_path": str(labels_path)
+    }
 
 @app.get("/annotate/{video_id}/details")
 def get_annotation_details(video_id: str, root_path: Optional[str] = None):
@@ -1342,10 +1351,40 @@ def get_annotation_details(video_id: str, root_path: Optional[str] = None):
     from pre_processamento.anotando_classes import carregar_pose_records, indexar_por_frame
     
     root = Path(root_path).resolve() if root_path else cm.REID_OUTPUT_DIR
-    json_path = root / "jsons" / f"{video_id}.json"
+    logger.info(f"[ANNOTATE] root_path recebido: {root_path}")
+    logger.info(f"[ANNOTATE] root inicial: {root}")
+    
+    # Ajusta se usuário selecionou subpasta
+    if root.name in ["predicoes", "jsons", "videos", "reid", "anotacoes"]:
+        root = root.parent
+        logger.info(f"[ANNOTATE] root ajustado para pai: {root}")
+    
+    # Tenta encontrar o JSON (pode ter sufixo _pose ou não)
+    json_dir = root / "jsons"
+    logger.info(f"[ANNOTATE] Buscando JSON em: {json_dir}")
+    
+    # Lista arquivos disponíveis para debug
+    if json_dir.exists():
+        available = [f.name for f in json_dir.glob("*.json")]
+        logger.info(f"[ANNOTATE] JSONs disponíveis: {available}")
+    
+    json_path = json_dir / f"{video_id}.json"
+    logger.info(f"[ANNOTATE] Tentando: {json_path.name} | Existe: {json_path.exists()}")
     
     if not json_path.exists():
-        raise HTTPException(status_code=404, detail="JSON não encontrado")
+        # Tenta sem sufixo _pose
+        clean_id = video_id.replace("_pose", "")
+        json_path = json_dir / f"{clean_id}.json"
+        logger.info(f"[ANNOTATE] Tentando sem _pose: {json_path.name} | Existe: {json_path.exists()}")
+    
+    if not json_path.exists():
+        # Tenta com sufixo _pose
+        json_path = json_dir / f"{video_id}_pose.json"
+        logger.info(f"[ANNOTATE] Tentando com _pose: {json_path.name} | Existe: {json_path.exists()}")
+    
+    if not json_path.exists():
+        logger.error(f"[ANNOTATE] JSON não encontrado para: {video_id}")
+        raise HTTPException(status_code=404, detail=f"JSON não encontrado: {video_id}")
         
     records = carregar_pose_records(json_path)
     frames_index, id_counter = indexar_por_frame(records)
@@ -1363,30 +1402,48 @@ def get_annotation_details(video_id: str, root_path: Optional[str] = None):
     return {
         "video_id": video_id,
         "ids": ids_info,
-        "total_frames": max(frames_index.keys()) if frames_index else 0
+        "total_frames": max(frames_index.keys()) if frames_index else 0,
+        "min_frames": cm.MIN_FRAMES_PER_ID
     }
 
 @app.post("/annotate/save")
 def save_annotations(req: AnnotationRequest):
-    """Salva as anotações no arquivo labels.json global."""
-    labels_path = cm.PROCESSING_ANNOTATIONS_DIR / "labels.json"
-    labels_path.parent.mkdir(parents=True, exist_ok=True)
+    """Salva as anotações no arquivo labels.json na pasta do dataset.
     
+    Salva em: {root_path}/anotacoes/labels.json
+    """
+    root = Path(req.root_path).resolve()
+    
+    # Ajusta se usuário selecionou subpasta
+    if root.name in ["predicoes", "jsons", "videos", "reid", "anotacoes"]:
+        root = root.parent
+    
+    # Define caminho do labels.json na pasta do dataset
+    labels_dir = root / "anotacoes"
+    labels_path = labels_dir / "labels.json"
+    labels_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Carrega labels existentes
     todas_labels = {}
     if labels_path.exists():
         try:
             with open(labels_path, "r", encoding="utf-8") as f:
                 todas_labels = json.load(f) or {}
-        except: pass
-        
-    # As anotações vêm como { "ID": "classe" }
-    # O formato do labels.json deve ser { "video_stem": { "ID": "classe", ... } }
+        except: 
+            pass
+    
+    # Atualiza com novas anotações
+    # Formato: { "video_stem": { "ID": "classe", ... } }
     todas_labels[req.video_stem] = req.annotations
     
     try:
         with open(labels_path, "w", encoding="utf-8") as f:
             json.dump(todas_labels, f, indent=4, ensure_ascii=False)
-        return {"status": "success", "message": f"Anotações salvas para {req.video_stem}"}
+        return {
+            "status": "success", 
+            "message": f"Anotações salvas para {req.video_stem}",
+            "labels_path": str(labels_path)
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao salvar: {e}")
 
@@ -1428,14 +1485,18 @@ class ReidBatchApplyRequest(BaseModel):
     output_path: Optional[str] = None
 
 def run_reid_batch_processing(source_dataset: str):
+    """Processa todos os vídeos agendados em reid.json e salva em resultados-reidentificacoes."""
+    state.is_running = True
     logger.info(f"Iniciando Batch Process ReID: {source_dataset}")
+    
     with CaptureOutput():
         try:
             paths = get_reid_paths_from_source(source_dataset)
             
-            # 1. Cria diretórios
+            # 1. Cria diretórios de saída
             for k in ["videos_dir", "predictions_dir", "jsons_dir"]:
                 paths[k].mkdir(parents=True, exist_ok=True)
+            logger.info(f"Pasta de saída: {paths['root']}")
                 
             # 2. Verifica Agenda
             if not paths["agenda_file"].exists():
@@ -1447,8 +1508,7 @@ def run_reid_batch_processing(source_dataset: str):
                 
             # 3. Define Origem
             src_path = Path(source_dataset)
-            # Se apontar para .../predicoes, ajusta para root do dataset
-            if src_path.name == 'predicoes':
+            if src_path.name in ['predicoes', 'jsons', 'videos']:
                 ds_root = src_path.parent
             else:
                 ds_root = src_path
@@ -1456,23 +1516,45 @@ def run_reid_batch_processing(source_dataset: str):
             src_videos = ds_root / "videos"
             src_jsons = ds_root / "jsons"
             
-            # 4. Copia Vídeos Originais
-            logger.info("Copiando vídeos base...")
-            if src_videos.exists():
-                for vfile in src_videos.glob("*"):
-                    if vfile.suffix.lower() in [".mp4", ".avi", ".mov", ".mkv"]:
-                        dst = paths["videos_dir"] / vfile.name
-                        if not dst.exists():
-                            shutil.copy2(vfile, dst)
-                            
-            # 5. Processa Vídeos da Agenda
+            # 4. Identifica vídeos para excluir (não copiar)
+            videos_to_delete = set()
+            videos_to_process = {}
+            
             for vid_entry in agenda.get("videos", []):
                 vid_id = vid_entry["video_id"]
                 action = vid_entry.get("action", "process")
                 
                 if action == "delete":
-                    continue 
-                    
+                    videos_to_delete.add(vid_id)
+                    # Remove _pose suffix para encontrar vídeo original
+                    clean_id = vid_id.replace("_pose", "")
+                    videos_to_delete.add(clean_id)
+                else:
+                    videos_to_process[vid_id] = vid_entry
+            
+            logger.info(f"Vídeos a excluir: {len(videos_to_delete)}")
+            logger.info(f"Vídeos a processar: {len(videos_to_process)}")
+            
+            # 5. Copia Vídeos Originais (exceto os marcados para delete)
+            logger.info("Copiando vídeos base...")
+            copied_count = 0
+            if src_videos.exists():
+                for vfile in src_videos.glob("*"):
+                    if vfile.suffix.lower() in [".mp4", ".avi", ".mov", ".mkv"]:
+                        # Verifica se deve pular (vídeo marcado para delete)
+                        if vfile.stem in videos_to_delete:
+                            logger.info(f"Pulando vídeo excluído: {vfile.name}")
+                            continue
+                            
+                        dst = paths["videos_dir"] / vfile.name
+                        if not dst.exists():
+                            shutil.copy2(vfile, dst)
+                            copied_count += 1
+            logger.info(f"Copiados {copied_count} vídeos")
+            
+            # 6. Processa Vídeos da Agenda
+            processed_count = 0
+            for vid_id, vid_entry in videos_to_process.items():
                 # Mapeia regras
                 swaps = [
                     {"src": s["src_id"], "tgt": s["tgt_id"], "start": s["frame_start"], "end": s["frame_end"]}
@@ -1490,37 +1572,56 @@ def run_reid_batch_processing(source_dataset: str):
                 # Carrega JSON original
                 json_in = src_jsons / f"{vid_id}.json"
                 if not json_in.exists():
-                    logger.warning(f"JSON input não achado: {json_in}")
+                    logger.warning(f"JSON input não encontrado: {json_in}")
                     continue
                     
                 with open(json_in, "r", encoding="utf-8") as f:
                     records = json.load(f)
-                    
-                # Aplica Lógica (Otimizada)
-                processed, _, _, _ = aplicar_processamento_completo(records, swaps, deletions, cuts)
                 
-                # Salva JSON Filtrado
+                # Verifica se há alterações reais
+                has_changes = len(swaps) > 0 or len(deletions) > 0 or len(cuts) > 0
+                
+                if has_changes:
+                    # Aplica Lógica de processamento
+                    processed, _, _, _ = aplicar_processamento_completo(records, swaps, deletions, cuts)
+                else:
+                    # Sem alterações, apenas copia o JSON original
+                    processed = records
+                
+                # Salva JSON (filtrado ou cópia)
                 json_out = paths["jsons_dir"] / f"{vid_id}.json"
                 with open(json_out, "w", encoding="utf-8") as f:
                     json.dump(processed, f, ensure_ascii=False, indent=2)
                     
-                # Gera Vídeo Anotado
-                vid_in = paths["videos_dir"] / f"{vid_id}.mp4"
-                if not vid_in.exists():
-                    candidates = list(paths["videos_dir"].glob(f"{vid_id}.*"))
-                    if candidates: vid_in = candidates[0]
+                # Gera Vídeo Anotado apenas se houver alterações
+                if has_changes:
+                    # Encontra vídeo de entrada
+                    vid_stem = vid_id.replace("_pose", "")
+                    vid_in = paths["videos_dir"] / f"{vid_stem}.mp4"
+                    if not vid_in.exists():
+                        vid_in = paths["videos_dir"] / f"{vid_id}.mp4"
+                    if not vid_in.exists():
+                        candidates = list(paths["videos_dir"].glob(f"{vid_stem}.*"))
+                        if candidates: 
+                            vid_in = candidates[0]
+                        
+                    if vid_in.exists():
+                        vid_out = paths["predictions_dir"] / f"{vid_id}_pose.mp4"
+                        logger.info(f"Gerando vídeo anotado: {vid_out.name}")
+                        renderizar_video_limpo(str(vid_in), str(vid_out), processed, cuts)
+                    else:
+                        logger.warning(f"Vídeo base não encontrado: {vid_id}")
+                
+                processed_count += 1
                     
-                if vid_in.exists():
-                    vid_out = paths["predictions_dir"] / f"{vid_id}.mp4"
-                    logger.info(f"Gerando vídeo anotado: {vid_out}")
-                    renderizar_video_limpo(str(vid_in), str(vid_out), processed, cuts)
-                else:
-                    logger.warning(f"Vídeo base não achado: {vid_id}")
-                    
-            logger.info("Batch ReID finalizado.")
+            logger.info(f"Batch ReID finalizado. Processados: {processed_count} vídeos.")
 
         except Exception as e:
-            logger.error(f"Erro critical batch reid: {e}")
+            logger.error(f"Erro crítico no batch reid: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+        finally:
+            state.reset()
 
 @app.post("/reid/batch-apply")
 def batch_apply_reid(request: ReidBatchApplyRequest, background_tasks: BackgroundTasks):

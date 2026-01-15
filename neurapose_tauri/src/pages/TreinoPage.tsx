@@ -47,7 +47,7 @@ export default function TreinoPage() {
                 setRoots(res.data.paths);
                 setSplitConfig(prev => ({
                     ...prev,
-                    inputDir: res.data.paths.reidentificacoes || ''
+                    inputDir: res.data.paths.reidentificacoes || '' // Sempre usa o do backend, ignorando localStorage antigo se houver
                 }));
             }
         });
@@ -364,7 +364,7 @@ export default function TreinoPage() {
                     setSplitConfig({ ...splitConfig, inputDir: path });
                     setExplorerOpen(false);
                 }}
-                initialPath={splitConfig.inputDir}
+                initialPath={roots.reidentificacoes}
                 rootPath={roots.reidentificacoes}
                 title="Selecionar Pasta de Resultados (ReID)"
             />

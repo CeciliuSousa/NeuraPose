@@ -29,7 +29,7 @@ export interface TrainRequest {
 export interface AnnotationRequest {
     video_stem: string;
     annotations: Record<string, string>;
-    output_path?: string;
+    root_path: string;  // Pasta raiz do dataset
 }
 
 export interface SplitRequest {
@@ -114,7 +114,7 @@ export const APIService = {
     // ReID Agenda (persistência em arquivo JSON)
     getReidAgenda: (rootPath?: string) => api.get<{ agenda: any, stats?: any }>('/reid/agenda', { params: { root_path: rootPath } }),
     saveToReidAgenda: (sourceDataset: string, video: any) => api.post('/reid/agenda/save', { source_dataset: sourceDataset, video }),
-    removeFromReidAgenda: (videoId: string) => api.delete(`/reid/agenda/${videoId}`),
+    removeFromReidAgenda: (videoId: string, rootPath?: string) => api.delete(`/reid/agenda/${videoId}`, { params: { root_path: rootPath } }),
 
     batchApplyReID: (data: { videos: any[], root_path?: string, output_path?: string }) => api.post('/reid/batch-apply', data),
 };

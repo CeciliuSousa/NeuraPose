@@ -1,243 +1,274 @@
-import { useState, useEffect } from 'react';
-
+import { useState, useEffect, useMemo } from 'react';
 import {
     Tag,
     Video as VideoIcon,
-    CheckCircle2,
-    AlertCircle,
     Save,
-    ChevronRight,
-    Info,
     FolderInput,
-    RefreshCcw
+    RefreshCcw,
+    Clock,
+    CheckCircle2 // Mantido se usado em outro lugar (ex: lista), mas verifiquei e só era usado na msg.
 } from 'lucide-react';
 import { APIService } from '../services/api';
-import { PageHeader } from '../components/ui/PageHeader';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { shortenPath } from '../lib/utils';
+import { VideoPlayer } from '../components/ui/VideoPlayer';
+import { FilterDropdown, FilterOption } from '../components/ui/FilterDropdown';
+import { StatusMessage } from '../components/ui/StatusMessage';
 
+interface VideoItem {
+    video_id: string;
+    video_name: string;
+    status: 'anotado' | 'pendente';
+    has_json: boolean;
+    creation_time: number;
+}
 
 export default function AnotacaoPage() {
-    const [videos, setVideos] = useState<any[]>([]);
-    const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
-    const [details, setDetails] = useState<any>(null);
-    const [annotations, setAnnotations] = useState<Record<string, string>>({});
-    const [loading, setLoading] = useState(true);
+    // Vídeos e seleção
+    const [videos, setVideos] = useState<VideoItem[]>([]);
+    const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null);
+    const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState('');
 
-    // Config for paths and classes
-    const [inputPath, setInputPath] = useState('');
-    const [positiveClass, setPositiveClass] = useState('FURTO');
-    const [negativeClass, setNegativeClass] = useState('NORMAL');
-    const [explorerOpen, setExplorerOpen] = useState(false);
-    const [roots, setRoots] = useState<Record<string, string>>({});
+    // Dados do vídeo selecionado
+    const [videoIds, setVideoIds] = useState<{ id: number; frames: number }[]>([]);
+    const [annotations, setAnnotations] = useState<Record<string, string>>({});
 
+    // Config
+    const [inputPath, setInputPath] = useState('');
+    const [roots, setRoots] = useState<Record<string, string>>({});
+    const [classe1, setClasse1] = useState('NORMAL');
+    const [classe2, setClasse2] = useState('FURTO');
+
+    // Filtro e UI
+    const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'annotated'>('all');
+    const [explorerOpen, setExplorerOpen] = useState(false);
+
+    // Stats
+    const stats = useMemo(() => {
+        let pending = 0;
+        let annotated = 0;
+        videos.forEach(v => {
+            if (v.status === 'anotado') annotated++;
+            else pending++;
+        });
+        return { pending, annotated, total: videos.length };
+    }, [videos]);
+
+    // Vídeos filtrados
+    const displayVideos = useMemo(() => {
+        if (filterStatus === 'all') return videos;
+        return videos.filter(v => {
+            if (filterStatus === 'pending') return v.status === 'pendente';
+            if (filterStatus === 'annotated') return v.status === 'anotado';
+            return true;
+        });
+    }, [videos, filterStatus]);
+
+    // Load inicial
     useEffect(() => {
-        // Load defaults from config
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
-                const savedPath = localStorage.getItem('np_annotation_input');
                 setRoots(res.data.paths);
-                setInputPath(savedPath || res.data.paths.reidentificacoes || '');
+                setInputPath(res.data.paths.reidentificacoes || '');
+
+                // Classes do config
+                if (res.data.classes) {
+                    setClasse1(res.data.classes.classe1 || 'NORMAL');
+                    setClasse2(res.data.classes.classe2 || 'FURTO');
+                }
             }
         });
     }, []);
 
+    // Reload quando muda inputPath
     useEffect(() => {
         if (inputPath) {
             loadVideos();
-            localStorage.setItem('np_annotation_input', inputPath);
+            // localStorage.setItem('np_annotation_input', inputPath); // Desativado para não persistir
         }
     }, [inputPath]);
-
 
     const loadVideos = async () => {
         setLoading(true);
         try {
             const res = await APIService.listAnnotationVideos(inputPath || undefined);
-            setVideos(res.data.videos);
+            setVideos(res.data.videos || []);
         } catch (err) {
             console.error(err);
-            setMessage("Erro ao carregar lista de vídeos");
+            setMessage("Erro ao carregar vídeos");
         } finally {
             setLoading(false);
         }
     };
 
-
-    const loadDetails = async (videoId: string) => {
-        setSelectedVideo(videoId);
-        setDetails(null);
+    const handleSelectVideo = async (video: VideoItem) => {
+        setSelectedVideo(video);
+        setVideoIds([]);
         setAnnotations({});
+        setMessage('');
+
         try {
-            const res = await APIService.getAnnotationDetails(videoId);
-            setDetails(res.data);
+            const res = await APIService.getAnnotationDetails(video.video_id, inputPath);
+            const ids = res.data.ids || [];
+            setVideoIds(ids);
+
+            // Por padrão todos são classe1 (NORMAL)
             const initial: Record<string, string> = {};
-            res.data.ids.forEach((item: any) => {
-                initial[item.id] = item.label !== 'desconhecido' ? item.label : 'NORMAL';
+            ids.forEach((item: any) => {
+                initial[String(item.id)] = classe1;
             });
             setAnnotations(initial);
         } catch (err) {
             console.error(err);
-            setMessage("Erro ao carregar detalhes do vídeo");
+            setMessage("Erro ao carregar dados do vídeo");
         }
     };
 
-    const handleClassChange = (id: string, label: string) => {
-        setAnnotations(prev => ({ ...prev, [id]: label }));
+    const handleClassChange = (id: string, classe: string) => {
+        setAnnotations(prev => ({ ...prev, [id]: classe }));
     };
 
     const handleSave = async () => {
-        if (!selectedVideo) return;
+        if (!selectedVideo || !inputPath) return;
         setSaving(true);
         try {
             await APIService.saveAnnotations({
-                video_stem: selectedVideo,
-                annotations: annotations
+                video_stem: selectedVideo.video_id,
+                annotations: annotations,
+                root_path: inputPath
             });
-            setMessage("Anotações salvas com sucesso!");
+            setMessage("✅ Anotações salvas com sucesso!");
             loadVideos();
             setTimeout(() => setMessage(''), 3000);
         } catch (err) {
             console.error(err);
-            setMessage("Erro ao salvar anotações");
+            setMessage("❌ Erro ao salvar anotações");
         } finally {
             setSaving(false);
         }
     };
 
-    return (
-        <div className="space-y-6">
-            <PageHeader
-                title="Anotação de Classes"
-                description="Classifique os indivíduos detectados (NORMAL ou FURTO) para treinar o modelo de detecção de anomalias."
-            />
+    const getVideoStatusColor = (status: string) => {
+        if (status === 'anotado') return 'border-l-4 border-green-500 bg-green-500/10';
+        return 'border-l-4 border-yellow-500 bg-yellow-500/10';
+    };
 
-            {/* Barra de Configuração */}
-            <div className="bg-card border border-border rounded-xl p-4">
-                <div className="flex flex-wrap items-end gap-4">
-                    <div className="flex-1 min-w-[300px] space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-muted-foreground">Pasta de Entrada (ReID)</label>
-                        <div className="flex gap-2">
-                            <input
-                                value={shortenPath(inputPath)}
-                                title={inputPath}
-                                onChange={(e) => setInputPath(e.target.value)}
-                                className="flex-1 bg-secondary/50 border border-border text-sm py-2 px-3 rounded-lg"
-                                placeholder="resultados-reidentificacoes/..."
-                            />
-                            <button
-                                onClick={() => setExplorerOpen(true)}
-                                className="p-2 bg-secondary border border-border rounded-lg hover:bg-secondary/80"
-                                title="Selecionar Pasta"
-                            >
-                                <FolderInput className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={loadVideos}
-                                className="p-2 bg-primary/10 text-primary rounded-lg hover:bg-primary/20"
-                                title="Recarregar"
-                            >
-                                <RefreshCcw className="w-4 h-4" />
-                            </button>
-                        </div>
+    // Opções do filtro  
+    const filterOptions: FilterOption[] = useMemo(() => [
+        { key: 'all', label: 'Todos os Vídeos', count: stats.total },
+        { key: 'pending', label: 'Pendentes', count: stats.pending, color: 'yellow-500' },
+        { key: 'annotated', label: 'Anotados', count: stats.annotated, color: 'green-500' },
+    ], [stats]);
+
+    const videoSrc = selectedVideo
+        ? `http://localhost:8000/reid/video/${selectedVideo.video_id}?root_path=${encodeURIComponent(inputPath)}`
+        : '';
+
+    return (
+        <div className="h-[calc(100vh-8rem)] flex flex-col space-y-4">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-border pb-4">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                        <Tag className="w-6 h-6 text-primary" />
                     </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-muted-foreground">Classe Positiva</label>
-                        <input
-                            value={positiveClass}
-                            onChange={(e) => setPositiveClass(e.target.value.toUpperCase())}
-                            className="w-24 bg-secondary/50 border border-border text-sm py-2 px-3 rounded-lg text-center"
-                        />
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight">Anotação de Classes</h1>
+                        <p className="text-sm text-muted-foreground">Classifique indivíduos: {classe1} ou {classe2}</p>
                     </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-muted-foreground">Classe Negativa</label>
-                        <input
-                            value={negativeClass}
-                            onChange={(e) => setNegativeClass(e.target.value.toUpperCase())}
-                            className="w-24 bg-secondary/50 border border-border text-sm py-2 px-3 rounded-lg text-center"
-                        />
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 bg-muted/30 p-1.5 rounded-lg border border-border">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground px-2">Entrada</span>
+                        <div className="h-4 w-px bg-border"></div>
+                        <button
+                            onClick={() => setExplorerOpen(true)}
+                            className="text-xs flex items-center gap-2 hover:text-primary transition-colors px-2 font-mono"
+                            title={inputPath}
+                        >
+                            {shortenPath(inputPath) || "Selecionar Pasta..."} <FolderInput className="w-3.5 h-3.5" />
+                        </button>
                     </div>
+                    <button
+                        onClick={loadVideos}
+                        className="p-2 hover:bg-muted rounded-md transition-colors border border-transparent hover:border-border"
+                        title="Recarregar Lista"
+                    >
+                        <RefreshCcw className={`w-4 h-4 text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
+                    </button>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-
-
-                {/* 1. Lista de Vídeos (Esquerda) */}
-                <div className="lg:col-span-3 space-y-4">
-                    <div className="bg-card border border-border rounded-xl overflow-hidden shadow-sm">
-                        <div className="px-4 py-3 bg-muted/30 border-b border-border font-semibold text-sm flex items-center justify-between">
-                            Vídeos Disponíveis
-                            <span className="text-[10px] bg-primary/20 text-primary px-2 py-0.5 rounded-full">{videos.length}</span>
+            <div className="grid grid-cols-12 gap-6 flex-1 overflow-hidden">
+                {/* Lista de Vídeos */}
+                <div className="col-span-3 border-r border-border pr-4 overflow-y-auto space-y-4">
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-bold uppercase text-muted-foreground">Fila de Vídeos</h3>
+                            <span className="text-[10px] text-muted-foreground font-mono">{displayVideos.length} / {videos.length}</span>
                         </div>
-                        <div className="max-h-[600px] overflow-y-auto">
-                            {loading ? (
-                                <div className="p-8 text-center text-muted-foreground animate-pulse text-xs">Carregando...</div>
-                            ) : videos.length === 0 ? (
-                                <div className="p-8 text-center text-muted-foreground italic text-xs">Nenhum vídeo processado.</div>
-                            ) : (
-                                <div className="divide-y divide-border">
-                                    {videos.map((v) => (
-                                        <button
-                                            key={v.video_id}
-                                            onClick={() => loadDetails(v.video_id)}
-                                            className={`w-full text-left px-4 py-3 hover:bg-muted/50 transition-all flex items-center justify-between group ${selectedVideo === v.video_id ? 'bg-primary/10 border-l-4 border-primary' : 'border-l-4 border-transparent'}`}
-                                        >
-                                            <div className="truncate pr-2">
-                                                <div className="text-xs font-bold truncate group-hover:text-primary transition-colors">{v.video_id}</div>
-                                                <div className="text-[10px] text-muted-foreground">{v.status === 'anotado' ? '✅ ROLUTADO' : '⏳ PENDENTE'}</div>
-                                            </div>
-                                            <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform ${selectedVideo === v.video_id ? 'translate-x-1 text-primary' : ''}`} />
-                                        </button>
-                                    ))}
+
+                        {/* Filtros Dropdown */}
+                        <FilterDropdown
+                            options={filterOptions}
+                            selected={filterStatus}
+                            onSelect={(key) => setFilterStatus(key as 'all' | 'pending' | 'annotated')}
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        {displayVideos.map(v => (
+                            <div
+                                key={v.video_id}
+                                onClick={() => handleSelectVideo(v)}
+                                className={`
+                                    p-3 rounded-lg border transition-all cursor-pointer flex items-center justify-between
+                                    ${getVideoStatusColor(v.status)}
+                                    ${selectedVideo?.video_id === v.video_id ? 'ring-2 ring-primary' : 'border-border'}
+                                `}
+                            >
+                                <div className="truncate flex-1">
+                                    <p className="font-bold text-sm truncate">{v.video_id}</p>
+                                    <p className="text-[10px] text-muted-foreground">
+                                        {v.status === 'anotado' ? '✅ ANOTADO' : '⏳ PENDENTE'}
+                                    </p>
                                 </div>
-                            )}
-                        </div>
+                                {v.status === 'anotado' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                                {v.status === 'pendente' && <Clock className="w-4 h-4 text-yellow-500" />}
+                            </div>
+                        ))}
                     </div>
                 </div>
 
-                {/* 2. Visualização e Anotação (Direita) */}
-                <div className="lg:col-span-9">
+                {/* Player e Anotações */}
+                <div className="col-span-9 overflow-y-auto space-y-4">
                     {!selectedVideo ? (
                         <div className="h-full min-h-[400px] border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center text-muted-foreground p-12 bg-muted/5">
                             <VideoIcon className="w-16 h-16 mb-4 opacity-20" />
-                            <p className="text-lg font-medium">Selecione um vídeo para começar a anotar</p>
-                            <p className="text-sm opacity-60">Apenas vídeos processados com Re-ID aparecem aqui.</p>
+                            <p className="text-lg font-medium">Selecione um vídeo para anotar</p>
+                            <p className="text-sm opacity-60">Os IDs persistentes serão listados abaixo do player.</p>
                         </div>
                     ) : (
-                        <div className="space-y-6 animate-in fade-in duration-500">
-
+                        <>
                             {/* Video Player */}
-                            <div className="bg-card border border-border rounded-xl overflow-hidden shadow-lg shadow-black/20">
-                                <div className="px-4 py-2 bg-slate-900 text-white flex items-center justify-between">
-                                    <span className="text-xs font-mono truncate">{selectedVideo}</span>
-                                    <div className="flex gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                        <span className="text-[10px] uppercase font-bold text-slate-400">Preview Mode</span>
-                                    </div>
-                                </div>
-                                <div className="aspect-video bg-black flex items-center justify-center">
-                                    <img
-                                        src={`http://localhost:8000/reid/video/${selectedVideo}`}
-                                        alt="Video Stream"
-                                        className="max-h-full max-w-full object-contain"
-                                        onError={(e: any) => e.target.src = "https://placehold.co/1280x720/000000/FFFFFF?text=Video+Not+Found"}
-                                    />
-                                </div>
-                            </div>
+                            <VideoPlayer src={videoSrc} fps={30} />
 
-                            {/* Annotation Form */}
+                            {/* Mensagem de feedback */}
+                            <StatusMessage message={message} onClose={() => setMessage('')} autoCloseDelay={5000} className="mb-4" />
+
+                            {/* Anotação de IDs */}
                             <div className="bg-card border border-border rounded-xl shadow-md">
                                 <div className="px-6 py-4 border-b border-border flex items-center justify-between">
                                     <h3 className="font-bold flex items-center gap-2">
                                         <Tag className="w-5 h-5 text-primary" />
-                                        Classificação de Indivíduos
+                                        Classificação de Indivíduos - {selectedVideo.video_id}
                                     </h3>
                                     <button
                                         onClick={handleSave}
-                                        disabled={saving || !details}
+                                        disabled={saving || videoIds.length === 0}
                                         className="px-6 py-2 bg-primary text-primary-foreground rounded-lg font-bold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-primary/20"
                                     >
                                         <Save className="w-4 h-4" />
@@ -246,23 +277,13 @@ export default function AnotacaoPage() {
                                 </div>
 
                                 <div className="p-6">
-                                    {message && (
-                                        <div className={`mb-6 p-4 rounded-lg flex items-center gap-3 text-sm font-medium border ${message.includes('sucesso') ? 'bg-green-500/10 text-green-500 border-green-500/20' : 'bg-red-500/10 text-red-500 border-red-500/20'}`}>
-                                            {message.includes('sucesso') ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-                                            {message}
-                                        </div>
-                                    )}
-
-                                    {!details ? (
-                                        <div className="flex flex-col items-center py-12 text-muted-foreground">
-                                            <div className="animate-spin mb-4">
-                                                <Info className="w-8 h-8" />
-                                            </div>
-                                            <p>Carregando dados dos indivíduos...</p>
+                                    {videoIds.length === 0 ? (
+                                        <div className="text-center text-muted-foreground py-8">
+                                            <p>Carregando IDs do vídeo...</p>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                                            {details.ids.map((item: any) => (
+                                            {videoIds.map((item) => (
                                                 <div key={item.id} className="p-4 border border-border rounded-xl bg-muted/10 hover:bg-muted/30 transition-colors flex flex-col gap-3">
                                                     <div className="flex items-center justify-between">
                                                         <span className="text-lg font-extrabold text-primary">ID {item.id}</span>
@@ -271,16 +292,16 @@ export default function AnotacaoPage() {
 
                                                     <div className="flex gap-2 p-1 bg-background border border-border rounded-lg">
                                                         <button
-                                                            onClick={() => handleClassChange(item.id, 'NORMAL')}
-                                                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${annotations[item.id] === 'NORMAL' ? 'bg-green-500 text-white shadow-sm' : 'hover:bg-muted text-muted-foreground'}`}
+                                                            onClick={() => handleClassChange(String(item.id), classe1)}
+                                                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${annotations[String(item.id)] === classe1 ? 'bg-green-500 text-white shadow-sm' : 'hover:bg-muted text-muted-foreground'}`}
                                                         >
-                                                            NORMAL
+                                                            {classe1}
                                                         </button>
                                                         <button
-                                                            onClick={() => handleClassChange(item.id, 'FURTO')}
-                                                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${annotations[item.id] === 'FURTO' ? 'bg-red-500 text-white shadow-sm' : 'hover:bg-muted text-muted-foreground'}`}
+                                                            onClick={() => handleClassChange(String(item.id), classe2)}
+                                                            className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all ${annotations[String(item.id)] === classe2 ? 'bg-red-500 text-white shadow-sm' : 'hover:bg-muted text-muted-foreground'}`}
                                                         >
-                                                            FURTO
+                                                            {classe2}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -289,21 +310,12 @@ export default function AnotacaoPage() {
                                     )}
                                 </div>
                             </div>
-
-                            <div className="bg-primary/5 border border-primary/10 p-4 rounded-xl text-[10px] text-muted-foreground leading-relaxed flex gap-3 italic">
-                                <Info className="w-4 h-4 text-primary shrink-0" />
-                                <div>
-                                    <strong>Ajuda:</strong> Assista ao vídeo acima para identificar qual indivíduo (ID) está cometendo a infração.
-                                    Apenas IDs com mais de {details?.min_frames || 30} frames são listados para evitar ruído.
-                                    As anotações serão usadas para treinar a camada temporal (LSTM/TFT).
-                                </div>
-                            </div>
-                        </div>
+                        </>
                     )}
                 </div>
             </div>
 
-            {/* File Explorer Modal */}
+            {/* File Explorer */}
             <FileExplorerModal
                 isOpen={explorerOpen}
                 onClose={() => setExplorerOpen(false)}
@@ -311,9 +323,27 @@ export default function AnotacaoPage() {
                     setInputPath(path);
                     setExplorerOpen(false);
                 }}
-                initialPath={inputPath}
+                initialPath={roots.reidentificacoes}
                 rootPath={roots.reidentificacoes}
                 title="Selecionar Pasta de ReID"
+                filterFn={(item) => {
+                    const normRoot = (roots.reidentificacoes || '').replace(/\\/g, '/').toLowerCase();
+                    const normCurrent = (item.currentPath || '').replace(/\\/g, '/').toLowerCase();
+
+                    // Se estamos na raiz, mostrar apenas pastas (datasets)
+                    if (normCurrent === normRoot || normCurrent === normRoot + '/') {
+                        // Mostrar datasets, ocultar arquivos soltos se houver
+                        return item.is_dir;
+                    }
+
+                    // Dentro do dataset: Mostrar 'predicoes' (conforme pedido)
+                    const relative = normCurrent.replace(normRoot, '');
+                    const depth = relative.split('/').filter(p => p).length;
+
+                    if (depth === 1) return item.name === 'predicoes';
+
+                    return true;
+                }}
             />
         </div>
     );

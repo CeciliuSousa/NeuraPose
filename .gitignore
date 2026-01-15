@@ -20,6 +20,7 @@ neurapose_backend/**/*.jpg
 
 neurapose_backend/datasets
 neurapose_backend/info
+neurapose_backend/resultados-anotacoes
 neurapose_backend/resultados-processamentos
 neurapose_backend/resultados-reidentificacoes
 neurapose_backend/videos

@@ -264,7 +264,7 @@ export default function TestesPage() {
                     if (explorerTarget === 'dataset') setConfig({ ...config, datasetPath: path });
                     setExplorerTarget(null);
                 }}
-                initialPath={explorerTarget === 'model' ? config.modelPath : config.datasetPath}
+                initialPath={explorerTarget === 'model' ? roots.modelos : roots.datasets}
                 rootPath={explorerTarget === 'model' ? roots.modelos : roots.datasets}
                 title={explorerTarget === 'model' ? "Selecionar Modelo (.pt)" : "Selecionar Pasta do Dataset"}
             />

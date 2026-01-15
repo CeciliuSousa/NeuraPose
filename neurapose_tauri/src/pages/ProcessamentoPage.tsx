@@ -33,7 +33,12 @@ export default function ProcessamentoPage() {
     // Logs & Health Polling
     useEffect(() => {
         const savedConfig = localStorage.getItem('np_process_config');
-        if (savedConfig) setConfig(JSON.parse(savedConfig));
+        // if (savedConfig) setConfig(JSON.parse(savedConfig)); // Desativado para sempre resetar inputPath
+        if (savedConfig) {
+            const parsed = JSON.parse(savedConfig);
+            // Mantém outras configs, mas ignora inputPath para forçar o default
+            setConfig(prev => ({ ...parsed, inputPath: '' }));
+        }
 
         const savedLogs = localStorage.getItem('np_process_logs');
         if (savedLogs) setLogs(JSON.parse(savedLogs));
@@ -47,7 +52,7 @@ export default function ProcessamentoPage() {
                 setRoots(res.data.paths);
                 setConfig(prev => ({
                     ...prev,
-                    inputPath: prev.inputPath || videos
+                    inputPath: videos // Sempre força o path padrão
                 }));
             }
         }).catch(err => console.error("Erro ao carregar caminhos do backend:", err));
@@ -395,7 +400,7 @@ export default function ProcessamentoPage() {
                 isOpen={explorerTarget !== null}
                 onClose={closeExplorer}
                 onSelect={handleSelectPath}
-                initialPath={config.inputPath}
+                initialPath={roots.videos}
                 rootPath={roots.videos}
                 title="Selecionar Pasta de Entrada (Vídeos)"
             />

@@ -20,7 +20,9 @@ export function shortenPath(fullPath: string): string {
     for (const marker of markers) {
         const index = normalized.toLowerCase().indexOf(marker.toLowerCase());
         if (index !== -1) {
-            return normalized.substring(index);
+            let relative = normalized.substring(index + marker.length);
+            if (relative.startsWith('/')) relative = relative.substring(1);
+            return relative || normalized.substring(index);
         }
     }
 

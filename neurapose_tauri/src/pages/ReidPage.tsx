@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RotateCcw, FileVideo, FolderInput, ChevronDown, Pencil } from 'lucide-react';
+import { ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RotateCcw, FileVideo, FolderInput, Pencil } from 'lucide-react';
 import { APIService, ReIDVideo, ReIDData } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { shortenPath } from '../lib/utils';
+import { FilterDropdown, FilterOption } from '../components/ui/FilterDropdown';
+import { StatusMessage } from '../components/ui/StatusMessage';
 import { ReidPlayer } from '../components/ReidPlayer';
 
 
@@ -13,9 +15,36 @@ export default function ReidPage() {
     const [reidData, setReidData] = useState<ReIDData | null>(null);
     const [inputPath, setInputPath] = useState('');
     const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'processed' | 'excluded'>('all');
-    const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+    const [roots, setRoots] = useState<Record<string, string>>({}); // Paths from backend
+    const [message, setMessage] = useState(''); // Feedback message
 
-    // Output is handled by backend default now (resultados-reidentificacoes)
+    useEffect(() => {
+        APIService.getConfig().then(res => {
+            if (res.data.status === 'success') {
+                setRoots(res.data.paths);
+            }
+        });
+    }, []);
+
+    // Calcula caminho de saída baseado na entrada
+    const outputPath = useMemo(() => {
+        if (!inputPath) return '';
+        // Extrai nome da pasta de entrada e gera nome de saída
+        const parts = inputPath.replace(/\\/g, '/').split('/');
+        let datasetName = parts[parts.length - 1];
+        if (['predicoes', 'jsons', 'videos'].includes(datasetName)) {
+            datasetName = parts[parts.length - 2] || datasetName;
+        }
+        // Encontra o diretório base (neurapose_backend)
+        const backendIdx = parts.findIndex(p => p === 'neurapose_backend');
+        if (backendIdx >= 0) {
+            const basePath = parts.slice(0, backendIdx + 1).join('/');
+            return `${basePath}/resultados-reidentificacoes/${datasetName}-reidentificado`;
+        }
+        // Fallback: mesmo nível da entrada
+        const parentPath = parts.slice(0, -1).join('/');
+        return `${parentPath}/../resultados-reidentificacoes/${datasetName}-reidentificado`;
+    }, [inputPath]);
 
     // Current Video Edits
     const [swaps, setSwaps] = useState<{ src: number; tgt: number; start: number; end: number }[]>([]);
@@ -76,6 +105,14 @@ export default function ReidPage() {
             return true;
         });
     }, [videos, batchAnnotations, filterStatus]);
+
+    // Opções de filtro para o novo componente
+    const filterOptions: FilterOption[] = useMemo(() => [
+        { key: 'all', label: 'Todos os Vídeos', count: videos.length },
+        { key: 'pending', label: 'Pendentes', count: stats.pending, color: 'yellow-500' },
+        { key: 'processed', label: 'Processados', count: stats.processed, color: 'green-500' },
+        { key: 'excluded', label: 'Excluídos', count: stats.excluded, color: 'red-500' },
+    ], [videos.length, stats]);
 
     const loadAgenda = async () => {
         if (!inputPath) return;
@@ -217,6 +254,47 @@ export default function ReidPage() {
         setCutForm({ start: '', end: '' });
     };
 
+    const handleToggleRemoval = async () => {
+        if (!selectedVideo || !inputPath) return;
+
+        const newStatus = !isDeleted;
+        // Optimistic UI update
+        setIsDeleted(newStatus);
+
+        try {
+            if (newStatus) {
+                // REMOVER: Salva action: 'delete'
+                const videoEntry = {
+                    video_id: selectedVideo.id,
+                    action: 'delete',
+                    swaps: [], deletions: [], cuts: []
+                };
+                await APIService.saveToReidAgenda(inputPath, videoEntry);
+
+                // Update batch status manually cause saveToBatch uses stale state here
+                setBatchAnnotations(prev => ({
+                    ...prev,
+                    [selectedVideo.id]: { ...videoEntry, video_id: selectedVideo.id }
+                }));
+
+            } else {
+                // RESTAURAR: Remove do JSON (volta a ser pendente)
+                await APIService.removeFromReidAgenda(selectedVideo.id, inputPath);
+
+                // Remove from batch
+                setBatchAnnotations(prev => {
+                    const copy = { ...prev };
+                    delete copy[selectedVideo.id];
+                    return copy;
+                });
+            }
+        } catch (error) {
+            console.error("Erro ao atualizar status de remoção", error);
+            setIsDeleted(!newStatus); // Revert
+            setMessage("❌ Erro ao salvar status. Tente novamente.");
+        }
+    };
+
     const handleSchedule = async () => {
         if (!selectedVideo || !inputPath) return;
 
@@ -234,13 +312,13 @@ export default function ReidPage() {
             if (res.data.status === 'success') {
                 // Atualiza estado local também
                 saveToBatch(selectedVideo.id);
-                alert(`✅ Vídeo "${selectedVideo.id}" agendado e salvo em reid.json!`);
+                setMessage(`✅ Vídeo "${selectedVideo.id}" agendado com sucesso!`);
             } else {
-                alert('Erro ao salvar agenda.');
+                setMessage('❌ Erro ao salvar agenda.');
             }
         } catch (error) {
             console.error('Erro ao salvar agenda:', error);
-            alert('Erro ao salvar agenda no servidor.');
+            setMessage('❌ Erro ao salvar agenda no servidor.');
         }
     };
 
@@ -250,11 +328,11 @@ export default function ReidPage() {
 
         const list = Object.values(batchAnnotations);
         if (list.length === 0) {
-            alert("Nenhuma alteração agendada.");
+            setMessage("⚠️ Nenhuma alteração agendada para processar.");
             return;
         }
 
-        if (!confirm(`Processar ${list.length} vídeos? \nIsso aplicará cortes, trocas e EXCLUSÕES permanentemente.`)) return;
+        // if (!confirm(`Processar ${list.length} vídeos? \nIsso aplicará cortes, trocas e REMOÇÕES permanentemente.`)) return;
 
         setLoading(true);
         try {
@@ -262,13 +340,14 @@ export default function ReidPage() {
                 videos: list,
                 root_path: inputPath,
             });
-            alert("Processamento finalizado/iniciado com sucesso!");
+            setMessage(`✅ Processamento iniciado com sucesso! Arquivos salvos.`);
             setBatchAnnotations({});
             loadVideos(); // Refresh list to remove deleted videos
+            loadAgenda(); // RECARREGA O JSON ATUALIZADO DO BACKEND para atualizar status (verde/vermelho)
             setSelectedVideo(null);
         } catch (error) {
             console.error(error);
-            alert("Erro ao processar lote.");
+            setMessage("❌ Erro ao processar lote.");
         } finally {
             setLoading(false);
         }
@@ -297,6 +376,7 @@ export default function ReidPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
+                    {/* Entrada */}
                     <div className="flex items-center gap-2 bg-muted/30 p-1.5 rounded-lg border border-border">
                         <span className="text-[10px] font-bold uppercase text-muted-foreground px-2">Entrada</span>
                         <div className="h-4 w-px bg-border"></div>
@@ -318,6 +398,8 @@ export default function ReidPage() {
                 </div>
             </div>
 
+            <StatusMessage message={message} onClose={() => setMessage('')} autoCloseDelay={5000} />
+
             <div className="grid grid-cols-12 gap-6 flex-1 overflow-hidden">
                 {/* LISTA DE VÍDEOS (Sidebar) */}
                 <div className="col-span-3 border-r border-border pr-4 overflow-y-auto space-y-4">
@@ -328,75 +410,11 @@ export default function ReidPage() {
                         </div>
 
                         {/* Filtros Dropdown */}
-                        <div className="relative">
-                            <button
-                                onClick={() => setFilterMenuOpen(!filterMenuOpen)}
-                                className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all group ${filterStatus === 'all' ? 'bg-muted/30 border-border text-muted-foreground hover:bg-muted hover:text-foreground' :
-                                    filterStatus === 'pending' ? 'bg-yellow-500/10 border-yellow-500 text-yellow-500' :
-                                        filterStatus === 'processed' ? 'bg-green-500/10 border-green-500 text-green-500' :
-                                            'bg-red-500/10 border-red-500 text-red-500'
-                                    }`}
-                            >
-                                <div className="flex flex-1 items-center justify-between mr-4">
-                                    <span className="text-xs font-bold uppercase tracking-wider opacity-90 truncate">
-                                        {filterStatus === 'all' ? 'Todos os Vídeos' :
-                                            filterStatus === 'pending' ? 'Pendentes' :
-                                                filterStatus === 'processed' ? 'Processados' : 'Excluídos'}
-                                    </span>
-                                    <span className="text-2xl font-black leading-none">
-                                        {filterStatus === 'all' ? videos.length :
-                                            filterStatus === 'pending' ? stats.pending :
-                                                filterStatus === 'processed' ? stats.processed : stats.excluded}
-                                    </span>
-                                </div>
-                                <ChevronDown className={`w-5 h-5 transition-transform ${filterMenuOpen ? 'rotate-180' : ''}`} />
-                            </button>
-
-                            {filterMenuOpen && (
-                                <div className="absolute top-full left-0 right-0 z-50 mt-2 bg-popover/95 backdrop-blur-xl border border-border rounded-xl shadow-2xl p-1.5 space-y-1 animate-in fade-in slide-in-from-top-2">
-                                    <button
-                                        onClick={() => { setFilterStatus('all'); setFilterMenuOpen(false); }}
-                                        className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors text-left"
-                                    >
-                                        <span className="text-sm font-medium">Todos os Vídeos</span>
-                                        <span className="text-xs font-mono opacity-50">{videos.length}</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => { setFilterStatus('pending'); setFilterMenuOpen(false); }}
-                                        className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-yellow-500/10 hover:text-yellow-500 transition-colors text-left"
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full bg-yellow-500 shadow-sm" />
-                                            <span className="text-sm font-medium">Pendentes</span>
-                                        </div>
-                                        <span className="text-xs font-mono font-bold">{stats.pending}</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => { setFilterStatus('processed'); setFilterMenuOpen(false); }}
-                                        className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-green-500/10 hover:text-green-500 transition-colors text-left"
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full bg-green-500 shadow-sm" />
-                                            <span className="text-sm font-medium">Processados</span>
-                                        </div>
-                                        <span className="text-xs font-mono font-bold">{stats.processed}</span>
-                                    </button>
-
-                                    <button
-                                        onClick={() => { setFilterStatus('excluded'); setFilterMenuOpen(false); }}
-                                        className="w-full flex items-center justify-between p-2 rounded-lg hover:bg-red-500/10 hover:text-red-500 transition-colors text-left"
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full bg-red-500 shadow-sm" />
-                                            <span className="text-sm font-medium">Excluídos</span>
-                                        </div>
-                                        <span className="text-xs font-mono font-bold">{stats.excluded}</span>
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        <FilterDropdown
+                            options={filterOptions}
+                            selected={filterStatus}
+                            onSelect={(key) => setFilterStatus(key as 'all' | 'pending' | 'processed' | 'excluded')}
+                        />
                     </div>
 
                     <div className="space-y-2">
@@ -436,7 +454,7 @@ export default function ReidPage() {
                                     <span>{reidData?.id_counts ? Object.keys(reidData.id_counts).length + ' IDs únicos detectados' : 'Carregando stats...'}</span>
                                 </div>
                                 <button
-                                    onClick={() => setIsDeleted(!isDeleted)}
+                                    onClick={handleToggleRemoval}
                                     className={`
                                         px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 transition-all
                                         ${isDeleted
@@ -444,7 +462,7 @@ export default function ReidPage() {
                                             : 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20'}
                                     `}
                                 >
-                                    {isDeleted ? <><RotateCcw className="w-3 h-3" /> Restaurar Vídeo</> : <><Trash2 className="w-3 h-3" /> EXCLUIR VÍDEO INTEIRO</>}
+                                    {isDeleted ? <><RotateCcw className="w-3 h-3" /> Restaurar Vídeo</> : <><Trash2 className="w-3 h-3" /> REMOVER VÍDEO INTEIRO</>}
                                 </button>
                             </div>
 
@@ -464,7 +482,7 @@ export default function ReidPage() {
                                 {isDeleted && (
                                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
                                         <div className="bg-red-600 text-white px-6 py-3 rounded-xl font-bold text-2xl shadow-xl transform -rotate-12 border-4 border-white">
-                                            MARCADO PARA EXCLUSÃO
+                                            REMOVIDO
                                         </div>
                                     </div>
                                 )}
@@ -578,7 +596,7 @@ export default function ReidPage() {
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow shadow-red-500/50"></span>
-                                                <span className="text-muted-foreground">Excluir: <b className="text-foreground text-lg">{Object.values(batchAnnotations).filter((v: any) => v.action === 'delete').length}</b></span>
+                                                <span className="text-muted-foreground">Remover: <b className="text-foreground text-lg">{Object.values(batchAnnotations).filter((v: any) => v.action === 'delete').length}</b></span>
                                             </div>
                                         </div>
 
@@ -607,9 +625,28 @@ export default function ReidPage() {
                 isOpen={explorerOpen}
                 onClose={() => setExplorerOpen(false)}
                 onSelect={(path) => { setInputPath(path); setExplorerOpen(false); }}
-                initialPath={inputPath}
+                initialPath={roots.processamentos}
+                rootPath={roots.processamentos}
                 title="Selecionar Pasta de Vídeos/Predições"
-                filterFn={(item) => !['jsons', 'videos'].includes(item.name)}
+                filterFn={(item) => {
+                    const normRoot = (roots.processamentos || '').replace(/\\/g, '/').toLowerCase();
+                    const normCurrent = (item.currentPath || '').replace(/\\/g, '/').toLowerCase();
+
+                    // Root: apenas datasets (pastas)
+                    if (normCurrent === normRoot || normCurrent === normRoot + '/') {
+                        return item.is_dir && !['videos', 'jsons', 'anotacoes'].includes(item.name);
+                    }
+
+                    // Inside Dataset: apenas 'predicoes'
+                    const relative = normCurrent.replace(normRoot, '');
+                    const depth = relative.split('/').filter(p => p).length;
+
+                    if (depth === 1) {
+                        return item.name === 'predicoes';
+                    }
+
+                    return true;
+                }}
             />
         </div>
     );
