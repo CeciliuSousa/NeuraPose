@@ -6,7 +6,7 @@ import HomePage from './pages/HomePage';
 import ProcessamentoPage from './pages/ProcessamentoPage';
 import ReidPage from './pages/ReidPage';
 import AnotacaoPage from './pages/AnotacaoPage';
-import DatasetsPage from './pages/DatasetsPage';
+// import DatasetsPage from './pages/DatasetsPage';
 import ConverterPage from './pages/ConverterPage';
 import TreinoPage from './pages/TreinoPage';
 import TestesPage from './pages/TestesPage';
@@ -26,7 +26,7 @@ function App() {
             <Route path="/processamento" element={<ProcessamentoPage />} />
             <Route path="/reid" element={<ReidPage />} />
             <Route path="/anotacao" element={<AnotacaoPage />} />
-            <Route path="/datasets" element={<DatasetsPage />} />
+            {/* <Route path="/datasets" element={<DatasetsPage />} /> */}
             <Route path="/converter" element={<ConverterPage />} />
             <Route path="/treino" element={<TreinoPage />} />
             <Route path="/testes" element={<TestesPage />} />

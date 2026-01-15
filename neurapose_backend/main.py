@@ -43,7 +43,8 @@ try:
         renderizar_video_limpo, 
         carregar_pose_records,
         salvar_json,
-        indexar_por_frame_e_contar_ids
+        indexar_por_frame_e_contar_ids,
+        renderizar_video_cortado_raw
     )
     # Import logic for Training
     from LSTM.pipeline import treinador
@@ -1606,9 +1607,15 @@ def run_reid_batch_processing(source_dataset: str):
                             vid_in = candidates[0]
                         
                     if vid_in.exists():
-                        vid_out = paths["predictions_dir"] / f"{vid_id}_pose.mp4"
-                        logger.info(f"Gerando vídeo anotado: {vid_out.name}")
-                        renderizar_video_limpo(str(vid_in), str(vid_out), processed, cuts)
+                        # 1. Vídeo Anotado (com caixas) -> Predições
+                        vid_out_pred = paths["predictions_dir"] / f"{vid_id}_pose.mp4"
+                        logger.info(f"Gerando vídeo anotado: {vid_out_pred.name}")
+                        renderizar_video_limpo(str(vid_in), str(vid_out_pred), processed, cuts)
+
+                        # 2. Vídeo Raw (sem caixas, mas cortado) -> Videos (para consistência)
+                        vid_out_raw = paths["videos_dir"] / f"{vid_id}.mp4"
+                        logger.info(f"Gerando vídeo raw cortado: {vid_out_raw.name}")
+                        renderizar_video_cortado_raw(str(vid_in), str(vid_out_raw), cuts)
                     else:
                         logger.warning(f"Vídeo base não encontrado: {vid_id}")
                 
@@ -1628,6 +1635,90 @@ def batch_apply_reid(request: ReidBatchApplyRequest, background_tasks: Backgroun
     """Executa o processamento em massa das correções de ReID."""
     background_tasks.add_task(run_reid_batch_processing, request.root_path)
     return {"status": "started", "message": "Iniciando processamento ReID em background."}
+
+
+# ==============================================================
+# DATASETS MANAGER
+# ==============================================================
+@app.get("/datasets/list")
+def list_all_datasets():
+    """
+    Lista todas as pastas de datasets organizadas por categoria:
+    - processamentos: Vídeos processados (resultado_processamento/)
+    - reidentificacoes: Datasets reidentificados (resultados-reidentificacoes/)
+    - datasets: Datasets prontos para treino (datasets/)
+    
+    Retorna status de completude baseado na presença de subpastas.
+    """
+    def check_folder_status(folder_path: Path, required_subfolders: list) -> dict:
+        """Verifica status de completude de uma pasta."""
+        if not folder_path.exists() or not folder_path.is_dir():
+            return None
+            
+        existing = [sf for sf in required_subfolders if (folder_path / sf).exists()]
+        has_videos = (folder_path / "videos").exists() and any((folder_path / "videos").glob("*.mp4"))
+        has_jsons = (folder_path / "jsons").exists() and any((folder_path / "jsons").glob("*.json"))
+        
+        # Status: complete, partial, empty
+        if len(existing) == len(required_subfolders) and has_videos and has_jsons:
+            status = "complete"
+        elif len(existing) > 0 or has_videos:
+            status = "partial"
+        else:
+            status = "empty"
+            
+        return {
+            "name": folder_path.name,
+            "path": str(folder_path),
+            "status": status,
+            "subfolders": existing,
+            "has_videos": has_videos,
+            "has_jsons": has_jsons,
+            "has_annotations": (folder_path / "anotacoes").exists(),
+            "has_reid": (folder_path / "reid").exists(),
+        }
+    
+    result = {
+        "processamentos": [],
+        "reidentificacoes": [],
+        "datasets": []
+    }
+    
+    # 1. Processamentos
+    proc_dir = cm.PROCESSING_OUTPUT_DIR
+    if proc_dir.exists():
+        for folder in proc_dir.iterdir():
+            if folder.is_dir() and not folder.name.startswith('.'):
+                info = check_folder_status(folder, ["videos", "jsons", "predicoes"])
+                if info:
+                    result["processamentos"].append(info)
+    
+    # 2. Reidentificações
+    reid_dir = cm.REID_MANUAL_OUTPUT_DIR
+    if reid_dir.exists():
+        for folder in reid_dir.iterdir():
+            if folder.is_dir() and not folder.name.startswith('.'):
+                info = check_folder_status(folder, ["videos", "jsons", "predicoes"])
+                if info:
+                    result["reidentificacoes"].append(info)
+    
+    # 3. Datasets (para treinamento)
+    datasets_dir = cm.DATASETS_DIR if hasattr(cm, 'DATASETS_DIR') else cm.BACKEND_DIR / "datasets"
+    if datasets_dir.exists():
+        for folder in datasets_dir.iterdir():
+            if folder.is_dir() and not folder.name.startswith('.'):
+                # Para datasets, verificamos se tem train/test splits
+                has_train = (folder / "train").exists()
+                has_test = (folder / "test").exists()
+                result["datasets"].append({
+                    "name": folder.name,
+                    "path": str(folder),
+                    "status": "complete" if has_train and has_test else "partial" if has_train or has_test else "empty",
+                    "has_train": has_train,
+                    "has_test": has_test,
+                })
+    
+    return {"status": "success", "data": result}
 
 
 if __name__ == "__main__":

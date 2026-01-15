@@ -170,15 +170,19 @@ def renderizar_video_limpo(video_in, video_out, registros_processados, cut_list)
     H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     
-    writer = cv2.VideoWriter(
-        str(video_out),
-        cv2.VideoWriter_fourcc(*"avc1"),
-        fps, (W, H)
-    )
-    if not writer.isOpened():
-        print(Fore.RED + f"[ERRO] Falha ao iniciar VideoWriter (ReID) com codec avc1.")
-        # Como é interativo, talvez fallback?
-        # Mas para web precisa de avc1.
+    writer = None
+    codecs = ["avc1", "mp4v", "XVID"]
+    
+    for c in codecs:
+        fourcc = cv2.VideoWriter_fourcc(*c)
+        temp_writer = cv2.VideoWriter(str(video_out), fourcc, fps, (W, H))
+        if temp_writer.isOpened():
+            writer = temp_writer
+            print(Fore.BLUE + f"[INFO] VideoWriter (ReID) aberto com codec: {c}")
+            break
+            
+    if not writer or not writer.isOpened():
+        print(Fore.RED + f"[ERRO] Falha ao iniciar VideoWriter (ReID).")
         return
 
     # Indexa registros processados pelo NOVO número de frame
@@ -240,6 +244,69 @@ def renderizar_video_limpo(video_in, video_out, registros_processados, cut_list)
 
     cap.release()
     writer.release()
+
+
+def renderizar_video_cortado_raw(video_in, video_out, cut_list):
+    """
+    Gera uma versão 'RAW' (limpa/original) do vídeo, mas aplicando os cortes temporais.
+    Usado para garantir que a pasta 'videos' do dataset de saída tenha
+    o mesmo conteúdo temporal que o JSON e as predições.
+    """
+    cap = cv2.VideoCapture(str(video_in))
+    if not cap.isOpened():
+        print(Fore.RED + f"[ERRO] Falha ao abrir vídeo raw para corte: {video_in}")
+        return
+    
+    W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    
+    # Garantir diretório
+    Path(video_out).parent.mkdir(parents=True, exist_ok=True)
+
+    # Tenta codecs
+    codecs = ["avc1", "mp4v", "XVID"]
+    writer = None
+    
+    for c in codecs:
+        fourcc = cv2.VideoWriter_fourcc(*c)
+        temp_writer = cv2.VideoWriter(str(video_out), fourcc, fps, (W, H))
+        if temp_writer.isOpened():
+            writer = temp_writer
+            print(Fore.BLUE + f"[INFO] VideoWriter aberto com codec: {c}")
+            break
+        else:
+            print(Fore.YELLOW + f"[AVISO] Codec {c} falhou. Tentando próximo...")
+            
+    if not writer or not writer.isOpened():
+        print(Fore.RED + f"[ERRO_CRITICO] Falha ao iniciar VideoWriter (Raw Cut). Nenhum codec funcionou.")
+        cap.release()
+        return
+
+    # Pré-computar frames cortados para lookup rápido
+    cut_set = _build_cut_set(cut_list)
+    
+    input_frame_idx = 1
+    frames_written = 0
+    
+    while True:
+        ok, frame = cap.read()
+        if not ok: break
+
+        # Se este frame original está na lista de corte, pulamos
+        if verificar_corte(input_frame_idx, cut_set):
+            input_frame_idx += 1
+            continue
+
+        # Se não foi cortado, grava o frame original (limpo)
+        writer.write(frame)
+        frames_written += 1
+        input_frame_idx += 1
+
+    print(Fore.GREEN + f"[OK] Video Raw Cortado: {frames_written} frames salvos em {video_out}")
+    cap.release()
+    writer.release()
+
 
 # ==============================================================================
 # 2. PLAYER INTERATIVO

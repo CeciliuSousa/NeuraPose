@@ -117,6 +117,9 @@ export const APIService = {
     removeFromReidAgenda: (videoId: string, rootPath?: string) => api.delete(`/reid/agenda/${videoId}`, { params: { root_path: rootPath } }),
 
     batchApplyReID: (data: { videos: any[], root_path?: string, output_path?: string }) => api.post('/reid/batch-apply', data),
+
+    // Datasets Manager
+    listAllDatasets: () => api.get<{ status: string, data: any }>('/datasets/list'),
 };
 
 export default api;

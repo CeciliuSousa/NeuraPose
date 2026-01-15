@@ -254,7 +254,7 @@ export default function AnotacaoPage() {
                     ) : (
                         <>
                             {/* Video Player */}
-                            <VideoPlayer src={videoSrc} fps={30} />
+                            <VideoPlayer key={selectedVideo.video_id} src={videoSrc} fps={30} />
 
                             {/* Mensagem de feedback */}
                             <StatusMessage message={message} onClose={() => setMessage('')} autoCloseDelay={5000} className="mb-4" />

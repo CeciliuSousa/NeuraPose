@@ -26,25 +26,7 @@ export default function ReidPage() {
         });
     }, []);
 
-    // Calcula caminho de saída baseado na entrada
-    const outputPath = useMemo(() => {
-        if (!inputPath) return '';
-        // Extrai nome da pasta de entrada e gera nome de saída
-        const parts = inputPath.replace(/\\/g, '/').split('/');
-        let datasetName = parts[parts.length - 1];
-        if (['predicoes', 'jsons', 'videos'].includes(datasetName)) {
-            datasetName = parts[parts.length - 2] || datasetName;
-        }
-        // Encontra o diretório base (neurapose_backend)
-        const backendIdx = parts.findIndex(p => p === 'neurapose_backend');
-        if (backendIdx >= 0) {
-            const basePath = parts.slice(0, backendIdx + 1).join('/');
-            return `${basePath}/resultados-reidentificacoes/${datasetName}-reidentificado`;
-        }
-        // Fallback: mesmo nível da entrada
-        const parentPath = parts.slice(0, -1).join('/');
-        return `${parentPath}/../resultados-reidentificacoes/${datasetName}-reidentificado`;
-    }, [inputPath]);
+
 
     // Current Video Edits
     const [swaps, setSwaps] = useState<{ src: number; tgt: number; start: number; end: number }[]>([]);
@@ -472,6 +454,7 @@ export default function ReidPage() {
                                 ${isDeleted ? 'border-red-500 opacity-50 grayscale pointer-events-none' : 'border-transparent'}
                             `}>
                                 <ReidPlayer
+                                    key={selectedVideo.id}
                                     src={`http://localhost:8000/reid/video/${selectedVideo.id}?root_path=${encodeURIComponent(inputPath)}`}
                                     reidData={playerReidData}
                                     swaps={swaps}
