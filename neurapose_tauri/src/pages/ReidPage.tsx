@@ -2,9 +2,9 @@ import { useState, useEffect, useMemo } from 'react';
 import { ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RotateCcw, FileVideo, FolderInput, Pencil } from 'lucide-react';
 import { APIService, ReIDVideo, ReIDData } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
-import { shortenPath } from '../lib/utils';
 import { FilterDropdown, FilterOption } from '../components/ui/FilterDropdown';
 import { StatusMessage } from '../components/ui/StatusMessage';
+import { TerminalModal } from '../components/ui/TerminalModal';
 import { ReidPlayer } from '../components/ReidPlayer';
 
 
@@ -44,6 +44,11 @@ export default function ReidPage() {
 
     // Explorer
     const [explorerOpen, setExplorerOpen] = useState(false);
+
+    // Terminal Modal
+    const [terminalOpen, setTerminalOpen] = useState(false);
+    const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+    const [terminalProcessing, setTerminalProcessing] = useState(false);
 
     // Transform Data for Player - API returns 1-indexed frames
     const playerReidData = useMemo(() => {
@@ -92,8 +97,8 @@ export default function ReidPage() {
     const filterOptions: FilterOption[] = useMemo(() => [
         { key: 'all', label: 'Todos os Vídeos', count: videos.length },
         { key: 'pending', label: 'Pendentes', count: stats.pending, color: 'yellow-500' },
-        { key: 'processed', label: 'Processados', count: stats.processed, color: 'green-500' },
-        { key: 'excluded', label: 'Excluídos', count: stats.excluded, color: 'red-500' },
+        { key: 'processed', label: 'Re-identificados', count: stats.processed, color: 'green-500' },
+        { key: 'excluded', label: 'Removidos', count: stats.excluded, color: 'red-500' },
     ], [videos.length, stats]);
 
     const loadAgenda = async () => {
@@ -121,11 +126,9 @@ export default function ReidPage() {
     };
 
     useEffect(() => {
-        const savedInput = localStorage.getItem('np_reid_input');
-        if (savedInput) setInputPath(savedInput);
-
+        // Sempre usar o root do backend, sem persistência em localStorage
         APIService.getConfig().then(res => {
-            if (res.data.status === 'success' && !savedInput) {
+            if (res.data.status === 'success') {
                 setInputPath(res.data.paths.processamentos || '');
             }
         });
@@ -135,7 +138,7 @@ export default function ReidPage() {
         if (inputPath) {
             loadVideos();
             loadAgenda();
-            localStorage.setItem('np_reid_input', inputPath);
+            // Não salvar em localStorage - sempre começar do root
         }
     }, [inputPath]);
 
@@ -314,25 +317,67 @@ export default function ReidPage() {
             return;
         }
 
-        // if (!confirm(`Processar ${list.length} vídeos? \nIsso aplicará cortes, trocas e REMOÇÕES permanentemente.`)) return;
-
+        // Abre modal e inicia estado de processamento
+        setTerminalOpen(true);
+        setTerminalProcessing(true);
+        setTerminalLogs(['[INFO] Iniciando processamento de re-identificação...', `[INFO] ${list.length} vídeos na fila`]);
         setLoading(true);
+        setMessage('');
+
         try {
+            // Limpa logs anteriores no backend
+            await APIService.clearLogs();
+
             await APIService.batchApplyReID({
                 videos: list,
                 root_path: inputPath,
             });
-            setMessage(`✅ Processamento iniciado com sucesso! Arquivos salvos.`);
+
+            // Polling de logs durante processamento
+            const pollLogs = async () => {
+                try {
+                    const res = await APIService.getLogs();
+                    if (res.data.logs && res.data.logs.length > 0) {
+                        setTerminalLogs(res.data.logs);
+                    }
+
+                    const health = await APIService.healthCheck();
+                    if (!health.data.processing) {
+                        setTerminalProcessing(false);
+                        setLoading(false);
+                        return; // Para polling
+                    }
+
+                    // Continua polling
+                    setTimeout(pollLogs, 500);
+                } catch (e) {
+                    console.error(e);
+                }
+            };
+
+            // Inicia polling
+            pollLogs();
+
+            // Adiciona mensagem de sucesso
+            setTerminalLogs(prev => [...prev, '[OK] Processamento concluído!']);
+            setTerminalProcessing(false);
             setBatchAnnotations({});
-            loadVideos(); // Refresh list to remove deleted videos
-            loadAgenda(); // RECARREGA O JSON ATUALIZADO DO BACKEND para atualizar status (verde/vermelho)
+            loadVideos();
+            loadAgenda();
             setSelectedVideo(null);
+
         } catch (error) {
             console.error(error);
-            setMessage("❌ Erro ao processar lote.");
-        } finally {
+            setTerminalLogs(prev => [...prev, '[ERRO] Falha ao processar lote']);
+            setTerminalProcessing(false);
             setLoading(false);
         }
+    };
+
+    const handleTerminalClose = () => {
+        setTerminalOpen(false);
+        setMessage('✅ Re-identificação processada com sucesso!');
+        setTimeout(() => setMessage(''), 5000);
     };
 
     // Status Color Helper
@@ -359,15 +404,21 @@ export default function ReidPage() {
 
                 <div className="flex items-center gap-3">
                     {/* Entrada */}
-                    <div className="flex items-center gap-2 bg-muted/30 p-1.5 rounded-lg border border-border">
-                        <span className="text-[10px] font-bold uppercase text-muted-foreground px-2">Entrada</span>
-                        <div className="h-4 w-px bg-border"></div>
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="text"
+                            value={inputPath ? inputPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
+                            title={inputPath}
+                            readOnly
+                            className="w-64 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
+                            placeholder="Selecione uma pasta para re-identificar..."
+                            onClick={() => setExplorerOpen(true)}
+                        />
                         <button
                             onClick={() => setExplorerOpen(true)}
-                            className="text-xs flex items-center gap-2 hover:text-primary transition-colors px-2 font-mono"
-                            title={inputPath}
+                            className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
                         >
-                            {shortenPath(inputPath) || "Selecionar Pasta..."} <FolderInput className="w-3.5 h-3.5" />
+                            <FolderInput className="w-4 h-4" />
                         </button>
                     </div>
                     <button
@@ -565,33 +616,6 @@ export default function ReidPage() {
                                         <Save className="w-5 h-5" />
                                         AGENDAR ALTERAÇÕES DESTE VÍDEO
                                     </button>
-
-                                    {/* Action Bar / Stats (Moved from Footer) */}
-                                    <div className="p-4 bg-secondary/30 border border-border rounded-xl flex items-center justify-between">
-                                        <div className="flex gap-4 text-sm">
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2.5 h-2.5 rounded-full bg-yellow-500 shadow shadow-yellow-500/50"></span>
-                                                <span className="text-muted-foreground">Pendentes: <b className="text-foreground text-lg">{stats.pending}</b></span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow shadow-green-500/50"></span>
-                                                <span className="text-muted-foreground">Processar: <b className="text-foreground text-lg">{Object.values(batchAnnotations).filter((v: any) => v.action !== 'delete').length}</b></span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow shadow-red-500/50"></span>
-                                                <span className="text-muted-foreground">Remover: <b className="text-foreground text-lg">{Object.values(batchAnnotations).filter((v: any) => v.action === 'delete').length}</b></span>
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            onClick={handleApplyBatch}
-                                            disabled={Object.keys(batchAnnotations).length === 0 || loading}
-                                            className="px-8 py-3 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-primary/10 flex items-center gap-2 transition-all"
-                                        >
-                                            <Save className="w-4 h-4" />
-                                            {loading ? "Processando..." : "Salvar Alterações"}
-                                        </button>
-                                    </div>
                                 </div>
                             )}
                         </div>
@@ -602,6 +626,35 @@ export default function ReidPage() {
                         </div>
                     )}
                 </div>
+            </div>
+
+            {/* Footer Fixo com Contadores e Botão Salvar */}
+            <div className="fixed bottom-0 left-64 right-0 bg-card/95 backdrop-blur-sm border-t border-border px-8 py-3 flex items-center justify-between z-40">
+                <div className="flex items-center gap-6 text-sm">
+                    <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                        <span className="text-muted-foreground">Pendentes:</span>
+                        <span className="font-bold text-yellow-500">{stats.pending}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                        <span className="text-muted-foreground">Re-identificados:</span>
+                        <span className="font-bold text-green-500">{stats.processed}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                        <span className="text-muted-foreground">Removidos:</span>
+                        <span className="font-bold text-red-500">{stats.excluded}</span>
+                    </div>
+                </div>
+                <button
+                    onClick={handleApplyBatch}
+                    disabled={Object.keys(batchAnnotations).length === 0 || loading}
+                    className="px-8 py-3 bg-primary text-primary-foreground text-sm font-bold rounded-lg hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-primary/10 flex items-center gap-2 transition-all"
+                >
+                    <Save className="w-4 h-4" />
+                    {loading ? "Processando..." : "Salvar Alterações"}
+                </button>
             </div>
 
             <FileExplorerModal
@@ -631,6 +684,17 @@ export default function ReidPage() {
                     return true;
                 }}
             />
-        </div>
+
+            {/* Terminal Modal para processamento */}
+            <TerminalModal
+                isOpen={terminalOpen}
+                title="Console de Re-identificação"
+                logs={terminalLogs}
+                isProcessing={terminalProcessing}
+                onClose={() => setTerminalOpen(false)}
+                autoCloseDelay={3000}
+                onAutoClose={handleTerminalClose}
+            />
+        </div >
     );
 }

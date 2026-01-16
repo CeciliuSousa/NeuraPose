@@ -4,11 +4,12 @@ import {
     Video,
     ScanFace,
     PenTool,
-    FolderOpen,
+    // FolderOpen,
     Scissors,
     FileOutput,
     Dumbbell,
     TestTube2,
+    FileBarChart,
     Settings,
     Menu,
     X,
@@ -29,6 +30,7 @@ const menuItems = [
     { name: 'Converter .pt', href: '/converter', icon: FileOutput },
     { name: 'Treinamento', href: '/treino', icon: Dumbbell },
     { name: 'Testes', href: '/testes', icon: TestTube2 },
+    { name: 'Relatórios', href: '/relatorios', icon: FileBarChart },
     { name: 'Configurações', href: '/configuracao', icon: Settings },
 ];
 

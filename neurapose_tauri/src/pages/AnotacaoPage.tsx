@@ -6,14 +6,14 @@ import {
     FolderInput,
     RefreshCcw,
     Clock,
-    CheckCircle2 // Mantido se usado em outro lugar (ex: lista), mas verifiquei e só era usado na msg.
+    CheckCircle2
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
-import { shortenPath } from '../lib/utils';
 import { VideoPlayer } from '../components/ui/VideoPlayer';
 import { FilterDropdown, FilterOption } from '../components/ui/FilterDropdown';
 import { StatusMessage } from '../components/ui/StatusMessage';
+import { TerminalModal } from '../components/ui/TerminalModal';
 
 interface VideoItem {
     video_id: string;
@@ -44,6 +44,11 @@ export default function AnotacaoPage() {
     // Filtro e UI
     const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'annotated'>('all');
     const [explorerOpen, setExplorerOpen] = useState(false);
+
+    // Terminal Modal
+    const [terminalOpen, setTerminalOpen] = useState(false);
+    const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+    const [terminalProcessing, setTerminalProcessing] = useState(false);
 
     // Stats
     const stats = useMemo(() => {
@@ -132,22 +137,67 @@ export default function AnotacaoPage() {
 
     const handleSave = async () => {
         if (!selectedVideo || !inputPath) return;
+
+        // Abre modal e inicia estado de processamento
+        setTerminalOpen(true);
+        setTerminalProcessing(true);
+        setTerminalLogs(['[INFO] Iniciando salvamento de anotações...']);
         setSaving(true);
+        setMessage('');
+
         try {
+            // Limpa logs anteriores no backend
+            await APIService.clearLogs();
+
+            // Inicia salvamento
             await APIService.saveAnnotations({
                 video_stem: selectedVideo.video_id,
                 annotations: annotations,
                 root_path: inputPath
             });
-            setMessage("✅ Anotações salvas com sucesso!");
+
+            // Polling de logs durante processamento
+            const pollLogs = async () => {
+                try {
+                    const res = await APIService.getLogs();
+                    if (res.data.logs && res.data.logs.length > 0) {
+                        setTerminalLogs(res.data.logs);
+                    }
+
+                    const health = await APIService.healthCheck();
+                    if (!health.data.processing) {
+                        setTerminalProcessing(false);
+                        setSaving(false);
+                        return; // Para polling
+                    }
+
+                    // Continua polling
+                    setTimeout(pollLogs, 500);
+                } catch (e) {
+                    console.error(e);
+                }
+            };
+
+            // Inicia polling
+            pollLogs();
+
+            // Adiciona mensagem de sucesso aos logs (aparece após o processamento)
+            setTerminalLogs(prev => [...prev, '[OK] Anotações salvas com sucesso!']);
+            setTerminalProcessing(false);
             loadVideos();
-            setTimeout(() => setMessage(''), 3000);
+
         } catch (err) {
             console.error(err);
-            setMessage("❌ Erro ao salvar anotações");
-        } finally {
+            setTerminalLogs(prev => [...prev, '[ERRO] Falha ao salvar anotações']);
+            setTerminalProcessing(false);
             setSaving(false);
         }
+    };
+
+    const handleTerminalClose = () => {
+        setTerminalOpen(false);
+        setMessage('✅ Anotações salvas com sucesso!');
+        setTimeout(() => setMessage(''), 5000);
     };
 
     const getVideoStatusColor = (status: string) => {
@@ -181,15 +231,22 @@ export default function AnotacaoPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-muted/30 p-1.5 rounded-lg border border-border">
-                        <span className="text-[10px] font-bold uppercase text-muted-foreground px-2">Entrada</span>
-                        <div className="h-4 w-px bg-border"></div>
+                    {/* Entrada */}
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="text"
+                            value={inputPath ? inputPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
+                            title={inputPath}
+                            readOnly
+                            className="w-64 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
+                            placeholder="Selecione uma pasta para anotar..."
+                            onClick={() => setExplorerOpen(true)}
+                        />
                         <button
                             onClick={() => setExplorerOpen(true)}
-                            className="text-xs flex items-center gap-2 hover:text-primary transition-colors px-2 font-mono"
-                            title={inputPath}
+                            className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
                         >
-                            {shortenPath(inputPath) || "Selecionar Pasta..."} <FolderInput className="w-3.5 h-3.5" />
+                            <FolderInput className="w-4 h-4" />
                         </button>
                     </div>
                     <button
@@ -345,6 +402,17 @@ export default function AnotacaoPage() {
                     return true;
                 }}
             />
-        </div>
+
+            {/* Terminal Modal para salvamento */}
+            <TerminalModal
+                isOpen={terminalOpen}
+                title="Console de Anotações"
+                logs={terminalLogs}
+                isProcessing={terminalProcessing}
+                onClose={() => setTerminalOpen(false)}
+                autoCloseDelay={3000}
+                onAutoClose={handleTerminalClose}
+            />
+        </div >
     );
 }

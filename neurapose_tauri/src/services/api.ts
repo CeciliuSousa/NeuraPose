@@ -38,12 +38,18 @@ export interface SplitRequest {
     output_root?: string;
     train_split?: string;
     test_split?: string;
+    train_ratio?: number; // Porcentagem de treino (0.0 a 1.0)
 }
 
 export interface TestRequest {
     model_path?: string;
     dataset_path?: string;
     device?: string;
+}
+
+export interface ConvertRequest {
+    dataset_path: string;  // Caminho do dataset (datasets/<nome>)
+    extension?: string;    // Extensão de saída (.pt, .pth)
 }
 
 export interface BrowseResponse {
@@ -120,6 +126,9 @@ export const APIService = {
 
     // Datasets Manager
     listAllDatasets: () => api.get<{ status: string, data: any }>('/datasets/list'),
+
+    // Conversão de Dataset para .pt
+    convertDataset: (data: ConvertRequest) => api.post('/convert/pt', data),
 };
 
 export default api;

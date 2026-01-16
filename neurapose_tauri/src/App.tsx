@@ -11,6 +11,7 @@ import SplitPage from './pages/SplitPage';
 import ConverterPage from './pages/ConverterPage';
 import TreinoPage from './pages/TreinoPage';
 import TestesPage from './pages/TestesPage';
+import RelatoriosPage from './pages/RelatoriosPage';
 import ConfiguracaoPage from './pages/ConfiguracaoPage';
 
 function App() {
@@ -32,6 +33,7 @@ function App() {
             <Route path="/converter" element={<ConverterPage />} />
             <Route path="/treino" element={<TreinoPage />} />
             <Route path="/testes" element={<TestesPage />} />
+            <Route path="/relatorios" element={<RelatoriosPage />} />
             <Route path="/configuracao" element={<ConfiguracaoPage />} />
           </Routes>
         </main>

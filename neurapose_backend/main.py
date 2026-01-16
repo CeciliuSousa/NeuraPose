@@ -143,12 +143,31 @@ class SplitRequest(BaseModel):
     output_root: Optional[str] = None
     train_split: str = "treino"
     test_split: str = "teste"
+    train_ratio: float = 0.85  # Porcentagem de treino (0.0 a 1.0)
 
 class TestRequest(BaseModel):
     model_path: Optional[str] = None
     dataset_path: Optional[str] = None
     device: str = "cuda"
 
+class ConvertRequest(BaseModel):
+    dataset_path: str  # Caminho do dataset (datasets/<nome>)
+    extension: str = ".pt"  # Extensão de saída (.pt, .pth)
+
+class TrainStartRequest(BaseModel):
+    dataset_path: str
+    model_type: str = "tft"
+    epochs: int = 5000
+    batch_size: int = 32
+    lr: float = 0.0003
+    dropout: float = 0.3
+    hidden_size: int = 128
+    num_layers: int = 2
+    num_heads: int = 8
+    kernel_size: int = 5
+
+class TrainRetrainRequest(TrainStartRequest):
+    pretrained_path: str  # Caminho do modelo pré-treinado
 
 # ==============================================================
 # GPU MEMORY MANAGEMENT
@@ -610,6 +629,8 @@ def api_get_config():
             "reidentificacoes": str(cm.REID_OUTPUT_DIR),
             "datasets": str(cm.ROOT / "datasets"),
             "modelos": str(cm.TRAINED_MODELS_DIR),
+            "modelos_treinados": str(cm.ROOT / "modelos-lstm-treinados"),
+            "relatorios_testes": str(cm.ROOT / "relatorios-testes"),
             "anotacoes": str(cm.ANNOTATIONS_OUTPUT_DIR),
             "root": str(cm.ROOT)
         },
@@ -828,9 +849,132 @@ async def start_training(req: TrainRequest, background_tasks: BackgroundTasks):
     background_tasks.add_task(run_training_task, req)
     return {"status": "started", "detail": f"Training {req.model_name}"}
 
-# ==============================================================
-# RE-ID MANUAL ENDPOINTS
-# ==============================================================
+
+@app.post("/train/start")
+async def train_model_start(req: TrainStartRequest, background_tasks: BackgroundTasks):
+    """Inicia treinamento de novo modelo com parâmetros configuráveis."""
+    from LSTM.pipeline.treinador import main as train_main
+    
+    dataset_path = Path(req.dataset_path).resolve()
+    if not dataset_path.exists():
+        raise HTTPException(status_code=404, detail=f"Dataset não encontrado: {dataset_path}")
+    
+    # Busca arquivo .pt na estrutura esperada
+    data_file = dataset_path / "treino" / "data" / "data.pt"
+    if not data_file.exists():
+        data_file = dataset_path / "data.pt"  # fallback
+    if not data_file.exists():
+        # Busca em qualquer lugar
+        pt_files = list(dataset_path.rglob("*.pt"))
+        if pt_files:
+            data_file = pt_files[0]
+        else:
+            raise HTTPException(status_code=400, detail=f"Arquivo .pt não encontrado em {dataset_path}")
+    
+    # Nome do dataset para nomenclatura
+    dataset_name = dataset_path.name
+    
+    def run_train():
+        state.is_running = True
+        with CaptureOutput():
+            try:
+                import sys
+                # Configura argumentos para o treinador
+                sys.argv = [
+                    "treinador.py",
+                    "--dataset", str(data_file),
+                    "--model", req.model_type,
+                    "--epochs", str(req.epochs),
+                    "--batch_size", str(req.batch_size),
+                    "--lr", str(req.lr),
+                    "--dropout", str(req.dropout),
+                    "--hidden_size", str(req.hidden_size),
+                    "--num_layers", str(req.num_layers),
+                    "--num_heads", str(req.num_heads),
+                    "--name", dataset_name
+                ]
+                
+                logger.info(f"[TREINO] Iniciando treinamento")
+                logger.info(f"[TREINO] Dataset: {data_file}")
+                logger.info(f"[TREINO] Modelo: {req.model_type}")
+                logger.info(f"[TREINO] Epochs: {req.epochs}")
+                
+                train_main()
+                
+                logger.info(f"[OK] Treinamento concluído!")
+            except Exception as e:
+                logger.error(f"[ERRO] Treinamento falhou: {e}")
+            finally:
+                state.reset()
+    
+    background_tasks.add_task(run_train)
+    return {"status": "started", "message": f"Treinamento iniciado: {dataset_name} com {req.model_type}"}
+
+
+@app.post("/train/retrain")
+async def train_model_retrain(req: TrainRetrainRequest, background_tasks: BackgroundTasks):
+    """Retreina modelo existente com novos dados ou mais épocas."""
+    from LSTM.pipeline.treinador import main as train_main
+    
+    dataset_path = Path(req.dataset_path).resolve()
+    pretrained_path = Path(req.pretrained_path).resolve()
+    
+    if not dataset_path.exists():
+        raise HTTPException(status_code=404, detail=f"Dataset não encontrado: {dataset_path}")
+    if not pretrained_path.exists():
+        raise HTTPException(status_code=404, detail=f"Modelo pré-treinado não encontrado: {pretrained_path}")
+    
+    # Busca arquivo .pt
+    data_file = dataset_path / "treino" / "data" / "data.pt"
+    if not data_file.exists():
+        pt_files = list(dataset_path.rglob("*.pt"))
+        data_file = pt_files[0] if pt_files else None
+    if not data_file:
+        raise HTTPException(status_code=400, detail=f"Arquivo .pt não encontrado em {dataset_path}")
+    
+    # Busca model_best.pt no modelo pré-treinado
+    model_best = pretrained_path / "model_best.pt"
+    if not model_best.exists():
+        model_best = pretrained_path  # Assume que é o arquivo diretamente
+    
+    dataset_name = dataset_path.name
+    
+    def run_retrain():
+        state.is_running = True
+        with CaptureOutput():
+            try:
+                import sys
+                sys.argv = [
+                    "treinador.py",
+                    "--dataset", str(data_file),
+                    "--pretrained", str(model_best),
+                    "--model", req.model_type,
+                    "--epochs", str(req.epochs),
+                    "--batch_size", str(req.batch_size),
+                    "--lr", str(req.lr),
+                    "--dropout", str(req.dropout),
+                    "--hidden_size", str(req.hidden_size),
+                    "--num_layers", str(req.num_layers),
+                    "--num_heads", str(req.num_heads),
+                    "--name", f"{dataset_name}-retreinado"
+                ]
+                
+                logger.info(f"[RETRAIN] Iniciando retreinamento")
+                logger.info(f"[RETRAIN] Dataset: {data_file}")
+                logger.info(f"[RETRAIN] Modelo base: {model_best}")
+                
+                train_main()
+                
+                logger.info(f"[OK] Retreinamento concluído!")
+            except Exception as e:
+                logger.error(f"[ERRO] Retreinamento falhou: {e}")
+            finally:
+                state.reset()
+    
+    background_tasks.add_task(run_retrain)
+    return {"status": "started", "message": f"Retreinamento iniciado: {dataset_name}"}
+
+
 
 @app.get("/reid/list")
 def list_reid_candidates(root_path: Optional[str] = None):
@@ -1468,7 +1612,8 @@ async def split_dataset(req: SplitRequest, background_tasks: BackgroundTasks):
                     dataset_name=req.dataset_name,
                     output_root=output_root,
                     train_split=req.train_split,
-                    test_split=req.test_split
+                    test_split=req.test_split,
+                    train_ratio=req.train_ratio
                 )
             except Exception as e:
                 logger.error(f"Erro no split de dataset: {e}")
@@ -1478,6 +1623,70 @@ async def split_dataset(req: SplitRequest, background_tasks: BackgroundTasks):
     background_tasks.add_task(run_split_task)
     return {"status": "started", "message": f"Split iniciado para o dataset {req.dataset_name}"}
 
+
+@app.post("/convert/pt")
+async def convert_dataset_to_pt(req: ConvertRequest, background_tasks: BackgroundTasks):
+    """Converte JSONs de anotações para formato PyTorch (.pt)."""
+    from pre_processamento.converte_pt import main as converte_main
+    
+    dataset_path = Path(req.dataset_path).resolve()
+    
+    if not dataset_path.exists():
+        raise HTTPException(status_code=404, detail=f"Dataset não encontrado: {dataset_path}")
+    
+    # Verifica se tem estrutura esperada
+    jsons_dir = dataset_path / "jsons"
+    labels_path = dataset_path / "anotacoes" / "labels.json"
+    
+    if not jsons_dir.exists():
+        raise HTTPException(status_code=400, detail=f"Pasta jsons não encontrada em {dataset_path}")
+    if not labels_path.exists():
+        raise HTTPException(status_code=400, detail=f"labels.json não encontrado em {dataset_path}/anotacoes/")
+    
+    def run_conversion():
+        state.is_running = True
+        with CaptureOutput():
+            try:
+                # Temporariamente ajusta config para usar o dataset correto
+                import config_master as cm
+                original_jsons = cm.PROCESSING_JSONS_DIR
+                original_labels = cm.PROCESSING_ANNOTATIONS_DIR
+                original_output = cm.TEST_DATASETS_ROOT.parent / cm.PROCESSING_DATASET
+                
+                # Atualiza paths para o dataset selecionado
+                cm.PROCESSING_JSONS_DIR = jsons_dir
+                cm.PROCESSING_ANNOTATIONS_DIR = dataset_path / "anotacoes"
+                
+                # Nome do dataset
+                dataset_name = dataset_path.name
+                
+                # Cria diretório de saída
+                out_dir = cm.TEST_DATASETS_ROOT.parent / dataset_name / "treino" / "data"
+                out_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Ajusta extensão se necessário
+                out_file = out_dir / f"data{req.extension}"
+                
+                logger.info(f"[CONVERTE] Iniciando conversão de {dataset_name}")
+                logger.info(f"[CONVERTE] JSONs: {jsons_dir}")
+                logger.info(f"[CONVERTE] Labels: {labels_path}")
+                logger.info(f"[CONVERTE] Saída: {out_file}")
+                
+                # Executa conversão
+                converte_main()
+                
+                logger.info(f"[OK] Conversão concluída! Arquivo salvo em {out_file}")
+                
+            except Exception as e:
+                logger.error(f"[ERRO] Conversão falhou: {e}")
+            finally:
+                # Restaura configs originais
+                cm.PROCESSING_JSONS_DIR = original_jsons
+                cm.PROCESSING_ANNOTATIONS_DIR = original_labels
+                state.reset()
+    
+    background_tasks.add_task(run_conversion)
+    return {"status": "started", "message": f"Conversão iniciada para {dataset_path.name}"}
 
 # Models e Endpoints ReID Batch
 class ReidBatchApplyRequest(BaseModel):

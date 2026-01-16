@@ -1,16 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
     Scissors,
     FolderInput,
     PieChart,
     Play,
-    Terminal as TerminalIcon,
     RefreshCcw
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
-import { shortenPath } from '../lib/utils';
+import { Terminal } from '../components/ui/Terminal';
+import { StatusMessage } from '../components/ui/StatusMessage';
 
 // Opções de porcentagem para split
 const SPLIT_OPTIONS = [
@@ -21,10 +21,10 @@ const SPLIT_OPTIONS = [
     { value: 90, label: '90% / 10%' },
 ];
 
-export default function DatasetsPage() {
+export default function SplitPage() {
     const [loading, setLoading] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
-    const terminalRef = useRef<HTMLDivElement>(null);
+    const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'processing' } | null>(null);
 
     const [inputDir, setInputDir] = useState('');
     const [trainPercent, setTrainPercent] = useState(80);
@@ -56,7 +56,7 @@ export default function DatasetsPage() {
 
     // Polling logs
     useEffect(() => {
-        let interval: any;
+        let interval: ReturnType<typeof setInterval>;
         if (loading) {
             interval = setInterval(async () => {
                 try {
@@ -66,19 +66,13 @@ export default function DatasetsPage() {
                     const health = await APIService.healthCheck();
                     if (!health.data.processing) {
                         setLoading(false);
+                        setMessage({ text: '✅ Split concluído com sucesso!', type: 'success' });
                     }
                 } catch (e) { console.error(e); }
             }, 1000);
         }
         return () => { if (interval) clearInterval(interval); };
     }, [loading]);
-
-    // Auto-scroll terminal
-    useEffect(() => {
-        if (terminalRef.current) {
-            terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-        }
-    }, [logs]);
 
     const handleSplit = async () => {
         if (!inputDir) {
@@ -91,9 +85,9 @@ export default function DatasetsPage() {
             await APIService.splitDataset({
                 input_dir_process: inputDir,
                 dataset_name: datasetName,
-                // output_root: não enviamos, backend usa padrão (datasets/)
                 train_split: 'treino',
-                test_split: 'teste'
+                test_split: 'teste',
+                train_ratio: trainPercent / 100  // Converte 85% para 0.85
             });
         } catch (error: any) {
             setLoading(false);
@@ -124,11 +118,11 @@ export default function DatasetsPage() {
                                 <div className="flex gap-2">
                                     <input
                                         type="text"
-                                        value={shortenPath(inputDir)}
+                                        value={datasetName}
                                         title={inputDir}
                                         readOnly
                                         className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
-                                        placeholder="Selecione uma pasta..."
+                                        placeholder="Selecione uma pasta para split..."
                                         onClick={() => setExplorerOpen(true)}
                                     />
                                     <button
@@ -217,35 +211,27 @@ export default function DatasetsPage() {
 
                 {/* Terminal / Stats Panel */}
                 <div className="space-y-4">
-                    <div className="rounded-xl border border-border bg-card overflow-hidden">
-                        <div className="px-4 py-3 bg-muted/30 border-b border-border flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <TerminalIcon className="w-4 h-4 text-muted-foreground" />
-                                <span className="font-medium text-sm">Logs</span>
-                            </div>
-                            <button
-                                onClick={async () => {
-                                    setLogs([]);
-                                    try { await APIService.clearLogs(); } catch (e) { console.error(e); }
-                                }}
-                                className="text-[10px] uppercase font-bold text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                                Limpar
-                            </button>
-                        </div>
-                        <div
-                            ref={terminalRef}
-                            className="h-[400px] bg-black/90 p-4 font-mono text-xs text-green-400 overflow-y-auto"
-                        >
-                            {logs.length === 0 ? (
-                                <div className="text-muted-foreground italic">Aguardando execução...</div>
-                            ) : (
-                                logs.map((log, i) => (
-                                    <div key={i} className="whitespace-pre-wrap">{log}</div>
-                                ))
-                            )}
-                        </div>
-                    </div>
+                    {/* Status Message */}
+                    {message && (
+                        <StatusMessage
+                            message={message.text}
+                            type={message.type}
+                            onClose={() => setMessage(null)}
+                            autoCloseDelay={5000}
+                        />
+                    )}
+
+                    {/* Terminal Component */}
+                    <Terminal
+                        logs={logs}
+                        title="Console do Split"
+                        height="400px"
+                        isLoading={loading}
+                        onClear={async () => {
+                            setLogs([]);
+                            try { await APIService.clearLogs(); } catch (e) { console.error(e); }
+                        }}
+                    />
 
                     <div className="flex items-center justify-center p-8 border border-dashed border-border rounded-xl bg-muted/10">
                         <div className="text-center space-y-2">

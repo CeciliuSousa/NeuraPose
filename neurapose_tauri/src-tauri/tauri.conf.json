@@ -12,9 +12,10 @@
   "app": {
     "windows": [
       {
-        "title": "neurapose_tauri",
-        "width": 800,
-        "height": 600
+        "title": "NeuraPose",
+        "width": 1280,
+        "height": 800,
+        "maximized": true
       }
     ],
     "security": {

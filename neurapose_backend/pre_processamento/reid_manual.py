@@ -193,6 +193,9 @@ def renderizar_video_limpo(video_in, video_out, registros_processados, cut_list)
             frames_map[f] = []
         frames_map[f].append(r)
 
+    # CORREÇÃO: Converter cut_list (lista de dicts) para cut_set (set de ints)
+    cut_set = _build_cut_set(cut_list) if cut_list else set()
+
     input_frame_idx = 1
     output_frame_idx = 1 # O vídeo de saída começa do 1 e é contínuo
     
@@ -201,7 +204,7 @@ def renderizar_video_limpo(video_in, video_out, registros_processados, cut_list)
         if not ok: break
 
         # Se este frame original está na lista de corte, pulamos
-        if verificar_corte(input_frame_idx, cut_list):
+        if verificar_corte(input_frame_idx, cut_set):
             input_frame_idx += 1
             continue
 

@@ -86,7 +86,7 @@ def copy_test_files(videos, videos_dir_out, anotacoes_dir, label_dict):
     return subset_labels
 
 
-def run_split(root_path: Path, dataset_name: str, output_root: Path, train_split: str, test_split: str):
+def run_split(root_path: Path, dataset_name: str, output_root: Path, train_split: str, test_split: str, train_ratio: float = 0.85):
     # Paths base
     base = root_path
     videos_dir = base / "videos"
@@ -123,7 +123,11 @@ def run_split(root_path: Path, dataset_name: str, output_root: Path, train_split
     np.random.shuffle(furto_videos)
 
     min_count = min(len(normal_videos), len(furto_videos))
-    train_size_per_class = int(min_count * 0.85)
+    # Usa train_ratio recebido, com fallback seguro para datasets pequenos
+    train_size_per_class = max(1, int(min_count * train_ratio)) if min_count > 0 else 0
+    # Se após cálculo sobrar 0 para teste, ajusta para deixar pelo menos 1 para teste
+    if min_count > 1 and train_size_per_class >= min_count:
+        train_size_per_class = min_count - 1
 
     train_normal = normal_videos[:train_size_per_class]
     train_furto = furto_videos[:train_size_per_class]

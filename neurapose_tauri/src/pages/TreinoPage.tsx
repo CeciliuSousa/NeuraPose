@@ -1,62 +1,81 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
     Dumbbell,
-    Database,
     Play,
-    Split,
     RefreshCcw,
-    Terminal as TerminalIcon,
     FolderInput,
-    Layers
+    Settings2,
+    Zap,
+    RotateCcw
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { shortenPath } from '../lib/utils';
+import { Terminal } from '../components/ui/Terminal';
+import { StatusMessage } from '../components/ui/StatusMessage';
+
+// Modelos disponíveis com nomes extensos
+const MODEL_OPTIONS = [
+    { value: 'tft', label: 'Temporal Fusion Transformer', description: 'Melhor para séries temporais complexas' },
+    { value: 'lstm', label: 'LSTM Clássico', description: 'Redes neurais recorrentes padrão' },
+    { value: 'robust', label: 'RobustLSTM', description: 'LSTM com normalização robusta' },
+    { value: 'pooled', label: 'PooledLSTM', description: 'LSTM com pooling temporal' },
+    { value: 'bilstm', label: 'BiLSTM (Bidirecional)', description: 'Processa em ambas direções' },
+    { value: 'attention', label: 'AttentionLSTM', description: 'LSTM com mecanismo de atenção' },
+    { value: 'tcn', label: 'TCN (Temporal Conv. Network)', description: 'Convoluções temporais' },
+    { value: 'transformer', label: 'Transformer', description: 'Arquitetura de atenção pura' },
+    { value: 'wavenet', label: 'WaveNet', description: 'Convoluções causais dilatadas' },
+];
+
+// Valores padrão dos parâmetros (do config_master.py)
+const DEFAULT_PARAMS = {
+    epochs: 5000,       // Usuário pediu 5000 como padrão
+    batch_size: 32,
+    lr: 0.0003,
+    dropout: 0.3,
+    hidden_size: 128,
+    num_layers: 2,
+    num_heads: 8,
+    kernel_size: 5,
+};
+
+type TrainMode = 'treinar' | 'retreinar';
 
 export default function TreinoPage() {
-    const [activeTab, setActiveTab] = useState<'train' | 'split'>('train');
+    const [mode, setMode] = useState<TrainMode>('treinar');
     const [loading, setLoading] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
-    const terminalRef = useRef<HTMLDivElement>(null);
+    const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'processing' | 'info' } | null>(null);
 
-    // Train Config State
-    const [trainConfig, setTrainConfig] = useState({
-        epochs: 100,
-        batchSize: 32,
-        lr: 0.0003,
-        modelName: 'meu-modelo-neurapose',
-        datasetName: 'dataset-final',
-        temporalModel: 'tft'
-    });
+    // Dataset e Modelo selecionados
+    const [datasetPath, setDatasetPath] = useState('');
+    const [pretrainedPath, setPretrainedPath] = useState('');
 
-    // Split Config State
-    const [splitConfig, setSplitConfig] = useState({
-        inputDir: '',
-        datasetName: 'meu-dataset',
-        trainSplit: 'treino',
-        testSplit: 'teste'
-    });
+    // Parâmetros de treinamento
+    const [params, setParams] = useState(DEFAULT_PARAMS);
+    const [modelType, setModelType] = useState('tft');
+    const [device, setDevice] = useState<'cuda' | 'cpu'>('cuda');
 
-    const [explorerOpen, setExplorerOpen] = useState(false);
+    // Estados do Explorer
+    const [explorerOpen, setExplorerOpen] = useState<'dataset' | 'pretrained' | null>(null);
     const [roots, setRoots] = useState<Record<string, string>>({});
 
+    // Nomes derivados
+    const datasetName = datasetPath ? datasetPath.replace(/\\/g, '/').split('/').pop() || '' : '';
+
+    // Carregar caminhos do backend
     useEffect(() => {
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
                 setRoots(res.data.paths);
-                setSplitConfig(prev => ({
-                    ...prev,
-                    inputDir: res.data.paths.reidentificacoes || '' // Sempre usa o do backend, ignorando localStorage antigo se houver
-                }));
             }
         });
     }, []);
 
-
-    // Polling de Logs
+    // Polling de logs
     useEffect(() => {
-        let interval: any;
+        let interval: ReturnType<typeof setInterval>;
         if (loading) {
             interval = setInterval(async () => {
                 try {
@@ -66,6 +85,7 @@ export default function TreinoPage() {
                     const health = await APIService.healthCheck();
                     if (!health.data.processing) {
                         setLoading(false);
+                        setMessage({ text: '✅ Treinamento concluído!', type: 'success' });
                     }
                 } catch (e) { console.error(e); }
             }, 1000);
@@ -73,300 +93,356 @@ export default function TreinoPage() {
         return () => { if (interval) clearInterval(interval); };
     }, [loading]);
 
-    // Auto-scroll terminal
-    useEffect(() => {
-        if (terminalRef.current) {
-            terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-        }
-    }, [logs]);
-
     const handleTrain = async () => {
+        if (!datasetPath) {
+            setMessage({ text: 'Por favor, selecione um dataset para treinamento.', type: 'error' });
+            return;
+        }
+        if (mode === 'retreinar' && !pretrainedPath) {
+            setMessage({ text: 'Para retreinar, selecione um modelo pré-treinado.', type: 'error' });
+            return;
+        }
+
         setLoading(true);
-        setLogs(prev => [...prev, `[INFO] Iniciando treinamento...`]);
+        setMessage({ text: `⏳ Iniciando ${mode === 'treinar' ? 'treinamento' : 'retreinamento'}...`, type: 'processing' });
+        setLogs(prev => [...prev, `[INFO] Modo: ${mode.toUpperCase()}`]);
+        setLogs(prev => [...prev, `[INFO] Dataset: ${datasetName}`]);
+        setLogs(prev => [...prev, `[INFO] Modelo: ${MODEL_OPTIONS.find(m => m.value === modelType)?.label}`]);
+        setLogs(prev => [...prev, `[INFO] Hardware: ${device === 'cuda' ? 'GPU (CUDA)' : 'CPU'}`]);
+
         try {
-            await APIService.startTraining({
-                epochs: trainConfig.epochs,
-                batch_size: trainConfig.batchSize,
-                learning_rate: trainConfig.lr,
-                model_name: trainConfig.modelName,
-                dataset_name: trainConfig.datasetName,
-                temporal_model: trainConfig.temporalModel
+            const endpoint = mode === 'treinar' ? '/train/start' : '/train/retrain';
+            await fetch(`http://localhost:8000${endpoint}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    dataset_path: datasetPath,
+                    model_type: modelType,
+                    device: device,
+                    pretrained_path: mode === 'retreinar' ? pretrainedPath : undefined,
+                    ...params
+                })
             });
         } catch (error: any) {
             setLoading(false);
-            setLogs(prev => [...prev, `[ERRO] ${error.response?.data?.detail || error.message}`]);
+            setMessage({ text: `❌ Erro: ${error.message}`, type: 'error' });
+            setLogs(prev => [...prev, `[ERRO] ${error.message}`]);
         }
     };
 
-    const handleSplit = async () => {
-        if (!splitConfig.inputDir) {
-            alert("Selecione a pasta de entrada para o split.");
-            return;
-        }
-        setLoading(true);
-        setLogs(prev => [...prev, `[INFO] Iniciando divisão do dataset...`]);
-        try {
-            await APIService.splitDataset({
-                input_dir_process: splitConfig.inputDir,
-                dataset_name: splitConfig.datasetName,
-                train_split: splitConfig.trainSplit,
-                test_split: splitConfig.testSplit
-            });
-        } catch (error: any) {
-            setLoading(false);
-            setLogs(prev => [...prev, `[ERRO] ${error.response?.data?.detail || error.message}`]);
-        }
+    const resetParams = () => {
+        setParams(DEFAULT_PARAMS);
+        setMessage({ text: 'Parâmetros restaurados para valores padrão.', type: 'info' });
     };
 
     return (
-        <div className="space-y-6 max-w-6xl mx-auto">
+        <div className="space-y-6">
             <PageHeader
-                title="Pipeline de Inteligência"
-                description="Prepare seus dados e treine modelos temporais para detecção de anomalias."
+                title="Treinamento de Modelo"
+                description="Treine ou retreine modelos LSTM/Transformer para detecção de anomalias comportamentais."
             />
 
-            <div className="flex gap-4 p-1 bg-muted/50 rounded-2xl w-fit mb-6">
+            {/* Seletor de Modo */}
+            <div className="flex gap-2 p-1 bg-muted/50 rounded-xl w-fit">
                 <button
-                    onClick={() => setActiveTab('train')}
-                    className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'train' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'hover:bg-muted text-muted-foreground'}`}
+                    onClick={() => setMode('treinar')}
+                    className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${mode === 'treinar'
+                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+                        : 'hover:bg-muted text-muted-foreground'
+                        }`}
                 >
-                    <Dumbbell className="w-4 h-4" />
-                    Treinamento
+                    <Zap className="w-4 h-4" />
+                    Treinar Novo
                 </button>
                 <button
-                    onClick={() => setActiveTab('split')}
-                    className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-bold transition-all ${activeTab === 'split' ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20' : 'hover:bg-muted text-muted-foreground'}`}
+                    onClick={() => setMode('retreinar')}
+                    className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${mode === 'retreinar'
+                        ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                        : 'hover:bg-muted text-muted-foreground'
+                        }`}
                 >
-                    <Split className="w-4 h-4" />
-                    Gerar Dataset (Split)
+                    <RotateCcw className="w-4 h-4" />
+                    Retreinar
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            {/* Status Message */}
+            {message && (
+                <StatusMessage
+                    message={message.text}
+                    type={message.type}
+                    onClose={() => setMessage(null)}
+                    autoCloseDelay={message.type === 'success' ? 5000 : undefined}
+                />
+            )}
 
-                {/* Configuration Column */}
-                <div className="lg:col-span-12 xl:col-span-7 space-y-6">
+            <div className="grid gap-6 lg:grid-cols-2">
+                {/* Config Panel */}
+                <div className="space-y-6">
+                    {/* Dataset Selection */}
+                    <div className="rounded-xl border border-border bg-card p-6">
+                        <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                            <Dumbbell className="w-5 h-5 text-primary" />
+                            Dados de Entrada
+                        </h3>
 
-                    {activeTab === 'train' ? (
-                        <div className="bg-card border border-border rounded-2xl p-8 shadow-md">
-                            <h3 className="font-bold text-2xl mb-8 flex items-center gap-3">
-                                <Layers className="w-6 h-6 text-primary" />
-                                Hiperparâmetros de Treino
-                            </h3>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Identificador do Modelo</label>
+                        <div className="space-y-4">
+                            {/* Dataset Path */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Dataset (.pt)</label>
+                                <div className="flex gap-2">
                                     <input
                                         type="text"
-                                        className="w-full px-4 py-3 rounded-xl bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40 font-medium"
-                                        value={trainConfig.modelName}
-                                        onChange={e => setTrainConfig({ ...trainConfig, modelName: e.target.value })}
+                                        value={shortenPath(datasetPath)}
+                                        title={datasetPath}
+                                        readOnly
+                                        className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
+                                        placeholder="Selecione uma pasta para treinamento..."
+                                        onClick={() => setExplorerOpen('dataset')}
                                     />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Dataset para Treino</label>
-                                    <input
-                                        type="text"
-                                        className="w-full px-4 py-3 rounded-xl bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40 font-medium"
-                                        value={trainConfig.datasetName}
-                                        onChange={e => setTrainConfig({ ...trainConfig, datasetName: e.target.value })}
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Épocas</label>
-                                    <input
-                                        type="number"
-                                        className="w-full px-4 py-3 rounded-xl bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40"
-                                        value={trainConfig.epochs}
-                                        onChange={e => setTrainConfig({ ...trainConfig, epochs: parseInt(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Batch Size</label>
-                                    <input
-                                        type="number"
-                                        className="w-full px-4 py-3 rounded-xl bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40"
-                                        value={trainConfig.batchSize}
-                                        onChange={e => setTrainConfig({ ...trainConfig, batchSize: parseInt(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">L. Rate</label>
-                                    <input
-                                        type="number"
-                                        step="0.0001"
-                                        className="w-full px-4 py-3 rounded-xl bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40 font-mono"
-                                        value={trainConfig.lr}
-                                        onChange={e => setTrainConfig({ ...trainConfig, lr: parseFloat(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Arquitetura</label>
-                                    <select
-                                        className="w-full px-4 py-3 rounded-xl bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40 font-bold"
-                                        value={trainConfig.temporalModel}
-                                        onChange={e => setTrainConfig({ ...trainConfig, temporalModel: e.target.value })}
+                                    <button
+                                        onClick={() => setExplorerOpen('dataset')}
+                                        className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
                                     >
-                                        <option value="tft">TFT</option>
-                                        <option value="lstm">LSTM</option>
-                                    </select>
+                                        <FolderInput className="w-4 h-4" />
+                                    </button>
                                 </div>
+                                {datasetName && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Dataset: <span className="font-mono text-primary">{datasetName}</span>
+                                    </p>
+                                )}
                             </div>
 
-                            <button
-                                onClick={handleTrain}
-                                disabled={loading}
-                                className={`w-full py-4 rounded-xl font-bold text-primary-foreground flex justify-center items-center gap-3 text-lg transition-all shadow-xl
-                                    ${loading ? 'bg-muted cursor-not-allowed text-muted-foreground' : 'bg-primary hover:brightness-110 hover:scale-[1.01] active:scale-95 shadow-primary/20'}
-                                `}
-                            >
-                                {loading ? <RefreshCcw className="w-6 h-6 animate-spin" /> : <Play className="w-6 h-6 fill-current" />}
-                                {loading ? 'Task em execução...' : 'Iniciar Ciclo de Treino'}
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="bg-card border border-border rounded-2xl p-8 shadow-md">
-                            <h3 className="font-bold text-2xl mb-8 flex items-center gap-3">
-                                <Database className="w-6 h-6 text-primary" />
-                                Configuração do Split
-                            </h3>
-
-                            <div className="space-y-6 mb-8">
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Diretório de Resultados (Fonte)</label>
+                            {/* Pretrained Model (only for retreinar) */}
+                            {mode === 'retreinar' && (
+                                <div className="space-y-2 p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+                                    <label className="text-sm font-medium text-orange-400">Modelo Pré-treinado</label>
                                     <div className="flex gap-2">
                                         <input
                                             type="text"
-                                            className="flex-1 px-4 py-3 rounded-xl bg-background border border-border text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40"
-                                            value={shortenPath(splitConfig.inputDir)}
-                                            title={splitConfig.inputDir}
-                                            onChange={e => setSplitConfig({ ...splitConfig, inputDir: e.target.value })}
-                                            placeholder="Caminho para pasta resultados-reidentificacoes"
+                                            value={shortenPath(pretrainedPath)}
+                                            title={pretrainedPath}
+                                            readOnly
+                                            className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
+                                            placeholder="Selecione um modelo para retreino..."
+                                            onClick={() => setExplorerOpen('pretrained')}
                                         />
                                         <button
-                                            onClick={() => setExplorerOpen(true)}
-                                            className="px-4 py-3 bg-secondary rounded-xl border border-border hover:bg-primary/10 hover:text-primary transition-all"
+                                            onClick={() => setExplorerOpen('pretrained')}
+                                            className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
                                         >
-                                            <FolderInput className="w-5 h-5" />
+                                            <FolderInput className="w-4 h-4" />
                                         </button>
                                     </div>
                                 </div>
+                            )}
+                        </div>
+                    </div>
 
-                                <div className="space-y-2">
-                                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Nome de Saída do Dataset</label>
-                                    <input
-                                        type="text"
-                                        className="w-full px-4 py-3 rounded-xl bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/40 font-medium"
-                                        value={splitConfig.datasetName}
-                                        onChange={e => setSplitConfig({ ...splitConfig, datasetName: e.target.value })}
-                                    />
-                                </div>
+                    {/* Model Selection */}
+                    <div className="rounded-xl border border-border bg-card p-6">
+                        <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
+                            <Settings2 className="w-5 h-5 text-primary" />
+                            Arquitetura do Modelo
+                        </h3>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Subpasta Treino</label>
-                                        <input
-                                            type="text"
-                                            className="w-full px-4 py-3 rounded-xl bg-background border border-border text-xs outline-none focus:ring-2 focus:ring-primary/40"
-                                            value={splitConfig.trainSplit}
-                                            onChange={e => setSplitConfig({ ...splitConfig, trainSplit: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Subpasta Teste</label>
-                                        <input
-                                            type="text"
-                                            className="w-full px-4 py-3 rounded-xl bg-background border border-border text-xs outline-none focus:ring-2 focus:ring-primary/40"
-                                            value={splitConfig.testSplit}
-                                            onChange={e => setSplitConfig({ ...splitConfig, testSplit: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
+                        <div className="grid grid-cols-3 gap-2">
+                            {MODEL_OPTIONS.map(opt => (
+                                <button
+                                    key={opt.value}
+                                    onClick={() => setModelType(opt.value)}
+                                    className={`p-3 rounded-lg text-left border-2 transition-all ${modelType === opt.value
+                                        ? 'bg-primary/10 border-primary text-primary'
+                                        : 'bg-secondary/30 border-border text-muted-foreground hover:border-primary/50'
+                                        }`}
+                                    title={opt.description}
+                                >
+                                    <span className="text-xs font-bold block truncate">{opt.label}</span>
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Hardware Selection */}
+                        <div className="mt-6 space-y-2">
+                            <label className="text-sm font-medium text-muted-foreground italic">Hardware para Treinamento</label>
+                            <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-xl">
+                                <button
+                                    onClick={() => setDevice('cuda')}
+                                    className={`py-2 text-xs font-bold rounded-lg transition-all ${device === 'cuda' ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-background/50 text-muted-foreground'}`}
+                                >
+                                    GPU (CUDA)
+                                </button>
+                                <button
+                                    onClick={() => setDevice('cpu')}
+                                    className={`py-2 text-xs font-bold rounded-lg transition-all ${device === 'cpu' ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-background/50 text-muted-foreground'}`}
+                                >
+                                    CPU
+                                </button>
                             </div>
+                        </div>
+                    </div>
 
+                    {/* Hyperparameters */}
+                    <div className="rounded-xl border border-border bg-card p-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold text-lg flex items-center gap-2">
+                                Hiperparâmetros
+                            </h3>
                             <button
-                                onClick={handleSplit}
-                                disabled={loading}
-                                className={`w-full py-4 rounded-xl font-bold text-primary-foreground flex justify-center items-center gap-3 text-lg transition-all shadow-xl
-                                    ${loading ? 'bg-muted cursor-not-allowed text-muted-foreground' : 'bg-primary hover:brightness-110 hover:scale-[1.01] shadow-primary/20'}
-                                `}
+                                onClick={resetParams}
+                                className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1"
                             >
-                                {loading ? <RefreshCcw className="w-6 h-6 animate-spin" /> : <Split className="w-6 h-6" />}
-                                {loading ? 'Dividindo...' : 'Gerar Novo Dataset'}
+                                <RotateCcw className="w-3 h-3" />
+                                Restaurar Padrão
                             </button>
                         </div>
-                    )}
-                </div>
 
-                {/* Terminal Column */}
-                <div className="lg:col-span-12 xl:col-span-5 flex flex-col h-full bg-slate-950 rounded-2xl border border-border shadow-2xl overflow-hidden min-h-[400px]">
-                    <div className="flex items-center justify-between px-5 py-4 bg-slate-900/50 border-b border-white/5">
-                        <div className="flex items-center gap-3">
-                            <TerminalIcon className="w-5 h-5 text-primary" />
-                            <span className="text-xs font-mono font-bold text-slate-300">Console de Execução</span>
-                        </div>
-                        <button
-                            onClick={async () => {
-                                setLogs([]);
-                                try { await APIService.clearLogs(); } catch (e) { console.error(e); }
-                            }}
-                            className="text-[10px] uppercase font-bold text-slate-500 hover:text-white transition-colors"
-                        >
-                            Limpar
-                        </button>
-                    </div>
-                    <div
-                        ref={terminalRef}
-                        className="flex-1 p-5 font-mono text-xs overflow-y-auto space-y-1.5 scrollbar-thin scrollbar-thumb-white/10"
-                    >
-                        {logs.length === 0 && <div className="text-slate-700 italic flex items-center justify-center h-full">Pronto para iniciar tarefas...</div>}
-                        {logs.map((log, i) => {
-                            const isError = log.includes('[ERRO]');
-                            const isInfo = log.includes('[INFO]');
-                            const isTqdm = log.includes('|') && log.includes('%');
-
-                            return (
-                                <div key={i} className={`
-                                    whitespace-pre-wrap break-all border-l-2 pl-3 py-0.5 transition-colors
-                                    ${isError ? 'text-red-400 border-red-500 bg-red-500/5' :
-                                        isInfo ? 'text-blue-400 border-blue-500 bg-blue-500/5' :
-                                            isTqdm ? 'text-emerald-400 border-emerald-500/30' :
-                                                'text-slate-300 border-transparent'}
-                                `}>
-                                    {log}
-                                </div>
-                            );
-                        })}
-                    </div>
-                    {loading && (
-                        <div className="bg-slate-900/80 px-5 py-3 border-t border-white/5 flex items-center justify-between">
-                            <span className="text-[10px] text-primary font-bold animate-pulse tracking-widest uppercase">
-                                Processando no Servidor
-                            </span>
-                            <div className="flex gap-1.5">
-                                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
-                                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '150ms' }} />
-                                <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: '300ms' }} />
+                        <div className="grid grid-cols-4 gap-4 mb-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">Épocas</label>
+                                <input
+                                    type="number"
+                                    className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm"
+                                    value={params.epochs}
+                                    onChange={e => setParams({ ...params, epochs: parseInt(e.target.value) || 0 })}
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">Batch Size</label>
+                                <input
+                                    type="number"
+                                    className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm"
+                                    value={params.batch_size}
+                                    onChange={e => setParams({ ...params, batch_size: parseInt(e.target.value) || 0 })}
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">Learning Rate</label>
+                                <input
+                                    type="number"
+                                    step="0.0001"
+                                    className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm font-mono"
+                                    value={params.lr}
+                                    onChange={e => setParams({ ...params, lr: parseFloat(e.target.value) || 0 })}
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">Dropout</label>
+                                <input
+                                    type="number"
+                                    step="0.05"
+                                    className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm"
+                                    value={params.dropout}
+                                    onChange={e => setParams({ ...params, dropout: parseFloat(e.target.value) || 0 })}
+                                />
                             </div>
                         </div>
-                    )}
+
+                        <div className="grid grid-cols-4 gap-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">Hidden Size</label>
+                                <input
+                                    type="number"
+                                    className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm"
+                                    value={params.hidden_size}
+                                    onChange={e => setParams({ ...params, hidden_size: parseInt(e.target.value) || 0 })}
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">Num Layers</label>
+                                <input
+                                    type="number"
+                                    className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm"
+                                    value={params.num_layers}
+                                    onChange={e => setParams({ ...params, num_layers: parseInt(e.target.value) || 0 })}
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">Num Heads</label>
+                                <input
+                                    type="number"
+                                    className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm"
+                                    value={params.num_heads}
+                                    onChange={e => setParams({ ...params, num_heads: parseInt(e.target.value) || 0 })}
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground">Kernel Size</label>
+                                <input
+                                    type="number"
+                                    className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm"
+                                    value={params.kernel_size}
+                                    onChange={e => setParams({ ...params, kernel_size: parseInt(e.target.value) || 0 })}
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Train Button */}
+                    <button
+                        onClick={handleTrain}
+                        disabled={loading || !datasetPath}
+                        className={`w-full py-4 rounded-xl font-bold flex justify-center items-center gap-3 text-lg transition-all shadow-xl ${loading || !datasetPath
+                            ? 'bg-muted cursor-not-allowed text-muted-foreground'
+                            : mode === 'treinar'
+                                ? 'bg-primary text-primary-foreground hover:brightness-110 shadow-primary/20'
+                                : 'bg-orange-500 text-white hover:brightness-110 shadow-orange-500/20'
+                            }`}
+                    >
+                        {loading ? (
+                            <>
+                                <RefreshCcw className="w-6 h-6 animate-spin" />
+                                {mode === 'treinar' ? 'Treinando...' : 'Retreinando...'}
+                            </>
+                        ) : (
+                            <>
+                                <Play className="w-6 h-6 fill-current" />
+                                {mode === 'treinar' ? 'Iniciar Treinamento' : 'Iniciar Retreinamento'}
+                            </>
+                        )}
+                    </button>
+                </div>
+
+                {/* Terminal Panel */}
+                <div>
+                    <Terminal
+                        logs={logs}
+                        title="Console de Treinamento"
+                        height="700px"
+                        isLoading={loading}
+                        onClear={async () => {
+                            setLogs([]);
+                            try { await APIService.clearLogs(); } catch (e) { console.error(e); }
+                        }}
+                    />
                 </div>
             </div>
 
+            {/* File Explorer Modal - Dataset */}
             <FileExplorerModal
-                isOpen={explorerOpen}
-                onClose={() => setExplorerOpen(false)}
+                isOpen={explorerOpen === 'dataset'}
+                onClose={() => setExplorerOpen(null)}
                 onSelect={(path) => {
-                    setSplitConfig({ ...splitConfig, inputDir: path });
-                    setExplorerOpen(false);
+                    setDatasetPath(path);
+                    setExplorerOpen(null);
                 }}
-                initialPath={roots.reidentificacoes}
-                rootPath={roots.reidentificacoes}
-                title="Selecionar Pasta de Resultados (ReID)"
+                initialPath={datasetPath || roots.datasets}
+                rootPath={roots.datasets}
+                title="Selecionar Dataset para Treinamento"
+            />
+
+            {/* File Explorer Modal - Pretrained Model */}
+            <FileExplorerModal
+                isOpen={explorerOpen === 'pretrained'}
+                onClose={() => setExplorerOpen(null)}
+                onSelect={(path) => {
+                    setPretrainedPath(path);
+                    setExplorerOpen(null);
+                }}
+                initialPath={pretrainedPath || roots.modelos_treinados}
+                rootPath={roots.modelos_treinados}
+                title="Selecionar Modelo Pré-treinado"
             />
         </div>
     );

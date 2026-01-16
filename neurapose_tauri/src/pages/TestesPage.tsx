@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
     TestTube2,
     PlayCircle,
-    Terminal as TerminalIcon,
     ChevronRight,
-    Search,
+    FolderInput,
     FileCode,
     Cpu,
     Zap,
@@ -15,12 +14,13 @@ import {
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
-import { shortenPath } from '../lib/utils';
+import { Terminal } from '../components/ui/Terminal';
+import { StatusMessage } from '../components/ui/StatusMessage';
 
 export default function TestesPage() {
     const [loading, setLoading] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
-    const terminalRef = useRef<HTMLDivElement>(null);
+    const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'processing' } | null>(null);
 
     const [config, setConfig] = useState({
         modelPath: '',
@@ -47,7 +47,7 @@ export default function TestesPage() {
 
     // Polling de Logs
     useEffect(() => {
-        let interval: any;
+        let interval: ReturnType<typeof setInterval>;
         if (loading) {
             interval = setInterval(async () => {
                 try {
@@ -57,6 +57,7 @@ export default function TestesPage() {
                     const health = await APIService.healthCheck();
                     if (!health.data.processing) {
                         setLoading(false);
+                        setMessage({ text: '✅ Teste concluído! Verifique os resultados.', type: 'success' });
                     }
                 } catch (e) { console.error(e); }
             }, 1000);
@@ -64,19 +65,13 @@ export default function TestesPage() {
         return () => { if (interval) clearInterval(interval); };
     }, [loading]);
 
-    // Auto-scroll terminal
-    useEffect(() => {
-        if (terminalRef.current) {
-            terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-        }
-    }, [logs]);
-
     const handleRunTest = async () => {
         if (!config.modelPath || !config.datasetPath) {
-            alert("Selecione o modelo e o dataset de teste.");
+            setMessage({ text: 'Por favor, selecione o modelo e o dataset de teste.', type: 'error' });
             return;
         }
         setLoading(true);
+        setMessage({ text: '⏳ Executando testes de validação...', type: 'processing' });
         setLogs(prev => [...prev, `[INFO] Iniciando validação de modelo...`]);
         try {
             await APIService.startTesting({
@@ -86,6 +81,7 @@ export default function TestesPage() {
             });
         } catch (error: any) {
             setLoading(false);
+            setMessage({ text: `❌ Erro: ${error.response?.data?.detail || error.message}`, type: 'error' });
             setLogs(prev => [...prev, `[ERRO] ${error.response?.data?.detail || error.message}`]);
         }
     };
@@ -118,18 +114,19 @@ export default function TestesPage() {
                                         </div>
                                         <input
                                             type="text"
-                                            className="w-full pl-11 pr-4 py-3 rounded-xl bg-background border border-border text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 truncate"
-                                            value={shortenPath(config.modelPath)}
+                                            className="w-full pl-11 pr-4 py-3 rounded-xl bg-background border border-border text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 truncate cursor-pointer"
+                                            value={config.modelPath ? config.modelPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
                                             title={config.modelPath}
                                             readOnly
-                                            placeholder="Selecione o arquivo do modelo..."
+                                            placeholder="Selecione um modelo para testes..."
+                                            onClick={() => setExplorerTarget('model')}
                                         />
                                     </div>
                                     <button
                                         onClick={() => setExplorerTarget('model')}
                                         className="px-4 py-3 bg-secondary rounded-xl border border-border hover:bg-primary/10 hover:text-primary transition-all shrink-0"
                                     >
-                                        <Search className="w-5 h-5" />
+                                        <FolderInput className="w-5 h-5" />
                                     </button>
                                 </div>
                             </div>
@@ -144,18 +141,19 @@ export default function TestesPage() {
                                         </div>
                                         <input
                                             type="text"
-                                            className="w-full pl-11 pr-4 py-3 rounded-xl bg-background border border-border text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 truncate"
-                                            value={shortenPath(config.datasetPath)}
+                                            className="w-full pl-11 pr-4 py-3 rounded-xl bg-background border border-border text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 truncate cursor-pointer"
+                                            value={config.datasetPath ? config.datasetPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
                                             title={config.datasetPath}
                                             readOnly
-                                            placeholder="Selecione a pasta do dataset..."
+                                            placeholder="Selecione uma pasta para testes..."
+                                            onClick={() => setExplorerTarget('dataset')}
                                         />
                                     </div>
                                     <button
                                         onClick={() => setExplorerTarget('dataset')}
                                         className="px-4 py-3 bg-secondary rounded-xl border border-border hover:bg-primary/10 hover:text-primary transition-all shrink-0"
                                     >
-                                        <Search className="w-5 h-5" />
+                                        <FolderInput className="w-5 h-5" />
                                     </button>
                                 </div>
                             </div>
@@ -209,50 +207,30 @@ export default function TestesPage() {
                 </div>
 
                 {/* Real-time Logs */}
-                <div className="lg:col-span-12 xl:col-span-6 flex flex-col h-full bg-slate-950 rounded-2xl border border-border shadow-2xl overflow-hidden min-h-[500px]">
-                    <div className="flex items-center justify-between px-6 py-4 bg-slate-900/50 border-b border-white/10">
-                        <div className="flex items-center gap-3">
-                            <TerminalIcon className="w-5 h-5 text-primary" />
-                            <span className="text-xs font-mono font-bold text-slate-300">Resumo de Validação</span>
+                <div className="lg:col-span-12 xl:col-span-6">
+                    {/* Status Message */}
+                    {message && (
+                        <div className="mb-4">
+                            <StatusMessage
+                                message={message.text}
+                                type={message.type}
+                                onClose={() => setMessage(null)}
+                                autoCloseDelay={message.type === 'success' ? 5000 : undefined}
+                            />
                         </div>
-                        <button
-                            onClick={async () => {
-                                setLogs([]);
-                                try { await APIService.clearLogs(); } catch (e) { console.error(e); }
-                            }}
-                            className="text-[10px] uppercase font-bold text-slate-500 hover:text-white transition-colors"
-                        >
-                            Limpar
-                        </button>
-                    </div>
-                    <div
-                        ref={terminalRef}
-                        className="flex-1 p-6 font-mono text-xs overflow-y-auto space-y-2 scrollbar-thin scrollbar-thumb-white/10"
-                    >
-                        {logs.length === 0 && (
-                            <div className="text-slate-700 italic flex flex-col items-center justify-center h-full gap-4">
-                                <Search className="w-12 h-12 opacity-20" />
-                                <span>Aguardando início dos testes...</span>
-                            </div>
-                        )}
-                        {logs.map((log, i) => {
-                            const isError = log.includes('[ERRO]');
-                            const isInfo = log.includes('[INFO]');
-                            const isMetric = log.includes('Acc:') || log.includes('F1:');
+                    )}
 
-                            return (
-                                <div key={i} className={`
-                                    whitespace-pre-wrap break-all border-l-2 pl-4 py-1.5 transition-all
-                                    ${isError ? 'text-red-400 border-red-500 bg-red-500/5' :
-                                        isInfo ? 'text-blue-400 border-blue-500 bg-blue-500/5' :
-                                            isMetric ? 'text-amber-400 border-amber-500/30 font-bold' :
-                                                'text-slate-300 border-transparent'}
-                                `}>
-                                    {log}
-                                </div>
-                            );
-                        })}
-                    </div>
+                    {/* Terminal Component */}
+                    <Terminal
+                        logs={logs}
+                        title="Console de Validação"
+                        height="500px"
+                        isLoading={loading}
+                        onClear={async () => {
+                            setLogs([]);
+                            try { await APIService.clearLogs(); } catch (e) { console.error(e); }
+                        }}
+                    />
                 </div>
             </div>
 
@@ -264,8 +242,8 @@ export default function TestesPage() {
                     if (explorerTarget === 'dataset') setConfig({ ...config, datasetPath: path });
                     setExplorerTarget(null);
                 }}
-                initialPath={explorerTarget === 'model' ? roots.modelos : roots.datasets}
-                rootPath={explorerTarget === 'model' ? roots.modelos : roots.datasets}
+                initialPath={explorerTarget === 'model' ? roots.modelos_treinados : roots.datasets}
+                rootPath={explorerTarget === 'model' ? roots.modelos_treinados : roots.datasets}
                 title={explorerTarget === 'model' ? "Selecionar Modelo (.pt)" : "Selecionar Pasta do Dataset"}
             />
         </div>
