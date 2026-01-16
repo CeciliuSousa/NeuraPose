@@ -45,11 +45,11 @@ export default function ProcessamentoPage() {
 
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
-                const { videos } = res.data.paths;
+                // const { videos } = res.data.paths;
                 setRoots(res.data.paths);
                 setConfig(prev => ({
                     ...prev,
-                    inputPath: videos // Sempre força o path padrão
+                    inputPath: '' // Mantém vazio para mostrar o placeholder
                 }));
             }
         }).catch(err => console.error("Erro ao carregar caminhos do backend:", err));
@@ -97,7 +97,7 @@ export default function ProcessamentoPage() {
 
     const handleProcess = async () => {
         if (!config.inputPath) {
-            alert("Por favor, selecione a pasta de entrada.");
+            alert("Por favor, selecione o diretório de entrada.");
             return;
         }
 
@@ -160,17 +160,22 @@ export default function ProcessamentoPage() {
 
                         <div className="space-y-4">
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-muted-foreground">Pasta de Entrada (Vídeos)</label>
+                                <label className="text-sm font-medium text-muted-foreground">Diretório de Entrada (Vídeos)</label>
                                 <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={config.inputPath ? config.inputPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
-                                        readOnly
-                                        title={config.inputPath}
-                                        placeholder="Selecione o diretório para processar..."
-                                        className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono cursor-pointer"
-                                        onClick={() => openExplorer()}
-                                    />
+                                    <div className="flex-1 relative">
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                                            <Video className="w-4 h-4" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={config.inputPath ? config.inputPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
+                                            readOnly
+                                            title={config.inputPath}
+                                            placeholder="Selecione o diretório para processar..."
+                                            className="w-full pl-9 bg-background border border-border rounded-md py-2 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono cursor-pointer truncate"
+                                            onClick={() => openExplorer()}
+                                        />
+                                    </div>
                                     <button
                                         onClick={() => openExplorer()}
                                         className="px-3 py-2 bg-secondary rounded-md border border-border hover:bg-secondary/80 transition-colors"
@@ -180,19 +185,19 @@ export default function ProcessamentoPage() {
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
+                            {/* <div className="space-y-2">
                                 <label className="text-sm font-medium text-muted-foreground">Nome do Dataset de Saída</label>
                                 <input
                                     type="text"
                                     value={config.datasetName}
                                     onChange={(e) => setConfig({ ...config, datasetName: e.target.value })}
-                                    placeholder="Deixe vazio para usar o nome da pasta de entrada"
+                                    placeholder="Deixe vazio para usar o nome do diretório de entrada"
                                     className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                                 />
                                 <p className="text-xs text-muted-foreground italic">
                                     Saída: resultados-processamentos/{config.datasetName || '[nome-da-pasta]'}-processado/
                                 </p>
-                            </div>
+                            </div> */}
 
                             <div className="space-y-2">
                                 <label className="text-sm font-medium text-muted-foreground italic">Hardware para Inferência</label>
@@ -311,7 +316,7 @@ export default function ProcessamentoPage() {
                 onSelect={handleSelectPath}
                 initialPath={roots.videos}
                 rootPath={roots.videos}
-                title="Selecionar Pasta de Entrada (Vídeos)"
+                title="Selecionar Diretório de Entrada (Vídeos)"
             />
         </div>
     );

@@ -36,13 +36,13 @@ export default function SplitPage() {
 
     // Load defaults
     useEffect(() => {
-        const savedInput = localStorage.getItem('np_split_input');
+        // const savedInput = localStorage.getItem('np_split_input'); // Removido para forçar placeholder
         const savedPercent = localStorage.getItem('np_split_percent');
 
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
                 setRoots(res.data.paths);
-                if (savedInput) setInputDir(savedInput);
+                setInputDir(''); // Força vazio para mostrar placeholder
                 if (savedPercent) setTrainPercent(parseInt(savedPercent));
             }
         });
@@ -76,7 +76,7 @@ export default function SplitPage() {
 
     const handleSplit = async () => {
         if (!inputDir) {
-            alert("Selecione a pasta de entrada com os dados reidentificados.");
+            alert("Selecione o diretório de entrada com os dados reidentificados.");
             return;
         }
         setLoading(true);
@@ -114,17 +114,22 @@ export default function SplitPage() {
                         <div className="space-y-5">
                             {/* Input Dir */}
                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Pasta de Entrada (Dados Reidentificados)</label>
+                                <label className="text-sm font-medium">Diretório de Entrada (Dados Reidentificados)</label>
                                 <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={datasetName}
-                                        title={inputDir}
-                                        readOnly
-                                        className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
-                                        placeholder="Selecione o diretório para split..."
-                                        onClick={() => setExplorerOpen(true)}
-                                    />
+                                    <div className="flex-1 relative">
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                                            <Scissors className="w-4 h-4" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={datasetName}
+                                            title={inputDir}
+                                            readOnly
+                                            className="w-full pl-9 pr-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer truncate"
+                                            placeholder="Selecione o diretório para split..."
+                                            onClick={() => setExplorerOpen(true)}
+                                        />
+                                    </div>
                                     <button
                                         onClick={() => setExplorerOpen(true)}
                                         className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
@@ -253,7 +258,7 @@ export default function SplitPage() {
                 }}
                 initialPath={inputDir || roots.reidentificacoes}
                 rootPath={roots.reidentificacoes}
-                title="Selecionar Pasta de Dados Reidentificados"
+                title="Selecionar Diretório de Dados Reidentificados"
             />
         </div>
     );

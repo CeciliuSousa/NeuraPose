@@ -405,15 +405,20 @@ export default function ReidPage() {
                 <div className="flex items-center gap-3">
                     {/* Entrada */}
                     <div className="flex items-center gap-2">
-                        <input
-                            type="text"
-                            value={inputPath ? inputPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
-                            title={inputPath}
-                            readOnly
-                            className="w-64 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
-                            placeholder="Selecione o diretório para reidentificar..."
-                            onClick={() => setExplorerOpen(true)}
-                        />
+                        <div className="relative">
+                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60">
+                                <ScanFace className="w-4 h-4" />
+                            </div>
+                            <input
+                                type="text"
+                                value={inputPath ? inputPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
+                                title={inputPath}
+                                readOnly
+                                className="w-64 pl-9 pr-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer truncate"
+                                placeholder="Selecione o diretório para reidentificar..."
+                                onClick={() => setExplorerOpen(true)}
+                            />
+                        </div>
                         <button
                             onClick={() => setExplorerOpen(true)}
                             className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
@@ -663,7 +668,7 @@ export default function ReidPage() {
                 onSelect={(path) => { setInputPath(path); setExplorerOpen(false); }}
                 initialPath={roots.processamentos}
                 rootPath={roots.processamentos}
-                title="Selecionar Pasta de Vídeos/Predições"
+                title="Selecionar Diretório de Vídeos/Predições"
                 filterFn={(item) => {
                     const normRoot = (roots.processamentos || '').replace(/\\/g, '/').toLowerCase();
                     const normCurrent = (item.currentPath || '').replace(/\\/g, '/').toLowerCase();

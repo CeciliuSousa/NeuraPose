@@ -4,7 +4,6 @@ import {
     Video,
     ScanFace,
     PenTool,
-    // FolderOpen,
     Scissors,
     FileOutput,
     Dumbbell,

@@ -37,8 +37,8 @@ export default function TestesPage() {
                 setRoots(res.data.paths);
                 setConfig(prev => ({
                     ...prev,
-                    modelPath: prev.modelPath || res.data.paths.modelos,
-                    datasetPath: prev.datasetPath || res.data.paths.datasets
+                    modelPath: '', // Inicia vazio para mostrar placeholder
+                    datasetPath: '' // Inicia vazio para mostrar placeholder
                 }));
             }
         });
@@ -118,7 +118,7 @@ export default function TestesPage() {
                                             value={config.modelPath ? config.modelPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
                                             title={config.modelPath}
                                             readOnly
-                                            placeholder="Selecione o diretório para testar..."
+                                            placeholder="Selecione o modelo para teste..."
                                             onClick={() => setExplorerTarget('model')}
                                         />
                                     </div>
@@ -133,7 +133,7 @@ export default function TestesPage() {
 
                             {/* Dataset Selection */}
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Dataset de Validação</label>
+                                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Dataset de Teste</label>
                                 <div className="flex gap-2">
                                     <div className="flex-1 relative">
                                         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">
@@ -145,7 +145,7 @@ export default function TestesPage() {
                                             value={config.datasetPath ? config.datasetPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
                                             title={config.datasetPath}
                                             readOnly
-                                            placeholder="Selecione o diretório para testar..."
+                                            placeholder="Selecione o dataset para teste..."
                                             onClick={() => setExplorerTarget('dataset')}
                                         />
                                     </div>
@@ -244,7 +244,7 @@ export default function TestesPage() {
                 }}
                 initialPath={explorerTarget === 'model' ? roots.modelos_treinados : roots.datasets}
                 rootPath={explorerTarget === 'model' ? roots.modelos_treinados : roots.datasets}
-                title={explorerTarget === 'model' ? "Selecionar Modelo (.pt)" : "Selecionar Pasta do Dataset"}
+                title={explorerTarget === 'model' ? "Selecionar Modelo (.pt)" : "Selecionar Diretório do Dataset"}
             />
         </div>
     );

@@ -125,15 +125,20 @@ export default function RelatoriosPage() {
                     </h3>
                     <div className="space-y-4">
                         <div className="flex gap-2">
-                            <input
-                                type="text"
-                                value={shortenPath(trainReportPath)}
-                                title={trainReportPath}
-                                readOnly
-                                className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
-                                placeholder="Selecione relatorio de modelo treinado..."
-                                onClick={() => setExplorerOpen('train')}
-                            />
+                            <div className="flex-1 relative">
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60">
+                                    <FileBarChart className="w-4 h-4" />
+                                </div>
+                                <input
+                                    type="text"
+                                    value={shortenPath(trainReportPath)}
+                                    title={trainReportPath}
+                                    readOnly
+                                    className="w-full pl-9 pr-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer truncate"
+                                    placeholder="Selecione relatorio de modelo treinado..."
+                                    onClick={() => setExplorerOpen('train')}
+                                />
+                            </div>
                             <button
                                 onClick={() => setExplorerOpen('train')}
                                 className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
@@ -157,15 +162,20 @@ export default function RelatoriosPage() {
                     </h3>
                     <div className="space-y-4">
                         <div className="flex gap-2">
-                            <input
-                                type="text"
-                                value={shortenPath(testReportPath)}
-                                title={testReportPath}
-                                readOnly
-                                className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
-                                placeholder="Selecione relatorio de teste..."
-                                onClick={() => setExplorerOpen('test')}
-                            />
+                            <div className="flex-1 relative">
+                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60">
+                                    <Target className="w-4 h-4" />
+                                </div>
+                                <input
+                                    type="text"
+                                    value={shortenPath(testReportPath)}
+                                    title={testReportPath}
+                                    readOnly
+                                    className="w-full pl-9 pr-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer truncate"
+                                    placeholder="Selecione relatorio de teste..."
+                                    onClick={() => setExplorerOpen('test')}
+                                />
+                            </div>
                             <button
                                 onClick={() => setExplorerOpen('test')}
                                 className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"

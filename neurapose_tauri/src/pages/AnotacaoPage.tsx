@@ -76,7 +76,7 @@ export default function AnotacaoPage() {
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
                 setRoots(res.data.paths);
-                setInputPath(res.data.paths.reidentificacoes || '');
+                setInputPath(''); // Inicia vazio para mostrar placeholder
 
                 // Classes do config
                 if (res.data.classes) {
@@ -233,15 +233,20 @@ export default function AnotacaoPage() {
                 <div className="flex items-center gap-3">
                     {/* Entrada */}
                     <div className="flex items-center gap-2">
-                        <input
-                            type="text"
-                            value={inputPath ? inputPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
-                            title={inputPath}
-                            readOnly
-                            className="w-64 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
-                            placeholder="Selecione o diretório para anotar..."
-                            onClick={() => setExplorerOpen(true)}
-                        />
+                        <div className="relative">
+                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60">
+                                <Tag className="w-4 h-4" />
+                            </div>
+                            <input
+                                type="text"
+                                value={inputPath ? inputPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
+                                title={inputPath}
+                                readOnly
+                                className="w-64 pl-9 pr-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer truncate"
+                                placeholder="Selecione o diretório para anotar..."
+                                onClick={() => setExplorerOpen(true)}
+                            />
+                        </div>
                         <button
                             onClick={() => setExplorerOpen(true)}
                             className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
@@ -382,7 +387,7 @@ export default function AnotacaoPage() {
                 }}
                 initialPath={roots.reidentificacoes}
                 rootPath={roots.reidentificacoes}
-                title="Selecionar Pasta de ReID"
+                title="Selecionar Diretório de ReID"
                 filterFn={(item) => {
                     const normRoot = (roots.reidentificacoes || '').replace(/\\/g, '/').toLowerCase();
                     const normCurrent = (item.currentPath || '').replace(/\\/g, '/').toLowerCase();

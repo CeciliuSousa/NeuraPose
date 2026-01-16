@@ -191,15 +191,20 @@ export default function TreinoPage() {
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">Dataset (.pt)</label>
                                 <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={shortenPath(datasetPath)}
-                                        title={datasetPath}
-                                        readOnly
-                                        className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
-                                        placeholder="Selecione o diretório para treinar..."
-                                        onClick={() => setExplorerOpen('dataset')}
-                                    />
+                                    <div className="flex-1 relative">
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                                            <Dumbbell className="w-4 h-4" />
+                                        </div>
+                                        <input
+                                            type="text"
+                                            value={shortenPath(datasetPath)}
+                                            title={datasetPath}
+                                            readOnly
+                                            className="w-full pl-9 pr-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer truncate"
+                                            placeholder="Selecione o diretório para treinar..."
+                                            onClick={() => setExplorerOpen('dataset')}
+                                        />
+                                    </div>
                                     <button
                                         onClick={() => setExplorerOpen('dataset')}
                                         className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"

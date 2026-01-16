@@ -1,0 +1,12 @@
+Em TODAS AS PÁGINAS, as entradas devem ser PLACEHOLDERS: 
+
+- Em "Processamento de Vídeo" entrada (dataset): "Selecione o diretório para processar..."
+- Em "re-identificação" entrada (dataset): "Selecione o diretório para reidentificar..."
+- Em "anotação" entrada (dataset): "Selecione o diretório para anotar..."
+- Em "split dataset" entrada (dataset): "Selecione o diretório para split..."
+- Em "teste" entrada (modelo): "Selecione o modelo para teste..."
+- Em "teste" entrada (dataset): "Selecione o dataset para teste..."
+
+Está faltando alterar apenas da pagina re-identificação
+
+remova o texto "resultados-processamentos" e coloque "Selecione o diretório para reidentificar..."

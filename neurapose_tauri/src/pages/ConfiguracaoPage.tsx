@@ -244,7 +244,7 @@ export default function ConfiguracaoPage() {
                                             <button
                                                 onClick={() => openExplorer(item.key)}
                                                 className="p-2.5 bg-secondary hover:bg-primary/20 hover:text-primary rounded-xl transition-all border border-border"
-                                                title="Procurar arquivo/pasta"
+                                                title="Procurar arquivo/diretório"
                                             >
                                                 <FolderOpen className="w-5 h-5" />
                                             </button>
@@ -283,7 +283,7 @@ export default function ConfiguracaoPage() {
                 onSelect={onPathSelect}
                 initialPath={activeKey ? config[activeKey] : ''}
                 rootPath={roots.root}
-                title="Selecionar Arquivo ou Pasta"
+                title="Selecionar Arquivo ou Diretório"
             />
 
             <div className="bg-primary/5 border border-primary/10 p-5 rounded-2xl text-xs text-muted-foreground leading-relaxed flex items-start gap-4">
@@ -291,7 +291,7 @@ export default function ConfiguracaoPage() {
                 <div>
                     <strong>Dica de Segurança:</strong> As alterações feitas aqui são persistidas em seu perfil de usuário (`user_settings.json`).
                     Alguns parâmetros como modelos YOLO ou OSNet podem exigir reinício silencioso do detector em background.
-                    Pastas de sistema e arquivos de código estão ocultos por segurança.
+                    Diretórios de sistema e arquivos de código estão ocultos por segurança.
                 </div>
             </div>
         </div>
