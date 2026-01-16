@@ -411,7 +411,7 @@ export default function ReidPage() {
                             title={inputPath}
                             readOnly
                             className="w-64 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
-                            placeholder="Selecione uma pasta para re-identificar..."
+                            placeholder="Selecione o diretório para reidentificar..."
                             onClick={() => setExplorerOpen(true)}
                         />
                         <button

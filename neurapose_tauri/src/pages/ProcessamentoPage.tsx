@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
-import { shortenPath } from '../lib/utils';
 import { Terminal } from '../components/ui/Terminal';
 
 export default function ProcessamentoPage() {
@@ -35,7 +34,7 @@ export default function ProcessamentoPage() {
         if (savedConfig) {
             const parsed = JSON.parse(savedConfig);
             // Mantém outras configs, mas ignora inputPath para forçar o default
-            setConfig(prev => ({ ...parsed, inputPath: '' }));
+            setConfig(() => ({ ...parsed, inputPath: '' }));
         }
 
         const savedLogs = localStorage.getItem('np_process_logs');
@@ -168,7 +167,7 @@ export default function ProcessamentoPage() {
                                         value={config.inputPath ? config.inputPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
                                         readOnly
                                         title={config.inputPath}
-                                        placeholder={`./videos/`}
+                                        placeholder="Selecione o diretório para processar..."
                                         className="flex-1 bg-background border border-border rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono cursor-pointer"
                                         onClick={() => openExplorer()}
                                     />

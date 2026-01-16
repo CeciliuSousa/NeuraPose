@@ -118,7 +118,7 @@ export default function TestesPage() {
                                             value={config.modelPath ? config.modelPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
                                             title={config.modelPath}
                                             readOnly
-                                            placeholder="Selecione um modelo para testes..."
+                                            placeholder="Selecione o diretório para testar..."
                                             onClick={() => setExplorerTarget('model')}
                                         />
                                     </div>
@@ -145,7 +145,7 @@ export default function TestesPage() {
                                             value={config.datasetPath ? config.datasetPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
                                             title={config.datasetPath}
                                             readOnly
-                                            placeholder="Selecione uma pasta para testes..."
+                                            placeholder="Selecione o diretório para testar..."
                                             onClick={() => setExplorerTarget('dataset')}
                                         />
                                     </div>

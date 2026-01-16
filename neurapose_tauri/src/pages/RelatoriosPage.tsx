@@ -49,7 +49,7 @@ export default function RelatoriosPage() {
             const datasetName = trainReportPath.replace(/\\/g, '/').split('/').pop();
             if (datasetName) {
                 // Tenta encontrar relatório de teste correspondente
-                const potentialTestPath = `${roots.relatorios_testes}/${datasetName}`;
+                // const potentialTestPath = `${roots.relatorios_testes}/${datasetName}`;
                 // TODO: Verificar se o path existe via API
                 setMessage({ text: `💡 Procurando relatório de teste correspondente para "${datasetName}"...`, type: 'info' });
             }
@@ -131,7 +131,7 @@ export default function RelatoriosPage() {
                                 title={trainReportPath}
                                 readOnly
                                 className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
-                                placeholder="Selecione relatório de treinamento..."
+                                placeholder="Selecione relatorio de modelo treinado..."
                                 onClick={() => setExplorerOpen('train')}
                             />
                             <button
@@ -163,7 +163,7 @@ export default function RelatoriosPage() {
                                 title={testReportPath}
                                 readOnly
                                 className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
-                                placeholder="Selecione relatório de teste..."
+                                placeholder="Selecione relatorio de teste..."
                                 onClick={() => setExplorerOpen('test')}
                             />
                             <button

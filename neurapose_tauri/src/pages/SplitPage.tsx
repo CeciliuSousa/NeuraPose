@@ -122,7 +122,7 @@ export default function SplitPage() {
                                         title={inputDir}
                                         readOnly
                                         className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
-                                        placeholder="Selecione uma pasta para split..."
+                                        placeholder="Selecione o diretório para split..."
                                         onClick={() => setExplorerOpen(true)}
                                     />
                                     <button

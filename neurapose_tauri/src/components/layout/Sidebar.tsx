@@ -15,7 +15,8 @@ import {
     X,
     Cpu,
     MemoryStick,
-    MonitorPlay
+    MonitorPlay,
+    History
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { APIService } from '../../services/api';
@@ -25,12 +26,12 @@ const menuItems = [
     { name: 'Processar Vídeo', href: '/processamento', icon: Video },
     { name: 'Re-identificação', href: '/reid', icon: ScanFace },
     { name: 'Anotação', href: '/anotacao', icon: PenTool },
-    // { name: 'Gerenciador', href: '/datasets', icon: FolderOpen },
     { name: 'Split Dataset', href: '/split', icon: Scissors },
     { name: 'Converter .pt', href: '/converter', icon: FileOutput },
     { name: 'Treinamento', href: '/treino', icon: Dumbbell },
     { name: 'Testes', href: '/testes', icon: TestTube2 },
     { name: 'Relatórios', href: '/relatorios', icon: FileBarChart },
+    { name: 'Histórico Global', href: '/historico', icon: History },
     { name: 'Configurações', href: '/configuracao', icon: Settings },
 ];
 
