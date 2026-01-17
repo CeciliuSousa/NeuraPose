@@ -3,7 +3,7 @@
 # ==============================================================
 
 import torch
-from app.configuracao.config import DEVICE
+from neurapose_backend.app.configuracao.config import DEVICE
 
 
 def rodar_lstm_uma_sequencia(seq_np, model, mu, sigma):

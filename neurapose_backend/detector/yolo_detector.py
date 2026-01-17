@@ -13,6 +13,10 @@ from ultralytics import YOLO
 # Importacoes do tracker (usando interface modular via rastreador.py)
 from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomReID, save_temp_tracker_yaml
 
+# Importa state para controle de parada
+from neurapose_backend.app.state import state
+from colorama import Fore
+
 # Importa nome do modelo YOLO e ROOT do config centralizado
 from neurapose_backend.config_master import YOLO_PATH, YOLO_MODEL, ROOT, DETECTION_CONF, YOLO_CLASS_PERSON, DEVICE, YOLO_IMGSZ
 
@@ -175,8 +179,11 @@ def yolo_detector_botsort(videos_dir=None):
         import sys
         sys.stdout.flush()
 
-        # Execucao do YOLO + tracking (half=True para FP16 na GPU)
-        results = model.track(
+        # Execucao do YOLO + tracking (stream=True para feedback e controle)
+        # Usamos stream=True para iterar frame a frame, permitindo:
+        # 1. Checar solicitação de parada (Stop)
+        # 2. Atualizar o preview no frontend (state.set_frame)
+        tracking_stream = model.track(
             source=str(video),
             imgsz=YOLO_IMGSZ,
             conf=DETECTION_CONF,
@@ -185,11 +192,35 @@ def yolo_detector_botsort(videos_dir=None):
             tracker=str(tracker_yaml_path),
             classes=[YOLO_CLASS_PERSON],
             verbose=False,
-            half=True  # FP16 para acelerar inferência na GPU
+            half=True,  # FP16 para acelerar inferência na GPU
+            stream=True # Retorna gerador
         )
+
+        results = []
+        
+        # Itera sobre o stream
+        for r in tracking_stream:
+            # Verifica Parada
+            if state.stop_requested:
+                print(Fore.YELLOW + "[STOP] Detecção interrompida pelo usuário.")
+                break
+
+            results.append(r)
+            
+            # Atualiza Preview
+            # O plot() desenha as boxes no frame. 
+            # Note que isso pode ter impacto na performance, ideal usar apenas se tiver flag show_preview
+            # Mas como o yolo_detector não recebe show_preview, vamos fazer sempre por enquanto 
+            # ou checar se tem alguém ouvindo (state.current_process pode indicar)
+            if state.is_running: 
+                state.set_frame(r.plot())
 
         print(f"[YOLO] Tracking concluido! {len(results)} frames processados.")
         sys.stdout.flush()
+
+        if state.stop_requested:
+             cap.release()
+             break # Sai do loop de videos
 
         if not results or not hasattr(results[0], "boxes"):
             print("[ERRO] Sem resultados validos.")
@@ -203,6 +234,10 @@ def yolo_detector_botsort(videos_dir=None):
         # COLETA DE TRACKS POR FRAME (start, end, frames)
         # ============================================================
         while True:
+            # Se parou no meio, aborta
+            if state.stop_requested: 
+                break
+
             ret, _ = cap.read()
             if not ret or frame_idx >= len(results):
                 break

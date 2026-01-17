@@ -9,6 +9,7 @@ import {
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { Terminal } from '../components/ui/Terminal';
+import { VideoPreviewPanel } from '../components/ui/VideoPreviewPanel';
 
 export default function ProcessamentoPage() {
     // Form State
@@ -266,32 +267,10 @@ export default function ProcessamentoPage() {
                     </div>
 
                     {/* Preview Video */}
-                    {loading && config.showPreview && (
-                        <div className="bg-card border border-border rounded-xl overflow-hidden shadow-lg animate-in fade-in zoom-in duration-300">
-                            <div className="px-4 py-2 bg-muted/50 border-b border-border flex items-center justify-between">
-                                <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                                    Live Preview
-                                </span>
-                            </div>
-                            <div className="aspect-video bg-black flex items-center justify-center relative">
-                                <img
-                                    src="http://localhost:8000/video_feed"
-                                    alt="Video Stream"
-                                    className="w-full h-full object-contain"
-                                    onError={(e: any) => {
-                                        e.target.style.display = 'none';
-                                    }}
-                                    onLoad={(e: any) => {
-                                        e.target.style.display = 'block';
-                                    }}
-                                />
-                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-                                    <Video className="w-12 h-12" />
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                    <VideoPreviewPanel
+                        isVisible={loading && config.showPreview}
+                        title="Processamento em tempo real"
+                    />
                 </div>
 
                 {/* Right: Terminal Output */}

@@ -5,7 +5,7 @@
 import cv2
 import numpy as np
 from tqdm import tqdm
-from app.configuracao.config import (
+from neurapose_backend.app.configuracao.config import (
     CLASSE1,
     CLASSE2,
     SIMCC_W,
@@ -15,27 +15,33 @@ from app.configuracao.config import (
     CLASSE2_THRESHOLD,
     MODEL_NAME
 )
+from colorama import Fore, Style, init
 
-from app.modulos.processamento_sequencia import (
+init(autoreset=True)
+
+from neurapose_backend.app.modulos.processamento_sequencia import (
     EmaSmoother, 
     _expand_bbox, 
     montar_sequencia_individual
 )
 
-from app.utils.geometria import (
+from neurapose_backend.app.utils.geometria import (
     get_affine_transform,
     transform_preds,
     _calc_center_scale
 )
 
-from app.modulos.rtmpose import (
+from neurapose_backend.app.modulos.rtmpose import (
     decode_simcc_output,
     preprocess_rtmpose_input
 )
 
-from app.modulos.inferencia_lstm import rodar_lstm_uma_sequencia
+from neurapose_backend.app.modulos.inferencia_lstm import rodar_lstm_uma_sequencia
 
-from app.utils.visualizacao import desenhar_esqueleto, desenhar_info_predicao
+from neurapose_backend.app.utils.visualizacao import desenhar_esqueleto, desenhar_info_predicao
+
+# Estado global para controle de parada
+from neurapose_backend.app.state import state
 
 
 
@@ -85,6 +91,11 @@ def extrair_keypoints_rtmpose_padronizado(
     frame_idx = 0
 
     while True:
+        # Verifica se foi solicitada parada
+        if state.stop_requested:
+            print(Fore.YELLOW + "[STOP] Processamento interrompido pelo usuário.")
+            break
+
         ok, frame = cap.read()
         if not ok:
             break
@@ -92,9 +103,7 @@ def extrair_keypoints_rtmpose_padronizado(
         # Se não há mais resultados, apenas avança
         if frame_idx >= len(results):
             if show_preview:
-                cv2.imshow("Predição (preview keypoints)", frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
+                state.set_frame(frame)  # Stream para browser
             pbar.update(1)
             continue
 
@@ -104,9 +113,7 @@ def extrair_keypoints_rtmpose_padronizado(
 
         if result.boxes is None or len(result.boxes) == 0:
             if show_preview:
-                cv2.imshow("Predição (preview keypoints)", frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
+                state.set_frame(frame)  # Stream para browser
             pbar.update(1)
             continue
 
@@ -234,12 +241,8 @@ def extrair_keypoints_rtmpose_padronizado(
                 )
 
         if show_preview:
-            cv2.imshow(
-                "Predição (preview keypoints)",
-                frame_preview if frame_preview is not None else frame,
-            )
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+            # Stream para browser via state.set_frame (MJPEG)
+            state.set_frame(frame_preview if frame_preview is not None else frame)
 
         pbar.update(1)
 

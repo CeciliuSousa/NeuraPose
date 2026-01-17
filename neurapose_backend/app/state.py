@@ -10,6 +10,8 @@ class ProcessingState:
         self.is_paused = False
         self.stop_requested = False
         self.current_frame = None
+        self.current_process = None  # 'test', 'train', 'process', 'convert', 'split', etc.
+        self.process_status = 'idle'  # 'idle', 'processing', 'success', 'error'
         self._lock = threading.Lock()
 
     def set_frame(self, frame):
@@ -25,6 +27,7 @@ class ProcessingState:
         self.is_paused = False
         self.stop_requested = False
         self.current_frame = None
+        # Manter current_process e process_status até próximo processo
         
     def add_process(self, proc):
         """Adiciona um processo para monitoramento/shutdown."""

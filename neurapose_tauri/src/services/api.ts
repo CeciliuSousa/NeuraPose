@@ -45,6 +45,7 @@ export interface TestRequest {
     model_path?: string;
     dataset_path?: string;
     device?: string;
+    show_preview?: boolean;
 }
 
 export interface ConvertRequest {
@@ -96,6 +97,7 @@ export const APIService = {
     getLogs: (category: string = 'default') => api.get<{ logs: string[] }>('/logs', { params: { category } }),
     clearLogs: (category?: string) => api.delete('/logs', { params: { category } }),
     stopTraining: () => api.post('/train/stop'),
+    stopTesting: () => api.post('/test/stop'),
 
     pickFolder: (initialDir?: string) => api.get<{ path: string | null }>('/pick-folder', { params: { initial_dir: initialDir } }),
 

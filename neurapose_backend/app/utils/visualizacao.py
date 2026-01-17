@@ -10,13 +10,16 @@ import hashlib
 from pathlib import Path
 from tqdm import tqdm
 
-from app.configuracao.config import (
+from neurapose_backend.app.configuracao.config import (
     CLASSE1,
     CLASSE2,
     POSE_CONF_MIN,
     TRACKER_NAME,
     PAIRS
 )
+
+# Estado global para streaming de vídeo
+from neurapose_backend.app.state import state
 
 
 def _hash_to_color(i: int):
@@ -216,9 +219,8 @@ def gerar_video_predicao(
         writer.write(frame)
 
         if show_preview:
-            cv2.imshow("Predição FINAL (com classe)", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
+            # Stream para browser via MJPEG
+            state.set_frame(frame)
 
         frame_idx += 1
         pbar.update(1)

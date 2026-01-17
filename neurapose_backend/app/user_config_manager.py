@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from typing import Dict, Any
-import config_master as cm
+import neurapose_backend.config_master as cm
 
 
 CONFIG_FILE = Path(__file__).resolve().parent.parent / "user_settings.json"

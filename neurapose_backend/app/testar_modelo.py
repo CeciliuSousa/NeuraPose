@@ -19,7 +19,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # Configuracoes
-from app.configuracao.config import (
+from neurapose_backend.app.configuracao.config import (
     CLASSE1, CLASSE2, DATASET_DIR, RTMPOSE_PATH, MODEL_DIR, METRICAS_DIR,
     LABELS_TEST_PATH, DEVICE,
     MODEL_NAME, BEST_MODEL_PATH,
@@ -27,11 +27,14 @@ from app.configuracao.config import (
 )
 
 
-from app.utils.ferramentas import verificar_recursos, imprimir_banner, carregar_sessao_onnx
-from app.pipeline.processador_video import processar_video
+from neurapose_backend.app.utils.ferramentas import verificar_recursos, imprimir_banner, carregar_sessao_onnx
+from neurapose_backend.app.pipeline.processador_video import processar_video
 
-from app.utils.gerar_graficos import gerar_todos_graficos
-from LSTM import ClassifierFactory
+from neurapose_backend.app.utils.gerar_graficos import gerar_todos_graficos
+from neurapose_backend.LSTM.modulos.fabrica_modelo import ClassifierFactory
+
+# Estado global para controle de parada
+from neurapose_backend.app.state import state
 
 
 colorama_init(autoreset=True)
@@ -61,10 +64,15 @@ def main():
     imprimir_banner(checks)
     
     # Se fornecido via argumento, usamos. Caso contrário, config_master
-    from config_master import TEST_REPORTS_DIR, RTMPOSE_PATH as CM_RTMPOSE
+    from neurapose_backend.config_master import TEST_REPORTS_DIR, RTMPOSE_PATH as CM_RTMPOSE
     
     # Determina diretório do modelo
-    model_dir = Path(getattr(args, 'model_dir', '')) or MODEL_DIR
+    arg_model = getattr(args, 'model_dir', '')
+    if arg_model and str(arg_model).strip():
+        model_dir = Path(arg_model)
+    else:
+        model_dir = MODEL_DIR
+
     best_model_path = model_dir / "model_best.pt"
     if not best_model_path.exists():
         # Tenta o próprio path se for um arquivo
@@ -136,6 +144,11 @@ def main():
     # Processa videos
     all_predictions = {}
     for video_path in video_list:
+        # Verifica se foi solicitada parada
+        if state.stop_requested:
+            print(Fore.YELLOW + "[STOP] Teste interrompido pelo usuário.")
+            break
+
         print(Fore.MAGENTA + f"\n[VIDEO] {video_path.name}")
         
         predictions = processar_video(
@@ -145,21 +158,33 @@ def main():
             model=lstm_model,
             mu=norm_stats.get("mu"),
             sigma=norm_stats.get("sigma"),
-            show_preview=args.show
+            show_preview=args.show,
+            output_dir=out_report_dir
         )
         
         all_predictions[video_path.stem] = predictions
+
+    # Verifica se deve abortar antes de calcular métricas
+    if state.stop_requested:
+        return
 
     # Calcula metricas
     if labels_gt:
         y_true, y_pred = [], []
         
         for video_stem, preds in all_predictions.items():
+            if preds is None:
+                continue
             if video_stem in labels_gt:
                 gt = classificar_video_por_label(labels_gt[video_stem])
-                pred = 1 if any(p.get(CLASSE2, False) for p in preds) else 0
+                # preds é um dict retornado por processar_video, com chave "pred" (0 ou 1)
+                pred = preds.get("pred", 0)
                 y_true.append(gt)
                 y_pred.append(pred)
+                
+                # Exibe classe predita para cada vídeo
+                classe_pred = CLASSE2 if pred == 1 else CLASSE1
+                print(Fore.CYAN + f"[CLASSE] {classe_pred}")
 
         if y_true:
             acc = accuracy_score(y_true, y_pred)

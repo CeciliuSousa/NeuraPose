@@ -65,14 +65,54 @@ export default function TreinoPage() {
     // Nomes derivados
     const datasetName = datasetPath ? datasetPath.replace(/\\/g, '/').split('/').pop() || '' : '';
 
-    // Carregar caminhos do backend
+    // Carregar caminhos do backend e restaurar estado
     useEffect(() => {
+        // Restaurar estado se houver treino em andamento
+        APIService.healthCheck().then(res => {
+            if (res.data.processing) {
+                setLoading(true);
+                setMessage({ text: '⏳ Treinamento em andamento...', type: 'processing' });
+            }
+        }).catch(() => { });
+
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
                 setRoots(res.data.paths);
             }
         });
+
+        // Restaurar logs do localStorage
+        const savedLogs = localStorage.getItem('np_train_logs');
+        if (savedLogs) setLogs(JSON.parse(savedLogs));
+
+        // [NOVO] Restaurar inputs do localStorage
+        try {
+            const savedState = localStorage.getItem('np_train_state');
+            if (savedState) {
+                const parsed = JSON.parse(savedState);
+                if (parsed.datasetPath) setDatasetPath(parsed.datasetPath);
+                if (parsed.pretrainedPath) setPretrainedPath(parsed.pretrainedPath);
+                if (parsed.mode) setMode(parsed.mode);
+                if (parsed.params) setParams(parsed.params);
+                if (parsed.modelType) setModelType(parsed.modelType);
+                if (parsed.device) setDevice(parsed.device);
+            }
+        } catch (e) { console.error('Error loading training state:', e); }
+
     }, []);
+
+    // [NOVO] Salvar inputs no localStorage sempre que mudarem
+    useEffect(() => {
+        const stateToSave = {
+            datasetPath,
+            pretrainedPath,
+            mode,
+            params,
+            modelType,
+            device
+        };
+        localStorage.setItem('np_train_state', JSON.stringify(stateToSave));
+    }, [datasetPath, pretrainedPath, mode, params, modelType, device]);
 
     // Polling de logs
     useEffect(() => {
@@ -82,6 +122,7 @@ export default function TreinoPage() {
                 try {
                     const res = await APIService.getLogs('train');
                     setLogs(res.data.logs);
+                    localStorage.setItem('np_train_logs', JSON.stringify(res.data.logs));
 
                     const health = await APIService.healthCheck();
                     if (!health.data.processing) {

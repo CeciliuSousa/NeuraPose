@@ -10,12 +10,15 @@ import {
     Zap,
     RefreshCcw,
     Database,
-    Binary
+    Binary,
+    StopCircle
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { Terminal } from '../components/ui/Terminal';
 import { StatusMessage } from '../components/ui/StatusMessage';
+import { VideoPreviewPanel } from '../components/ui/VideoPreviewPanel';
+import { useProcessingStatus } from '../hooks/useProcessingStatus';
 
 export default function TestesPage() {
     const [loading, setLoading] = useState(false);
@@ -25,24 +28,50 @@ export default function TestesPage() {
     const [config, setConfig] = useState({
         modelPath: '',
         datasetPath: '',
-        device: 'cuda'
+        device: 'cuda',
+        showPreview: false
     });
 
     const [explorerTarget, setExplorerTarget] = useState<'model' | 'dataset' | null>(null);
     const [roots, setRoots] = useState<Record<string, string>>({});
+    const { setPageStatus } = useProcessingStatus();
 
+    // Load config and restore state
     useEffect(() => {
+        // Restaurar estado se houver teste em andamento
+        APIService.healthCheck().then(res => {
+            if (res.data.processing) {
+                setLoading(true);
+                setMessage({ text: '⏳ Teste em andamento...', type: 'processing' });
+                setPageStatus('test', 'processing');
+            }
+        }).catch(() => { });
+
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
                 setRoots(res.data.paths);
-                setConfig(prev => ({
-                    ...prev,
-                    modelPath: '', // Inicia vazio para mostrar placeholder
-                    datasetPath: '' // Inicia vazio para mostrar placeholder
-                }));
             }
         });
+
+        // Restaurar logs do localStorage
+        const savedLogs = localStorage.getItem('np_test_logs');
+        if (savedLogs) setLogs(JSON.parse(savedLogs));
+
+        // Restore Config
+        const savedConfig = localStorage.getItem('np_test_config');
+        if (savedConfig) {
+            try {
+                setConfig(JSON.parse(savedConfig));
+            } catch (e) {
+                console.error("Failed to parse saved config", e);
+            }
+        }
     }, []);
+
+    // Save Config on Change
+    useEffect(() => {
+        localStorage.setItem('np_test_config', JSON.stringify(config));
+    }, [config]);
 
 
     // Polling de Logs
@@ -53,17 +82,27 @@ export default function TestesPage() {
                 try {
                     const res = await APIService.getLogs('test');
                     setLogs(res.data.logs);
+                    localStorage.setItem('np_test_logs', JSON.stringify(res.data.logs));
 
                     const health = await APIService.healthCheck();
                     if (!health.data.processing) {
                         setLoading(false);
                         setMessage({ text: '✅ Teste concluído! Verifique os resultados.', type: 'success' });
+                        setPageStatus('test', 'success');
                     }
                 } catch (e) { console.error(e); }
             }, 1000);
         }
         return () => { if (interval) clearInterval(interval); };
     }, [loading]);
+
+    const handleStop = async () => {
+        try {
+            await APIService.stopTesting();
+            setLogs(prev => [...prev, '[INFO] Solicitação de parada enviada...']);
+            setMessage({ text: '⚠️ Parando teste...', type: 'processing' });
+        } catch (e) { console.error(e); }
+    };
 
     const handleRunTest = async () => {
         if (!config.modelPath || !config.datasetPath) {
@@ -73,11 +112,13 @@ export default function TestesPage() {
         setLoading(true);
         setMessage({ text: '⏳ Executando testes de validação...', type: 'processing' });
         setLogs(prev => [...prev, `[INFO] Iniciando validação de modelo...`]);
+        setPageStatus('test', 'processing');
         try {
             await APIService.startTesting({
                 model_path: config.modelPath,
                 dataset_path: config.datasetPath,
-                device: config.device
+                device: config.device,
+                show_preview: config.showPreview
             });
         } catch (error: any) {
             setLoading(false);
@@ -178,18 +219,51 @@ export default function TestesPage() {
                                     </button>
                                 </div>
                             </div>
+
+                            {/* Preview Toggle */}
+                            <div className="pt-2">
+                                <label className="flex items-center gap-3 cursor-pointer group">
+                                    <div className="relative">
+                                        <input
+                                            type="checkbox"
+                                            checked={config.showPreview}
+                                            onChange={(e) => setConfig({ ...config, showPreview: e.target.checked })}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="w-10 h-5 bg-muted rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                                        <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+                                    </div>
+                                    <span className="text-sm font-medium group-hover:text-primary transition-colors">Mostrar Preview em tempo real</span>
+                                </label>
+                            </div>
                         </div>
 
-                        <button
-                            onClick={handleRunTest}
-                            disabled={loading}
-                            className={`w-full py-4 rounded-xl font-bold text-primary-foreground flex justify-center items-center gap-3 text-lg transition-all shadow-xl
-                                ${loading ? 'bg-muted cursor-not-allowed text-muted-foreground' : 'bg-primary hover:brightness-110 hover:scale-[1.01] active:scale-95 shadow-primary/20'}
-                            `}
-                        >
-                            {loading ? <RefreshCcw className="w-6 h-6 animate-spin" /> : <PlayCircle className="w-6 h-6 fill-current" />}
-                            {loading ? 'Validando...' : 'Iniciar Bateria de Testes'}
-                        </button>
+                        {!loading ? (
+                            <button
+                                onClick={handleRunTest}
+                                className="w-full py-4 rounded-xl font-bold text-primary-foreground flex justify-center items-center gap-3 text-lg transition-all shadow-xl bg-primary hover:brightness-110 hover:scale-[1.01] active:scale-95 shadow-primary/20"
+                            >
+                                <PlayCircle className="w-6 h-6 fill-current" />
+                                Iniciar Bateria de Testes
+                            </button>
+                        ) : (
+                            <div className="flex gap-3">
+                                <button
+                                    disabled
+                                    className="flex-1 py-4 rounded-xl font-bold bg-muted text-muted-foreground flex justify-center items-center gap-3"
+                                >
+                                    <RefreshCcw className="w-6 h-6 animate-spin" />
+                                    Validando...
+                                </button>
+                                <button
+                                    onClick={handleStop}
+                                    className="px-6 py-4 rounded-xl font-bold bg-red-500 text-white flex justify-center items-center gap-2 hover:bg-red-600 transition-all"
+                                >
+                                    <StopCircle className="w-6 h-6" />
+                                    Parar
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <div className="bg-primary/5 border border-primary/10 p-6 rounded-2xl">
@@ -207,7 +281,7 @@ export default function TestesPage() {
                 </div>
 
                 {/* Real-time Logs */}
-                <div className="lg:col-span-12 xl:col-span-6">
+                <div className="lg:col-span-12 xl:col-span-6 space-y-6">
                     {/* Status Message */}
                     {message && (
                         <div className="mb-4">
@@ -230,6 +304,12 @@ export default function TestesPage() {
                             setLogs([]);
                             try { await APIService.clearLogs('test'); } catch (e) { console.error(e); }
                         }}
+                    />
+
+                    {/* Video Preview - Below Terminal */}
+                    <VideoPreviewPanel
+                        isVisible={loading && config.showPreview}
+                        title="Preview de Inferência"
                     />
                 </div>
             </div>

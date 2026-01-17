@@ -4,8 +4,8 @@
 
 import torch
 from pathlib import Path
-from app.configuracao.config import TIME_STEPS, NUM_CHANNELS, NUM_JOINTS # Importa as constantes
-from LSTM.models.models import (
+from neurapose_backend.app.configuracao.config import TIME_STEPS, NUM_CHANNELS, NUM_JOINTS # Importa as constantes
+from neurapose_backend.LSTM.models.models import (
     LSTM, RobustLSTM, PooledLSTM, BILSTM, AttentionLSTM,
     TCN, TransformerModel, TemporalFusionTransformer, WaveNet
 )

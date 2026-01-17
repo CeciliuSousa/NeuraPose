@@ -30,13 +30,25 @@ export default function ConverterPage() {
     // Nome do dataset derivado do caminho
     const datasetName = datasetPath ? datasetPath.replace(/\\/g, '/').split('/').pop() || '' : '';
 
-    // Load config
+    // Load config and restore state
     useEffect(() => {
+        // Restaurar estado se houver conversão em andamento
+        APIService.healthCheck().then(res => {
+            if (res.data.processing) {
+                setLoading(true);
+                setMessage({ text: '⏳ Conversão em andamento...', type: 'processing' });
+            }
+        }).catch(() => { });
+
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
                 setRoots(res.data.paths);
             }
         });
+
+        // Restaurar logs do localStorage
+        const savedLogs = localStorage.getItem('np_convert_logs');
+        if (savedLogs) setLogs(JSON.parse(savedLogs));
     }, []);
 
     // Polling logs durante conversão
@@ -47,6 +59,7 @@ export default function ConverterPage() {
                 try {
                     const res = await APIService.getLogs('convert');
                     setLogs(res.data.logs);
+                    localStorage.setItem('np_convert_logs', JSON.stringify(res.data.logs));
 
                     const health = await APIService.healthCheck();
                     if (!health.data.processing) {

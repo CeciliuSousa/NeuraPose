@@ -19,6 +19,27 @@ import {
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { APIService } from '../../services/api';
+import { useProcessingStatus, PageStatus } from '../../hooks/useProcessingStatus';
+
+// Mapeamento de rotas para chaves de status
+const STATUS_KEYS: Record<string, string> = {
+    '/processamento': 'process',
+    '/treino': 'train',
+    '/testes': 'test',
+    '/converter': 'convert',
+    '/split': 'split',
+    '/reid': 'reid',
+    '/anotacao': 'annotate',
+};
+
+function getStatusColor(status: PageStatus): string {
+    switch (status) {
+        case 'processing': return 'bg-yellow-500 animate-pulse';
+        case 'success': return 'bg-green-500';
+        case 'error': return 'bg-red-500';
+        default: return '';
+    }
+}
 
 const menuItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -49,6 +70,15 @@ export function Sidebar() {
     const [isOpen, setIsOpen] = useState(false);
     const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
     const [isOnline, setIsOnline] = useState(false);
+    const { statuses, clearPageStatus } = useProcessingStatus();
+
+    // Limpa o status (success/error) ao visitar a página
+    useEffect(() => {
+        const key = STATUS_KEYS[pathname];
+        if (key) {
+            clearPageStatus(key);
+        }
+    }, [pathname, clearPageStatus]);
 
     // Polling de informações do sistema - otimizado
     useEffect(() => {
@@ -106,6 +136,9 @@ export function Sidebar() {
                             {menuItems.map((item) => {
                                 const Icon = item.icon;
                                 const isActive = pathname === item.href;
+                                const statusKey = STATUS_KEYS[item.href];
+                                const status = statusKey ? statuses[statusKey] : undefined;
+                                const statusColor = status ? getStatusColor(status) : '';
 
                                 return (
                                     <li key={item.href}>
@@ -119,7 +152,10 @@ export function Sidebar() {
                       `}
                                         >
                                             <Icon className="w-5 h-5" />
-                                            {item.name}
+                                            <span className="flex-1">{item.name}</span>
+                                            {statusColor && (
+                                                <div className={`w-2 h-2 rounded-full ${statusColor}`} />
+                                            )}
                                         </Link>
                                     </li>
                                 );

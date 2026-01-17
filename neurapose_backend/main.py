@@ -77,6 +77,15 @@ HIDDEN_ENTRIES = {
 
 app = FastAPI(title="NeuraPose API", version="1.0.0")
 
+@app.on_event("shutdown")
+def shutdown_event():
+    """Executado quando a aplicação está encerrando (ex: Ctrl+C)."""
+    logger.info("Recebido sinal de desligamento. Solicitando parada de tarefas em segundo plano...")
+    state.stop_requested = True
+    state.is_running = False
+    state.kill_all_processes()
+
+
 # ==============================================================
 # CORS
 # ==============================================================
@@ -339,6 +348,8 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
     
     state.reset()
     state.is_running = True
+    state.current_process = 'process'
+    state.process_status = 'processing'
     log_buffer = LogBuffer()
     category = "process"
     
@@ -419,15 +430,18 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
         if process.returncode == 0:
             log_buffer.write("[OK] Processamento concluído com sucesso!", category)
             logger.info("Processamento concluído com sucesso.")
+            state.process_status = 'success'
         elif not state.stop_requested:
             log_buffer.write(f"[ERRO] Processo finalizou com código: {process.returncode}", category)
             logger.error(f"Processo finalizou com código: {process.returncode}")
+            state.process_status = 'error'
             
     except Exception as e:
         logger.error(f"Erro ao executar subprocess: {e}")
         log_buffer.write(f"[ERRO] {str(e)}", category)
+        state.process_status = 'error'
     finally:
-        state.reset()
+        state.is_running = False
         # Limpa memória GPU após processamento
         cleanup_result = cleanup_gpu_memory(force=True)
         if cleanup_result.get("success"):
@@ -435,9 +449,11 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
 
 
 # Mantém a função antiga para compatibilidade (pode ser removida futuramente)
-def run_processing_task(input_path: Path, output_path: Path, onnx_path: Path, show: bool, device: str = "cuda"):
+def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, show: bool, device: str = "cuda"):
     state.reset()
     state.is_running = True
+    state.current_process = 'process'
+    state.process_status = 'processing'
     
     # Atualiza o dispositivo no config_master para esta sessão
     cm.DEVICE = device if (device == "cpu" or torch.cuda.is_available()) else "cpu"
@@ -472,13 +488,17 @@ def run_processing_task(input_path: Path, output_path: Path, onnx_path: Path, sh
             
             if state.stop_requested:
                 logger.info("Processamento interrompido pelo usuario.")
+                state.process_status = 'idle' # Ou manter error/warning?
             else:
                 logger.info("Processamento concluido.")
+                state.process_status = 'success'
         except Exception as e:
             logger.error(f"Erro no processamento: {e}")
             print(f"Erro critico: {e}")
+            state.process_status = 'error'
         finally:
-            state.reset()
+            state.is_running = False
+            state.current_frame = None
 
 def run_training_task(req: TrainRequest):
     """Executa o pipeline de treinamento em segundo plano."""
@@ -513,6 +533,8 @@ def run_testing_task(req: Dict[str, Any]):
     """Executa o pipeline de teste em segundo plano."""
     state.reset()
     state.is_running = True
+    state.current_process = 'test'
+    state.process_status = 'processing'
     
     with CaptureOutput(category="test"):
         logger.info("Iniciando fase de testes e validação...")
@@ -524,6 +546,8 @@ def run_testing_task(req: Dict[str, Any]):
                 sys.argv.extend(["--input-dir", req["dataset_path"]])
             if req.get("model_path"):
                 sys.argv.extend(["--model-dir", req["model_path"]])
+            if req.get("show_preview"):
+                sys.argv.append("--show")
             
             # Recarrega os modulos para garantir que peguem o novo sys.argv
             import importlib
@@ -537,12 +561,15 @@ def run_testing_task(req: Dict[str, Any]):
             
             tm.main()
             logger.info("Fase de testes concluída.")
+            state.process_status = 'success'
         except Exception as e:
             logger.error(f"Erro nos testes: {e}")
             import traceback
             logger.error(traceback.format_exc())
+            state.process_status = 'error'
         finally:
-            state.reset()
+            state.is_running = False
+            state.current_frame = None
 
 
 
@@ -574,8 +601,40 @@ def health_check():
         "version": "1.0.0",
         "device": "gpu" if cm.DEVICE == "cuda" else "cpu",
         "processing": state.is_running,
-        "paused": state.is_paused
+        "paused": state.is_paused,
+        "current_process": state.current_process,
+        "process_status": state.process_status
     }
+
+
+def generate_video_stream():
+    """Generator that yields MJPEG frames from state.current_frame."""
+    import cv2
+    import time
+    
+    while True:
+        frame = state.get_frame()
+        if frame is not None:
+            # Encode frame as JPEG
+            _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+        else:
+            # No frame available, send a small delay
+            time.sleep(0.05)
+            # Optionally yield an empty frame or placeholder
+            continue
+
+
+@app.get("/video_feed")
+def video_feed():
+    """Stream de vídeo em tempo real via MJPEG."""
+    from starlette.responses import StreamingResponse
+    return StreamingResponse(
+        generate_video_stream(),
+        media_type="multipart/x-mixed-replace; boundary=frame"
+    )
+
 
 # Cache para system info (evita chamadas pesadas)
 _system_info_cache = {"data": None, "timestamp": 0}
@@ -843,10 +902,14 @@ async def start_processing(req: ProcessRequest, background_tasks: BackgroundTask
     
     output_dir = cm.PROCESSING_OUTPUT_DIR / f"{dataset_name}-processado"
     
+    # Define o caminho do modelo ONNX
+    onnx_path = Path(req.onnx_path) if req.onnx_path else Path(cm.YOLO_MODEL)
+    
     background_tasks.add_task(
-        run_subprocess_processing, 
-        str(inp), 
-        dataset_name, 
+        run_processing_thread, 
+        inp, 
+        output_dir, 
+        onnx_path,
         req.show_preview, 
         req.device
     )
@@ -866,6 +929,13 @@ async def start_testing(req: TestRequest, background_tasks: BackgroundTasks):
     background_tasks.add_task(run_testing_task, req.dict())
     return {"status": "started", "message": "Fase de testes iniciada."}
 
+
+@app.post("/test/stop")
+async def stop_testing():
+    """Para a fase de testes."""
+    state.stop_requested = True
+    logger.info("Solicitação de parada de teste recebida.")
+    return {"status": "stopped", "message": "Solicitação de parada enviada."}
 
 @app.post("/train")
 async def start_training(req: TrainRequest, background_tasks: BackgroundTasks):
@@ -900,6 +970,8 @@ async def train_model_start(req: TrainStartRequest, background_tasks: Background
     
     def run_train():
         state.is_running = True
+        state.current_process = 'train'
+        state.process_status = 'processing'
         with CaptureOutput(category="train"):
             try:
                 import sys
@@ -926,10 +998,12 @@ async def train_model_start(req: TrainStartRequest, background_tasks: Background
                 train_main()
                 
                 logger.info(f"[OK] Treinamento concluído!")
+                state.process_status = 'success'
             except Exception as e:
                 logger.error(f"[ERRO] Treinamento falhou: {e}")
+                state.process_status = 'error'
             finally:
-                state.reset()
+                state.is_running = False
     
     background_tasks.add_task(run_train)
     return {"status": "started", "message": f"Treinamento iniciado: {dataset_name} com {req.model_type}"}
@@ -965,6 +1039,8 @@ async def train_model_retrain(req: TrainRetrainRequest, background_tasks: Backgr
     
     def run_retrain():
         state.is_running = True
+        state.current_process = 'train'
+        state.process_status = 'processing'
         with CaptureOutput(category="train"):
             try:
                 import sys

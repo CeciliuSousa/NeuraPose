@@ -20,7 +20,7 @@ args, _ = parser.parse_known_args()
 # ------------------------------------------------------------------
 # Importa TUDO do config_master.py
 # ------------------------------------------------------------------
-from config_master import *
+from neurapose_backend.config_master import *
 
 
 # ------------------------------------------------------------------

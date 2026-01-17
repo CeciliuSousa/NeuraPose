@@ -88,7 +88,7 @@ export default function HomePage() {
                         <AlertCircle className="w-5 h-5" />
                     )}
                     <span className="font-bold tracking-wide uppercase text-xs">
-                        {loading ? 'Sincronizando...' : status?.status === 'healthy' ? 'Backend Ativo' : 'Backend offline'}
+                        {loading ? 'Sincronizando...' : status?.status === 'healthy' ? 'Backend: online' : 'Backend offline'}
                     </span>
                 </div>
             </div>

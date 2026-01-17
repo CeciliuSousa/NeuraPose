@@ -9,26 +9,23 @@ from pathlib import Path
 from colorama import Fore
 
 # Importações do projeto
-from detector.yolo_detector import yolo_detector_botsort as yolo_detector
+from neurapose_backend.detector.yolo_detector import yolo_detector_botsort as yolo_detector
 
-from app.configuracao.config import (
+from neurapose_backend.app.configuracao.config import (
     CLASSE1,
     CLASSE2,
-    PREDICOES_DIR,
-    JSONS_DIR,
-    RELATORIOS_ROOT,
     CLASSE2_THRESHOLD,
 )
 
-from app.modulos.extracao_pose import extrair_keypoints_rtmpose_padronizado
-from app.modulos.processamento_sequencia import montar_sequencia_individual
-from app.modulos.inferencia_lstm import rodar_lstm_uma_sequencia
-from app.modulos.tracking import TrackHistory
-from app.utils.visualizacao import gerar_video_predicao
+from neurapose_backend.app.modulos.extracao_pose import extrair_keypoints_rtmpose_padronizado
+from neurapose_backend.app.modulos.processamento_sequencia import montar_sequencia_individual
+from neurapose_backend.app.modulos.inferencia_lstm import rodar_lstm_uma_sequencia
+from neurapose_backend.app.modulos.tracking import TrackHistory
+from neurapose_backend.app.utils.visualizacao import gerar_video_predicao
 
 
 
-def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_preview=False):
+def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_preview=False, output_dir: Path = None):
     """
     Processa um único vídeo do início ao fim.
     Retorna um dicionário com estatísticas e resultados.
@@ -57,8 +54,25 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
     results = res["results"]
     id_map = res.get("id_map", {})
 
-    pred_video_path = PREDICOES_DIR / f"{video_path.stem}_pred.mp4"
-    json_path = JSONS_DIR / f"{video_path.stem}.json"
+    # Usa output_dir se fornecido, caso contrário usa fallback
+    if output_dir:
+        predicoes_dir = output_dir / "predicoes"
+        jsons_dir = output_dir / "jsons"
+        trackings_dir = output_dir / "trackings"
+        predicoes_dir.mkdir(parents=True, exist_ok=True)
+        jsons_dir.mkdir(parents=True, exist_ok=True)
+        trackings_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        # Fallback para diretório local (usado em pré-processamento)
+        predicoes_dir = video_path.parent / "predicoes"
+        jsons_dir = video_path.parent / "jsons"
+        trackings_dir = video_path.parent / "trackings"
+        predicoes_dir.mkdir(parents=True, exist_ok=True)
+        jsons_dir.mkdir(parents=True, exist_ok=True)
+        trackings_dir.mkdir(parents=True, exist_ok=True)
+
+    pred_video_path = predicoes_dir / f"{video_path.stem}_pred.mp4"
+    json_path = jsons_dir / f"{video_path.stem}.json"
 
     # ---------------- POSE (RTMPose) ----------------
     p0 = time.time()
@@ -152,10 +166,7 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
             # Usando botsort_id (ID original do tracker)
             track_history.update(r["botsort_id"], t_sec)
 
-        TRACKINGS_DIR = RELATORIOS_ROOT / "trackings"
-        TRACKINGS_DIR.mkdir(parents=True, exist_ok=True)
-        
-        tracking_txt_path = TRACKINGS_DIR /f"{video_path.stem}_trackings.txt"
+        tracking_txt_path = trackings_dir / f"{video_path.stem}_trackings.txt"
         track_history.save_txt(tracking_txt_path)
         # print(Fore.GREEN + f"[OK] Relatório de tracking salvo em: {tracking_txt_path}")
     except Exception as e:

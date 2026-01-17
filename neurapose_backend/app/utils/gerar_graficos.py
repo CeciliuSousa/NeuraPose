@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, Any
 from colorama import Fore
 
-from app.configuracao.config import (
+from neurapose_backend.app.configuracao.config import (
     CLASSE1,
     CLASSE2,
     TEMPORAL_MODEL

@@ -1,12 +1,6 @@
-Em TODAS AS PÁGINAS, as entradas devem ser PLACEHOLDERS: 
+Nada funciona como eu pede!
 
-- Em "Processamento de Vídeo" entrada (dataset): "Selecione o diretório para processar..."
-- Em "re-identificação" entrada (dataset): "Selecione o diretório para reidentificar..."
-- Em "anotação" entrada (dataset): "Selecione o diretório para anotar..."
-- Em "split dataset" entrada (dataset): "Selecione o diretório para split..."
-- Em "teste" entrada (modelo): "Selecione o modelo para teste..."
-- Em "teste" entrada (dataset): "Selecione o dataset para teste..."
+Exemplo, quando ativei a pagina testar modelos!
 
-Está faltando alterar apenas da pagina re-identificação
-
-remova o texto "resultados-processamentos" e coloque "Selecione o diretório para reidentificar..."
+- Troquei para outra página, voltei e as entradas de modelo e dataet sumiram.
+- O vídeo não foi exibido em tempo real durante seu processamento, isso funciona quando rodo um comando no terminal: uv run python -m neurapose_backend.app.testar_modelo --model tft --relatorio teste--input-dir neurapose_backend/datasets/teste-processado-v2-reidentificado/teste/videos --show. A flag --show exibi o vídeo em uma janela do python

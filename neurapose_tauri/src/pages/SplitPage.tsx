@@ -39,6 +39,13 @@ export default function SplitPage() {
         // const savedInput = localStorage.getItem('np_split_input'); // Removido para forçar placeholder
         const savedPercent = localStorage.getItem('np_split_percent');
 
+        // Restaurar estado se houver split em andamento
+        APIService.healthCheck().then(res => {
+            if (res.data.processing) {
+                setLoading(true);
+            }
+        }).catch(() => { });
+
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
                 setRoots(res.data.paths);
@@ -46,6 +53,10 @@ export default function SplitPage() {
                 if (savedPercent) setTrainPercent(parseInt(savedPercent));
             }
         });
+
+        // Restaurar logs do localStorage
+        const savedLogs = localStorage.getItem('np_split_logs');
+        if (savedLogs) setLogs(JSON.parse(savedLogs));
     }, []);
 
     // Persist settings
@@ -62,6 +73,7 @@ export default function SplitPage() {
                 try {
                     const res = await APIService.getLogs('split');
                     setLogs(res.data.logs);
+                    localStorage.setItem('np_split_logs', JSON.stringify(res.data.logs));
 
                     const health = await APIService.healthCheck();
                     if (!health.data.processing) {

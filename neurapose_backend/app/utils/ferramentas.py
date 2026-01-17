@@ -7,7 +7,7 @@ import onnxruntime as ort
 from pathlib import Path
 from yt_dlp import YoutubeDL
 from colorama import Fore
-from app.configuracao.config import (
+from neurapose_backend.app.configuracao.config import (
     YOLO_PATH,
     OSNET_PATH,
     RTMPOSE_PATH,
@@ -70,10 +70,12 @@ def imprimir_banner(checks):
     )
     print("------------------------------------------------------------")
     
-    print(f"Dataset de vídeos de teste: {checks['dataset_path']}")
+    # Exibe caminhos completos de forma mais legível
+    print(f"Modelo             : modelos-lstm-treinados/{checks['modelo_temporal_nome']}")
+    print(f"Dataset de teste   : datasets/{checks.get('dataset_name', DATASET_NAME)}/teste/videos")
     if DEVICE.startswith("cuda"):
         try:
-            print(Fore.GREEN + f"GPU detectada: {torch.cuda.get_device_name(0)}")
+            print(Fore.GREEN + f"GPU detectada      : {torch.cuda.get_device_name(0)}")
         except Exception:
             print(Fore.GREEN + "GPU detectada (não foi possível obter o nome).")
     else:
