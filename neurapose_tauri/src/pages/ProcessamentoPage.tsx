@@ -60,7 +60,7 @@ export default function ProcessamentoPage() {
             localStorage.setItem('np_process_loading', 'true');
             interval = setInterval(async () => {
                 try {
-                    const res = await APIService.getLogs();
+                    const res = await APIService.getLogs('process');
                     const newLogs = res.data.logs;
                     setLogs(newLogs);
                     localStorage.setItem('np_process_logs', JSON.stringify(newLogs));
@@ -305,7 +305,7 @@ export default function ProcessamentoPage() {
                     onClear={async () => {
                         setLogs([]);
                         localStorage.removeItem('np_process_logs');
-                        try { await APIService.clearLogs(); } catch (e) { console.error(e); }
+                        try { await APIService.clearLogs('process'); } catch (e) { console.error(e); }
                     }}
                 />
             </div>

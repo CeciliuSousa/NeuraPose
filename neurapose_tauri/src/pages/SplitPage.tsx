@@ -60,7 +60,7 @@ export default function SplitPage() {
         if (loading) {
             interval = setInterval(async () => {
                 try {
-                    const res = await APIService.getLogs();
+                    const res = await APIService.getLogs('split');
                     setLogs(res.data.logs);
 
                     const health = await APIService.healthCheck();
@@ -234,7 +234,7 @@ export default function SplitPage() {
                         isLoading={loading}
                         onClear={async () => {
                             setLogs([]);
-                            try { await APIService.clearLogs(); } catch (e) { console.error(e); }
+                            try { await APIService.clearLogs('split'); } catch (e) { console.error(e); }
                         }}
                     />
 

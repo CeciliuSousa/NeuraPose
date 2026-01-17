@@ -137,7 +137,8 @@ FRAME_DISPLAY_H = 720
 
 # Treinamento
 TRAINING_INPUT_DIR = PROCESSING_OUTPUT_DIR
-TRAINED_MODELS_DIR = ROOT / "meus-modelos-treinados"
+TRAINED_MODELS_DIR = ROOT / "modelos-lstm-treinados"
+TRAINED_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_SAVE_DIR = TRAINED_MODELS_DIR / f"{TEMPORAL_MODEL}-{TRAINED_MODEL_NAME}"
 
 # Teste
@@ -145,6 +146,10 @@ TEST_DATASETS_ROOT = ROOT / "datasets" / TEST_DATASET
 TEST_DIR = TEST_DATASETS_ROOT / TEST_SPLIT / "videos"
 TEST_LABELS_JSON = TEST_DATASETS_ROOT / TEST_SPLIT / "anotacoes" / "labels.json"
 TEST_MODEL_DIR = MODEL_SAVE_DIR
+
+# Relatórios
+TEST_REPORTS_DIR = ROOT / "relatorios-testes"
+TEST_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Dados de treino
 TRAINING_DATA_PATH = ROOT / "datasets" / PROCESSING_DATASET / "treino" / "data" / "data.pt"

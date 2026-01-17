@@ -18,6 +18,7 @@ from colorama import Fore, init
 import os
 from datetime import datetime
 from sklearn.model_selection import StratifiedShuffleSplit
+import shutil
 
 # Imports do projeto
 from LSTM.configuracao.config import get_config
@@ -168,62 +169,106 @@ def main():
     history = []
 
     # Loop de treinamento
+    from app.state import state
     print(Fore.CYAN + "\n[TREINO]")
     for epoch in range(1, args.epochs + 1):
-        with tqdm(total=len(train_loader), desc=f"Epoca {epoch}", ncols=120) as pbar:
-            tr_loss, tr_acc, tr_f1m, tr_f1w = train_one_epoch(model, train_loader, optimizer, criterion, device)
-            va_loss, va_acc, va_f1m, va_f1w, _, _, _, _ = evaluate(model, val_loader, device, criterion)
+        # Verifica interrupção
+        if state.stop_requested:
+            print(Fore.RED + f"\n[STOP] Treinamento interrompido pelo usuário na época {epoch}")
+            break
 
-            scheduler.step(va_f1m)
+        tr_loss, tr_acc, tr_f1m, tr_f1w = train_one_epoch(model, train_loader, optimizer, criterion, device)
+        va_loss, va_acc, va_f1m, va_f1w, _, _, _, _ = evaluate(model, val_loader, device, criterion)
 
-            history.append({
-                "epoch": epoch,
-                "train_loss": tr_loss, "val_loss": va_loss,
-                "train_acc": tr_acc, "val_acc": va_acc,
-                "train_f1m": tr_f1m, "val_f1m": va_f1m
-            })
+        scheduler.step(va_f1m)
 
-            if va_f1m > best_val_f1:
-                best_val_f1, best_epoch = va_f1m, epoch
-                torch.save(model.state_dict(), best_model_path)
+        history.append({
+            "epoch": epoch,
+            "train_loss": tr_loss, "val_loss": va_loss,
+            "train_acc": tr_acc, "val_acc": va_acc,
+            "train_f1m": tr_f1m, "val_f1m": va_f1m
+        })
 
-            pbar.set_postfix({"TrLoss": f"{tr_loss:.4f}", "ValF1": f"{va_f1m:.4f}"})
-            pbar.update(len(train_loader))
-            pbar.write(f"[{epoch:03d}] Loss: {tr_loss:.4f}/{va_loss:.4f} | F1: {tr_f1m:.4f}/{va_f1m:.4f}")
+        if va_f1m > best_val_f1:
+            best_val_f1, best_epoch = va_f1m, epoch
+            torch.save(model.state_dict(), best_model_path)
+
+        # Print otimizado (apenas algumas épocas ou no final para não travar o log)
+        if epoch == 1 or epoch % 10 == 0 or epoch == args.epochs:
+            print(f"[{epoch:03d}/{args.epochs}] Loss: {tr_loss:.4f}/{va_loss:.4f} | Acc: {va_acc*100:.1f}% | F1: {va_f1m:.4f}")
 
         if early.should_stop(va_f1m, va_loss):
             print(Fore.MAGENTA + f"[STOP] Early stopping na epoca {epoch}")
             break
+
+    if state.stop_requested:
+        return
 
     # Avaliacao final
     model.load_state_dict(torch.load(best_model_path, map_location=device))
     tr_loss, tr_acc, tr_f1m, tr_f1w, _, _, _, _ = evaluate(model, train_loader, device, criterion)
     va_loss, va_acc, va_f1m, va_f1w, va_report, _, _, va_cm = evaluate(model, val_loader, device, criterion)
 
-    # Salva graficos e modelo final
-    plot_curves(history, curves_path)
-    plot_confusion_matrix(va_cm, [primeiraClasse, segundaClasse], cm_val_path)
-    torch.save(model.state_dict(), final_model_path)
+    # Nomenclatura final do diretório: <dataset>-modelo_<abbr>-acc_<float>
+    def get_model_abbr(m):
+        m = m.lower()
+        if "temporal fusion" in m or m == "tft": return "tft"
+        if "robust" in m: return "RobustLSTM"
+        if "pooled" in m: return "PooledLSTM"
+        if "bilstm" in m: return "BiLSTM"
+        if "attention" in m: return "AttentionLSTM"
+        if "tcn" in m: return "tcn"
+        if "transformer" in m: return "trans"
+        if "wavenet" in m: return "wave"
+        if "lstm" in m: return "lstm"
+        return m
+
+    abbr = get_model_abbr(args.model)
+    accuracy_percent = va_acc * 100
+    final_dir_name = f"{args.name}-modelo_{abbr}-acc_{accuracy_percent:.1f}"
+    
+    # Define o novo diretório final e move o conteúdo
+    final_model_dir = model_dir.parent / final_dir_name
+    final_model_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Salva graficos e modelo final no novo dir
+    plot_curves(history, final_model_dir / "curvas_treino_validacao.png")
+    plot_confusion_matrix(va_cm, [primeiraClasse, segundaClasse], final_model_dir / "matriz_confusao_validacao.png")
+    torch.save(model.state_dict(), final_model_dir / MODEL_FINAL_FILENAME)
+    # Move o model_best.pt e o norm_stats.pt
+    shutil.move(str(best_model_path), str(final_model_dir / MODEL_BEST_FILENAME))
+    shutil.move(str(model_dir / NORM_STATS_FILENAME), str(final_model_dir / NORM_STATS_FILENAME))
 
     # Relatorio
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    report_path = model_dir / f"relatorio_{timestamp}.txt"
-    hist_json_path = model_dir / f"historico_{timestamp}.json"
+    report_path = final_model_dir / f"relatorio_{timestamp}.txt"
+    hist_json_path = final_model_dir / f"historico_{timestamp}.json"
 
     with open(report_path, "w", encoding="utf-8") as f:
         f.write("RELATORIO DE TREINAMENTO\n")
         f.write(f"Data: {timestamp}\n")
         f.write(f"Dispositivo: {get_gpu_info()}\n")
-        f.write(f"Modelo: {args.model}\n")
+        f.write(f"Modelo: {args.model} ({abbr})\n")
         f.write(f"Epocas: {args.epochs}\n")
         f.write(f"Melhor epoca: {best_epoch}\n")
+        f.write(f"Val Acc (best): {accuracy_percent:.1f}%\n")
         f.write(f"Val F1 (best): {best_val_f1:.4f}\n")
 
     with open(hist_json_path, "w", encoding="utf-8") as jf:
         json.dump(history, jf, indent=2)
 
+    # Limpa diretório temporário se estiver vazio ou deleta se quiser limpar tudo
+    try:
+        if model_dir != final_model_dir:
+            # Remove arquivos temporários se houver
+            for item in model_dir.iterdir():
+                if item.is_file(): item.unlink()
+            model_dir.rmdir()
+    except: pass
+
     print(Fore.GREEN + "\n[SUCESSO] Treinamento concluido!")
-    print(f"Modelo: {best_model_path}")
+    print(f"Modelo: {final_model_dir / MODEL_BEST_FILENAME}")
+    print(f"Acc (val): {accuracy_percent:.1f}%")
     print(f"F1 (val): {va_f1m:.4f}")
 
 

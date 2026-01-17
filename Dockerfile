@@ -106,9 +106,9 @@ ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility
 # ============================================================
 RUN mkdir -p /app/neurapose/videos \
     /app/neurapose/datasets \
-    /app/neurapose/meus-modelos-treinados \
+    /app/neurapose/modelos-lstm-treinados \
     /app/neurapose/resultado_processamento \
-    /app/neurapose/relatorios-teste
+    /app/neurapose/relatorios-testes
 
 # ============================================================
 # 9. Entrypoint

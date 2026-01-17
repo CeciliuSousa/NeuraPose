@@ -147,7 +147,7 @@ export default function AnotacaoPage() {
 
         try {
             // Limpa logs anteriores no backend
-            await APIService.clearLogs();
+            await APIService.clearLogs('default');
 
             // Inicia salvamento
             await APIService.saveAnnotations({
@@ -159,7 +159,7 @@ export default function AnotacaoPage() {
             // Polling de logs durante processamento
             const pollLogs = async () => {
                 try {
-                    const res = await APIService.getLogs();
+                    const res = await APIService.getLogs('default');
                     if (res.data.logs && res.data.logs.length > 0) {
                         setTerminalLogs(res.data.logs);
                     }

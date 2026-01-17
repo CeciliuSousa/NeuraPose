@@ -51,9 +51,9 @@ def imprimir_banner(checks):
     Imprime o banner inicial do sistema com o status dos recursos,
     garantindo o alinhamento.
     """
-    print("\n======================================================================")
+    print("\n============================================================")
     print("SISTEMA DE DETECÇÃO — NEURAPOSE AI")
-    print("======================================================================")
+    print("============================================================")
     
     print(f"YOLO                : {status_str(checks['yolo'])} {YOLO_PATH.name}")
     print(f"TRACKER             : {status_str(True)} {TRACKER_NAME}")
@@ -68,7 +68,7 @@ def imprimir_banner(checks):
     print(
         f"Labels de Teste     : {status_str(checks['labels'])} {LABELS_TEST_PATH.name}"
     )
-    print("----------------------------------------------------------------------")
+    print("------------------------------------------------------------")
     
     print(f"Dataset de vídeos de teste: {checks['dataset_path']}")
     if DEVICE.startswith("cuda"):
@@ -78,7 +78,7 @@ def imprimir_banner(checks):
             print(Fore.GREEN + "GPU detectada (não foi possível obter o nome).")
     else:
         print(Fore.YELLOW + "Executando em CPU.")
-    print("======================================================================\n")
+    print("============================================================\n")
 
 
 def carregar_sessao_onnx(model_path: str | Path):

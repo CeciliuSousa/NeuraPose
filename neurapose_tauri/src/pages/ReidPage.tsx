@@ -125,20 +125,12 @@ export default function ReidPage() {
         }
     };
 
-    useEffect(() => {
-        // Sempre usar o root do backend, sem persistência em localStorage
-        APIService.getConfig().then(res => {
-            if (res.data.status === 'success') {
-                setInputPath(res.data.paths.processamentos || '');
-            }
-        });
-    }, []);
-
+    // Carregar configurações apenas uma vez (já feito no primeiro useEffect)
+    // inputPath deve começar vazio para mostrar o placeholder
     useEffect(() => {
         if (inputPath) {
             loadVideos();
             loadAgenda();
-            // Não salvar em localStorage - sempre começar do root
         }
     }, [inputPath]);
 
@@ -326,7 +318,7 @@ export default function ReidPage() {
 
         try {
             // Limpa logs anteriores no backend
-            await APIService.clearLogs();
+            await APIService.clearLogs('process');
 
             await APIService.batchApplyReID({
                 videos: list,
@@ -336,7 +328,7 @@ export default function ReidPage() {
             // Polling de logs durante processamento
             const pollLogs = async () => {
                 try {
-                    const res = await APIService.getLogs();
+                    const res = await APIService.getLogs('process');
                     if (res.data.logs && res.data.logs.length > 0) {
                         setTerminalLogs(res.data.logs);
                     }

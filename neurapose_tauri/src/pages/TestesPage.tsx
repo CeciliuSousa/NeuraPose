@@ -51,7 +51,7 @@ export default function TestesPage() {
         if (loading) {
             interval = setInterval(async () => {
                 try {
-                    const res = await APIService.getLogs();
+                    const res = await APIService.getLogs('test');
                     setLogs(res.data.logs);
 
                     const health = await APIService.healthCheck();
@@ -228,7 +228,7 @@ export default function TestesPage() {
                         isLoading={loading}
                         onClear={async () => {
                             setLogs([]);
-                            try { await APIService.clearLogs(); } catch (e) { console.error(e); }
+                            try { await APIService.clearLogs('test'); } catch (e) { console.error(e); }
                         }}
                     />
                 </div>
@@ -238,8 +238,18 @@ export default function TestesPage() {
                 isOpen={explorerTarget !== null}
                 onClose={() => setExplorerTarget(null)}
                 onSelect={(path) => {
-                    if (explorerTarget === 'model') setConfig({ ...config, modelPath: path });
-                    if (explorerTarget === 'dataset') setConfig({ ...config, datasetPath: path });
+                    if (explorerTarget === 'model') {
+                        // Ao selecionar um Modelo, busca o model_best.pt
+                        let finalPath = path;
+                        // Simulação de busca no front (o backend já tratará, mas informamos o usuário)
+                        // Note: finalPath remains the folder path, but backend will look for model_best.pt
+                        setConfig({ ...config, modelPath: finalPath });
+                    }
+                    if (explorerTarget === 'dataset') {
+                        // Ao selecionar um Dataset, busca teste/videos
+                        // O backend já faz o ajuste se enviarmos a pasta raiz do dataset
+                        setConfig({ ...config, datasetPath: path });
+                    }
                     setExplorerTarget(null);
                 }}
                 initialPath={explorerTarget === 'model' ? roots.modelos_treinados : roots.datasets}

@@ -34,14 +34,16 @@ from config_master import (
   
 
 # ------------------------------------------------------------
-# PATHS DERIVADOS DO CONFIG_MASTER
+# PATHS DINÂMICOS (PODEM SER SOBRESCRITOS PELO MAIN.PY)
 # ------------------------------------------------------------
 JSONS_DIR = PROCESSING_JSONS_DIR
 LABELS_PATH = PROCESSING_ANNOTATIONS_DIR / "labels.json"
-OUTPUT_BASE = TEST_DATASETS_ROOT.parent / PROCESSING_DATASET
-OUT_PT = OUTPUT_BASE / "treino" / "data" / "data.pt"
-LOG_FILE = OUTPUT_BASE / "treino" / "data" / "frames_invalidos.txt"
-DEBUG_LOG = OUTPUT_BASE / "treino" / "data" / "debug_log.txt"
+
+# Saída: sempre dentro de <pasta_do_labels>/../data/
+OUTPUT_BASE = LABELS_PATH.parent.parent
+OUT_PT = OUTPUT_BASE / "data" / "data.pt"
+LOG_FILE = OUTPUT_BASE / "data" / "frames_invalidos.txt"
+DEBUG_LOG = OUTPUT_BASE / "data" / "debug_log.txt"
 
 OUT_PT.parent.mkdir(parents=True, exist_ok=True)
 

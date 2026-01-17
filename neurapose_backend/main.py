@@ -340,6 +340,7 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
     state.reset()
     state.is_running = True
     log_buffer = LogBuffer()
+    category = "process"
     
     # Monta o comando
     cmd = [
@@ -394,7 +395,7 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
                 line = output_queue.get(timeout=0.1)
                 if line is None:  # Fim do output
                     break
-                log_buffer.write(line)
+                log_buffer.write(line, category)
             except queue.Empty:
                 # Verifica se deve parar
                 if state.stop_requested:
@@ -408,7 +409,7 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
                         try:
                             line = output_queue.get_nowait()
                             if line:
-                                log_buffer.write(line)
+                                log_buffer.write(line, category)
                         except:
                             break
                     break
@@ -416,15 +417,15 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
         process.wait()
         
         if process.returncode == 0:
-            log_buffer.write("[OK] Processamento concluído com sucesso!")
+            log_buffer.write("[OK] Processamento concluído com sucesso!", category)
             logger.info("Processamento concluído com sucesso.")
         elif not state.stop_requested:
-            log_buffer.write(f"[ERRO] Processo finalizou com código: {process.returncode}")
+            log_buffer.write(f"[ERRO] Processo finalizou com código: {process.returncode}", category)
             logger.error(f"Processo finalizou com código: {process.returncode}")
             
     except Exception as e:
         logger.error(f"Erro ao executar subprocess: {e}")
-        log_buffer.write(f"[ERRO] {str(e)}")
+        log_buffer.write(f"[ERRO] {str(e)}", category)
     finally:
         state.reset()
         # Limpa memória GPU após processamento
@@ -443,7 +444,7 @@ def run_processing_task(input_path: Path, output_path: Path, onnx_path: Path, sh
 
     
     # Wrap execution to capture stdout/stderr to LogBuffer
-    with CaptureOutput():
+    with CaptureOutput(category="process"):
         # Imprime banner como faz o processar.py
         imprimir_banner(onnx_path)
         
@@ -513,15 +514,33 @@ def run_testing_task(req: Dict[str, Any]):
     state.reset()
     state.is_running = True
     
-    with CaptureOutput():
+    with CaptureOutput(category="test"):
         logger.info("Iniciando fase de testes e validação...")
         try:
-            from app.testar_modelo import main as start_test
-            # Similar ao treino, o teste lê de configurações globais
-            start_test()
+            import sys
+            # Passa argumentos para o script de teste
+            sys.argv = ["testar_modelo.py"]
+            if req.get("dataset_path"):
+                sys.argv.extend(["--input-dir", req["dataset_path"]])
+            if req.get("model_path"):
+                sys.argv.extend(["--model-dir", req["model_path"]])
+            
+            # Recarrega os modulos para garantir que peguem o novo sys.argv
+            import importlib
+            import app.configuracao.config as config
+            import app.utils.ferramentas as tools
+            import app.testar_modelo as tm
+            
+            importlib.reload(config)
+            importlib.reload(tools)
+            importlib.reload(tm)
+            
+            tm.main()
             logger.info("Fase de testes concluída.")
         except Exception as e:
             logger.error(f"Erro nos testes: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
         finally:
             state.reset()
 
@@ -536,15 +555,15 @@ def root():
     return {"status": "ok", "system": "NeuraPose API"}
 
 @app.get("/logs")
-def get_logs():
-    """Retorna logs do backend."""
-    return {"logs": LogBuffer().get_logs()}
+def get_logs(category: str = "default"):
+    """Retorna logs do backend por categoria."""
+    return {"logs": LogBuffer().get_logs(category)}
 
 @app.delete("/logs")
-def clear_logs():
-    """Limpa o buffer de logs do servidor."""
-    LogBuffer().clear()
-    return {"status": "logs cleared"}
+def clear_logs(category: Optional[str] = None):
+    """Limpa o buffer de logs do servidor (ou de uma categoria)."""
+    LogBuffer().clear(category)
+    return {"status": "logs cleared", "category": category or "all"}
 
 @app.get("/health")
 def health_check():
@@ -629,8 +648,8 @@ def api_get_config():
             "reidentificacoes": str(cm.REID_OUTPUT_DIR),
             "datasets": str(cm.ROOT / "datasets"),
             "modelos": str(cm.TRAINED_MODELS_DIR),
-            "modelos_treinados": str(cm.ROOT / "modelos-lstm-treinados"),
-            "relatorios_testes": str(cm.ROOT / "relatorios-testes"),
+            "modelos_treinados": str(cm.TRAINED_MODELS_DIR),
+            "relatorios_testes": str(cm.TEST_REPORTS_DIR),
             "anotacoes": str(cm.ANNOTATIONS_OUTPUT_DIR),
             "root": str(cm.ROOT)
         },
@@ -787,6 +806,11 @@ def stop_process():
     state.stop_requested = True
     return {"status": "stop_requested"}
 
+@app.post("/train/stop")
+def stop_training():
+    state.stop_requested = True
+    return {"status": "stop_requested", "message": "Interrupção de treinamento solicitada."}
+
 @app.post("/process/pause")
 def pause_process():
     state.is_paused = True
@@ -876,7 +900,7 @@ async def train_model_start(req: TrainStartRequest, background_tasks: Background
     
     def run_train():
         state.is_running = True
-        with CaptureOutput():
+        with CaptureOutput(category="train"):
             try:
                 import sys
                 # Configura argumentos para o treinador
@@ -941,7 +965,7 @@ async def train_model_retrain(req: TrainRetrainRequest, background_tasks: Backgr
     
     def run_retrain():
         state.is_running = True
-        with CaptureOutput():
+        with CaptureOutput(category="train"):
             try:
                 import sys
                 sys.argv = [
@@ -1634,55 +1658,66 @@ async def convert_dataset_to_pt(req: ConvertRequest, background_tasks: Backgroun
     if not dataset_path.exists():
         raise HTTPException(status_code=404, detail=f"Dataset não encontrado: {dataset_path}")
     
-    # Verifica se tem estrutura esperada
-    jsons_dir = dataset_path / "jsons"
-    labels_path = dataset_path / "anotacoes" / "labels.json"
+    # Suporte para estrutura flexível: busca 'treino' ou usa a raiz
+    base_search = dataset_path / "treino" if (dataset_path / "treino").exists() else dataset_path
+    
+    # Busca pasta de JSONs ('dados' ou 'jsons')
+    jsons_dir = base_search / "dados" if (base_search / "dados").exists() else base_search / "jsons"
+    annotations_dir = base_search / "anotacoes"
+    labels_path = annotations_dir / "labels.json"
     
     if not jsons_dir.exists():
-        raise HTTPException(status_code=400, detail=f"Pasta jsons não encontrada em {dataset_path}")
+        raise HTTPException(status_code=400, detail=f"Pasta de JSONs ('dados' ou 'jsons') não encontrada em {base_search}")
     if not labels_path.exists():
-        raise HTTPException(status_code=400, detail=f"labels.json não encontrado em {dataset_path}/anotacoes/")
+        raise HTTPException(status_code=400, detail=f"labels.json não encontrado em {annotations_dir}")
     
     def run_conversion():
         state.is_running = True
-        with CaptureOutput():
+        with CaptureOutput(category="convert"):
             try:
-                # Temporariamente ajusta config para usar o dataset correto
                 import config_master as cm
                 original_jsons = cm.PROCESSING_JSONS_DIR
                 original_labels = cm.PROCESSING_ANNOTATIONS_DIR
-                original_output = cm.TEST_DATASETS_ROOT.parent / cm.PROCESSING_DATASET
                 
-                # Atualiza paths para o dataset selecionado
-                cm.PROCESSING_JSONS_DIR = jsons_dir
-                cm.PROCESSING_ANNOTATIONS_DIR = dataset_path / "anotacoes"
-                
-                # Nome do dataset
+                # Nome do dataset e caminhos de saída
                 dataset_name = dataset_path.name
-                
-                # Cria diretório de saída
-                out_dir = cm.TEST_DATASETS_ROOT.parent / dataset_name / "treino" / "data"
+                out_dir = (dataset_path / "treino" / "data").resolve()
                 out_dir.mkdir(parents=True, exist_ok=True)
-                
-                # Ajusta extensão se necessário
                 out_file = out_dir / f"data{req.extension}"
                 
-                logger.info(f"[CONVERTE] Iniciando conversão de {dataset_name}")
-                logger.info(f"[CONVERTE] JSONs: {jsons_dir}")
-                logger.info(f"[CONVERTE] Labels: {labels_path}")
-                logger.info(f"[CONVERTE] Saída: {out_file}")
+                # FORÇA a atualização das variáveis dentro do módulo converte_pt
+                import pre_processamento.converte_pt as cpt
                 
-                # Executa conversão
-                converte_main()
+                # Atualiza cm para qualquer outro import interno no converte_pt
+                cm.PROCESSING_JSONS_DIR = jsons_dir
+                cm.PROCESSING_ANNOTATIONS_DIR = annotations_dir
                 
-                logger.info(f"[OK] Conversão concluída! Arquivo salvo em {out_file}")
+                # Sobrescreve caminhos que o script usa internamente
+                cpt.JSONS_DIR = jsons_dir.resolve()
+                cpt.LABELS_PATH = labels_path.resolve()
+                cpt.OUT_PT = out_file.resolve()
+                cpt.LOG_FILE = (out_dir / "frames_invalidos.txt").resolve()
+                cpt.DEBUG_LOG = (out_dir / "debug_log.txt").resolve()
+                
+                logger.info(f"[CONVERTE] Iniciando conversão para {dataset_name}")
+                logger.info(f"[CONVERTE] Caminho Base Localizado: {base_search}")
+                logger.info(f"[CONVERTE] Usando JSONs em: {cpt.JSONS_DIR}")
+                logger.info(f"[CONVERTE] Usando Labels em: {cpt.LABELS_PATH}")
+                logger.info(f"[CONVERTE] Destino Final: {cpt.OUT_PT}")
+                
+                # Executa a função main do script de conversão
+                cpt.main()
+                
+                logger.info(f"[OK] Conversão concluída com sucesso!")
                 
             except Exception as e:
                 logger.error(f"[ERRO] Conversão falhou: {e}")
             finally:
                 # Restaura configs originais
-                cm.PROCESSING_JSONS_DIR = original_jsons
-                cm.PROCESSING_ANNOTATIONS_DIR = original_labels
+                if 'original_jsons' in locals():
+                    cm.PROCESSING_JSONS_DIR = original_jsons
+                if 'original_labels' in locals():
+                    cm.PROCESSING_ANNOTATIONS_DIR = original_labels
                 state.reset()
     
     background_tasks.add_task(run_conversion)

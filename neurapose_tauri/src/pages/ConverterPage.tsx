@@ -45,7 +45,7 @@ export default function ConverterPage() {
         if (loading) {
             interval = setInterval(async () => {
                 try {
-                    const res = await APIService.getLogs();
+                    const res = await APIService.getLogs('convert');
                     setLogs(res.data.logs);
 
                     const health = await APIService.healthCheck();
@@ -149,6 +149,7 @@ export default function ConverterPage() {
                                 </h4>
                                 <ul className="text-sm text-blue-300 space-y-1">
                                     <li>• <code className="bg-blue-500/20 px-1 rounded">{datasetName || '<dataset>'}/treino/data/data{extension}</code></li>
+                                    <li>• Busca automática por pastas <code className="bg-blue-500/20 px-1 rounded">dados</code> ou <code className="bg-blue-500/20 px-1 rounded">jsons</code></li>
                                     <li>• Arquivo de log com frames inválidos</li>
                                     <li>• Debug log com detalhes da conversão</li>
                                 </ul>
@@ -198,7 +199,7 @@ export default function ConverterPage() {
                         isLoading={loading}
                         onClear={async () => {
                             setLogs([]);
-                            try { await APIService.clearLogs(); } catch (e) { console.error(e); }
+                            try { await APIService.clearLogs('convert'); } catch (e) { console.error(e); }
                         }}
                     />
                 </div>

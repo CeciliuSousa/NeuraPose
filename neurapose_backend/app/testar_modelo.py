@@ -60,36 +60,78 @@ def main():
     checks = verificar_recursos()
     imprimir_banner(checks)
     
-    # Verificacoes
-    if not BEST_MODEL_PATH.exists():
-        print(Fore.RED + f"[ERRO] Modelo nao encontrado: {BEST_MODEL_PATH}")
-        return
-        
-    if not RTMPOSE_PATH.exists():
-        print(Fore.RED + f"[ERRO] RTMPose nao encontrado: {RTMPOSE_PATH}")
+    # Se fornecido via argumento, usamos. Caso contrário, config_master
+    from config_master import TEST_REPORTS_DIR, RTMPOSE_PATH as CM_RTMPOSE
+    
+    # Determina diretório do modelo
+    model_dir = Path(getattr(args, 'model_dir', '')) or MODEL_DIR
+    best_model_path = model_dir / "model_best.pt"
+    if not best_model_path.exists():
+        # Tenta o próprio path se for um arquivo
+        if model_dir.is_file():
+            best_model_path = model_dir
+            model_dir = model_dir.parent
+        else:
+            print(Fore.RED + f"[ERRO] Modelo model_best.pt nao encontrado em {model_dir}")
+            return
+            
+    # Determina diretório de vídeos (dataset)
+    # User quer teste/videos/ se for um dataset
+    video_input = Path(args.input_dir) if args.input_dir else DATASET_DIR
+    if video_input.is_dir():
+        if (video_input / "teste" / "videos").exists():
+            video_input = video_input / "teste" / "videos"
+        elif (video_input / "videos").exists():
+            video_input = video_input / "videos"
+            
+    # Labels ground-truth: busca automática
+    labels_gt_path = video_input.parent / "anotacoes" / "labels.json"
+    if not labels_gt_path.exists():
+        # Tenta na raiz do que foi selecionado
+        labels_gt_path = video_input / "teste" / "anotacoes" / "labels.json"
+    if not labels_gt_path.exists():
+        labels_gt_path = video_input / "anotacoes" / "labels.json"
+    if not labels_gt_path.exists():
+        labels_gt_path = LABELS_TEST_PATH
+
+    # Caminho do RTMPose (config_master)
+    rtmpose_p = CM_RTMPOSE
+    if not rtmpose_p.exists():
+        print(Fore.RED + f"[ERRO] RTMPose nao encontrado em {rtmpose_p}")
         return
 
     # Carrega modelo LSTM/TFT
-    print(Fore.CYAN + f"\n[MODELO] Carregando {MODEL_NAME} de {MODEL_DIR}")
-    lstm_model, norm_stats = ClassifierFactory.load(MODEL_DIR, device=DEVICE)
+    print(Fore.CYAN + f"\n[MODELO] Carregando modelo de: {model_dir}")
+    lstm_model, norm_stats = ClassifierFactory.load(model_dir, device=DEVICE)
     lstm_model.eval()
 
     # Carrega sessao ONNX
-    sess, input_name = carregar_sessao_onnx(str(RTMPOSE_PATH))
+    sess, input_name = carregar_sessao_onnx(str(rtmpose_p))
 
     # Lista videos
-    if DATASET_DIR.is_file():
-        video_list = [DATASET_DIR]
+    if video_input.is_file():
+        video_list = [video_input]
     else:
-        video_list = sorted(DATASET_DIR.glob("*.mp4"))
-        video_list += sorted(DATASET_DIR.glob("*.m4v"))
+        video_list = sorted(video_input.glob("*.mp4"))
+        video_list += sorted(video_input.glob("*.m4v"))
     
+    if not video_list:
+        print(Fore.YELLOW + f"[AVISO] Nenhum vídeo encontrado em {video_input}")
+        return
+
     print(Fore.CYAN + f"[INFO] {len(video_list)} videos para processar")
 
     # Carrega labels ground-truth
     labels_gt = {}
-    if LABELS_TEST_PATH.exists():
-        labels_gt = carregar_labels_videos(LABELS_TEST_PATH)
+    if labels_gt_path.exists():
+        print(Fore.BLUE + f"[LABELS] Usando Ground Truth: {labels_gt_path}")
+        labels_gt = carregar_labels_videos(labels_gt_path)
+
+    # Output Dir para Relatórios: relatorios-testes / <nome_do_modelo>
+    out_report_dir = TEST_REPORTS_DIR / model_dir.name
+    out_report_dir.mkdir(parents=True, exist_ok=True)
+    out_metricas_dir = out_report_dir / "metricas"
+    out_metricas_dir.mkdir(parents=True, exist_ok=True)
 
     # Processa videos
     all_predictions = {}
@@ -129,7 +171,7 @@ def main():
             cm = confusion_matrix(y_true, y_pred)
 
             print(Fore.GREEN + "\n" + "="*50)
-            print("METRICAS")
+            print("METRICAS DE VALIDAÇÃO")
             print("="*50)
             print(f"Acuracia: {acc:.4f}")
             print(f"F1 Macro: {f1:.4f}")
@@ -143,17 +185,19 @@ def main():
             metricas = {
                 "accuracy": acc, "f1_macro": f1, "precision": prec,
                 "recall": rec, "balanced_accuracy": bacc, "mcc": mcc,
-                "confusion_matrix": cm.tolist()
+                "confusion_matrix": cm.tolist(),
+                "model_name": model_dir.name,
+                "dataset_videos": str(video_input)
             }
             
-            metricas_path = METRICAS_DIR / "metricas.json"
+            metricas_path = out_metricas_dir / "metricas.json"
             with open(metricas_path, "w", encoding="utf-8") as f:
                 json.dump(metricas, f, indent=2)
             
             # Gera graficos
-            gerar_todos_graficos(y_true, y_pred, METRICAS_DIR)
+            gerar_todos_graficos(y_true, y_pred, out_metricas_dir)
             
-            print(Fore.GREEN + f"\n[OK] Metricas salvas em {METRICAS_DIR}")
+            print(Fore.GREEN + f"\n[OK] Relatorio salvo em: {out_report_dir}")
 
     print(Fore.GREEN + "\n[FIM] Teste concluido!")
 

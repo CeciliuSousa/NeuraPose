@@ -84,7 +84,8 @@ export const APIService = {
 
     startProcessing: (data: ProcessRequest) => api.post('/process', data),
 
-    startTraining: (data: TrainRequest) => api.post('/train', data),
+    startTraining: (data: any) => api.post('/train/start', data),
+    retrainTraining: (data: any) => api.post('/train/retrain', data),
 
     listReIDVideos: (rootPath?: string) => api.get<{ videos: ReIDVideo[] }>(`/reid/list`, { params: { root_path: rootPath } }),
 
@@ -92,8 +93,9 @@ export const APIService = {
 
     applyReIDChanges: (videoId: string, data: any, rootPath?: string) => api.post(`/reid/${videoId}/apply`, data, { params: { root_path: rootPath } }),
 
-    getLogs: () => api.get<{ logs: string[] }>('/logs'),
-    clearLogs: () => api.delete('/logs'),
+    getLogs: (category: string = 'default') => api.get<{ logs: string[] }>('/logs', { params: { category } }),
+    clearLogs: (category?: string) => api.delete('/logs', { params: { category } }),
+    stopTraining: () => api.post('/train/stop'),
 
     pickFolder: (initialDir?: string) => api.get<{ path: string | null }>('/pick-folder', { params: { initial_dir: initialDir } }),
 

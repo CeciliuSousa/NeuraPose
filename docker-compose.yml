@@ -35,13 +35,13 @@ services:
       - ./neurapose/datasets:/app/neurapose/datasets
 
       # Modelos treinados
-      - ./neurapose/meus-modelos-treinados:/app/neurapose/meus-modelos-treinados
+      - ./neurapose/modelos-lstm-treinados:/app/neurapose/modelos-lstm-treinados
 
       # Saida do pre-processamento
       - ./neurapose/resultado_processamento:/app/neurapose/resultado_processamento
 
       # Relatorios de teste
-      - ./neurapose/relatorios-teste:/app/neurapose/relatorios-teste
+      - ./neurapose/relatorios-testes:/app/neurapose/relatorios-testes
 
       # Modelos pre-treinados (YOLO, RTMPose, OSNet)
       - ./neurapose/detector/models:/app/neurapose/detector/models

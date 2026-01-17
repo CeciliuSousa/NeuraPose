@@ -7,7 +7,8 @@ import {
     FolderInput,
     Settings2,
     Zap,
-    RotateCcw
+    RotateCcw,
+    StopCircle
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
@@ -79,7 +80,7 @@ export default function TreinoPage() {
         if (loading) {
             interval = setInterval(async () => {
                 try {
-                    const res = await APIService.getLogs();
+                    const res = await APIService.getLogs('train');
                     setLogs(res.data.logs);
 
                     const health = await APIService.healthCheck();
@@ -111,22 +112,32 @@ export default function TreinoPage() {
         setLogs(prev => [...prev, `[INFO] Hardware: ${device === 'cuda' ? 'GPU (CUDA)' : 'CPU'}`]);
 
         try {
-            const endpoint = mode === 'treinar' ? '/train/start' : '/train/retrain';
-            await fetch(`http://localhost:8000${endpoint}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    dataset_path: datasetPath,
-                    model_type: modelType,
-                    device: device,
-                    pretrained_path: mode === 'retreinar' ? pretrainedPath : undefined,
-                    ...params
-                })
-            });
+            const data = {
+                dataset_path: datasetPath,
+                model_type: modelType,
+                device: device,
+                pretrained_path: mode === 'retreinar' ? pretrainedPath : undefined,
+                ...params
+            };
+
+            if (mode === 'treinar') {
+                await APIService.startTraining(data);
+            } else {
+                await APIService.retrainTraining(data);
+            }
         } catch (error: any) {
             setLoading(false);
             setMessage({ text: `❌ Erro: ${error.message}`, type: 'error' });
             setLogs(prev => [...prev, `[ERRO] ${error.message}`]);
+        }
+    };
+
+    const handleStop = async () => {
+        try {
+            await APIService.stopTraining();
+            setMessage({ text: '🛑 Interrupção de treinamento solicitada...', type: 'info' });
+        } catch (error: any) {
+            setMessage({ text: `❌ Erro ao parar: ${error.message}`, type: 'error' });
         }
     };
 
@@ -385,28 +396,40 @@ export default function TreinoPage() {
                     </div>
 
                     {/* Train Button */}
-                    <button
-                        onClick={handleTrain}
-                        disabled={loading || !datasetPath}
-                        className={`w-full py-4 rounded-xl font-bold flex justify-center items-center gap-3 text-lg transition-all shadow-xl ${loading || !datasetPath
-                            ? 'bg-muted cursor-not-allowed text-muted-foreground'
-                            : mode === 'treinar'
-                                ? 'bg-primary text-primary-foreground hover:brightness-110 shadow-primary/20'
-                                : 'bg-orange-500 text-white hover:brightness-110 shadow-orange-500/20'
-                            }`}
-                    >
-                        {loading ? (
-                            <>
-                                <RefreshCcw className="w-6 h-6 animate-spin" />
-                                {mode === 'treinar' ? 'Treinando...' : 'Retreinando...'}
-                            </>
-                        ) : (
-                            <>
-                                <Play className="w-6 h-6 fill-current" />
-                                {mode === 'treinar' ? 'Iniciar Treinamento' : 'Iniciar Retreinamento'}
-                            </>
+                    <div className="flex gap-4">
+                        <button
+                            onClick={handleTrain}
+                            disabled={loading || !datasetPath}
+                            className={`flex-1 py-4 rounded-xl font-bold flex justify-center items-center gap-3 text-lg transition-all shadow-xl ${loading || !datasetPath
+                                ? 'bg-muted cursor-not-allowed text-muted-foreground'
+                                : mode === 'treinar'
+                                    ? 'bg-primary text-primary-foreground hover:brightness-110 shadow-primary/20'
+                                    : 'bg-orange-500 text-white hover:brightness-110 shadow-orange-500/20'
+                                }`}
+                        >
+                            {loading ? (
+                                <>
+                                    <RefreshCcw className="w-6 h-6 animate-spin" />
+                                    {mode === 'treinar' ? 'Treinando...' : 'Retreinando...'}
+                                </>
+                            ) : (
+                                <>
+                                    <Play className="w-6 h-6 fill-current" />
+                                    {mode === 'treinar' ? 'Iniciar Treinamento' : 'Iniciar Retreinamento'}
+                                </>
+                            )}
+                        </button>
+
+                        {loading && (
+                            <button
+                                onClick={handleStop}
+                                className="px-6 py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold flex items-center gap-2 shadow-xl shadow-red-500/20 transition-all animate-pulse"
+                            >
+                                <StopCircle className="w-6 h-6" />
+                                Parar
+                            </button>
                         )}
-                    </button>
+                    </div>
                 </div>
 
                 {/* Terminal Panel */}
@@ -418,7 +441,7 @@ export default function TreinoPage() {
                         isLoading={loading}
                         onClear={async () => {
                             setLogs([]);
-                            try { await APIService.clearLogs(); } catch (e) { console.error(e); }
+                            try { await APIService.clearLogs('train'); } catch (e) { console.error(e); }
                         }}
                     />
                 </div>

@@ -35,9 +35,9 @@ class ClassifierFactory:
             "pooled": "pooledlstm", "pooled-lstm": "pooledlstm",
             "attention": "attentionlstm", "attention-lstm": "attentionlstm",
             "bilstm": "bilstm", "tcn": "tcn",
-            "wavenet": "wavenet",
-            "transformer": "transformer",
+            "transformer": "transformer", "trans": "transformer",
             "tft": "temporalfusiontransformer",
+            "wavenet": "wavenet", "wave": "wavenet",
         }
         # Tenta o alias, senão usa o nome da classe como fallback (ex: 'TemporalFusionTransformer' -> 'temporalfusiontransformer')
         key = aliases.get(name, name).replace('-', '') 
@@ -100,9 +100,20 @@ class ClassifierFactory:
         Método estático para carregar um modelo a partir de um diretório.
         Tenta extrair o tipo do modelo do nome do diretório ou usa config.
         """
-        # Extrai nome do modelo do diretório (ex: 'tft-data-labex')
-        # Pega a primeira parte 'tft'
-        model_name = model_dir.name.split("-")[0]
+        # Tenta extrair o tipo do modelo do nome do diretório
+        # Padrão novo: <dataset>-modelo_<abbr>-acc_<float>
+        # Padrão antigo: <model>-<dataset>
+        
+        name = model_dir.name
+        if "-modelo_" in name:
+            try:
+                # Extrai o que está entre '-modelo_' e o próximo '-' (que deve ser o '-acc_')
+                model_name = name.split("-modelo_")[1].split("-")[0]
+            except:
+                model_name = name.split("-")[0]
+        else:
+            # Fallback para o padrão antigo
+            model_name = name.split("-")[0]
         
         factory = ClassifierFactory(device)
         model, mu, sigma = factory.load_model(model_name, model_dir)
