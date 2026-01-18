@@ -206,14 +206,7 @@ def yolo_detector_botsort(videos_dir=None):
                 break
 
             results.append(r)
-            
-            # Atualiza Preview
-            # O plot() desenha as boxes no frame. 
-            # Note que isso pode ter impacto na performance, ideal usar apenas se tiver flag show_preview
-            # Mas como o yolo_detector não recebe show_preview, vamos fazer sempre por enquanto 
-            # ou checar se tem alguém ouvindo (state.current_process pode indicar)
-            if state.is_running: 
-                state.set_frame(r.plot())
+            # NOTA: Preview acontece durante RTMPose (extracao_pose.py), NÃO aqui
 
         print(f"[YOLO] Tracking concluido! {len(results)} frames processados.")
         sys.stdout.flush()

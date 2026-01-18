@@ -148,6 +148,11 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     time_rtmpose_start = time.time()
 
     while True:
+        # Verifica se foi solicitada parada
+        if state_notifier is not None and state_notifier.stop_requested:
+            print(Fore.YELLOW + "[STOP] Processamento interrompido pelo usuário.")
+            break
+            
         ok, frame = cap.read()
         if not ok:
             break
@@ -157,6 +162,10 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
         # Checa se ha deteccoes e IDs validos
         if regs is None or len(regs) == 0 or regs.id is None:
             writer_pred.write(frame)
+            
+            # Stream para preview mesmo sem detecções
+            if show and state_notifier is not None:
+                state_notifier.set_frame(frame)
 
             frame_idx += 1
             # Print de progresso a cada 10%
@@ -213,6 +222,10 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
 
 
         writer_pred.write(frame)
+        
+        # Stream para preview em tempo real (se ativado)
+        if show and state_notifier is not None:
+            state_notifier.set_frame(frame)
 
         frame_idx += 1
         # Print de progresso a cada 10%

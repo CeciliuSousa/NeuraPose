@@ -20,9 +20,8 @@ warnings.filterwarnings("ignore")
 
 # Configuracoes
 from neurapose_backend.app.configuracao.config import (
-    CLASSE1, CLASSE2, DATASET_DIR, RTMPOSE_PATH, MODEL_DIR, METRICAS_DIR,
+    CLASSE1, CLASSE2, DATASET_DIR, MODEL_DIR,
     LABELS_TEST_PATH, DEVICE,
-    MODEL_NAME, BEST_MODEL_PATH,
     args as config_args
 )
 
@@ -74,33 +73,54 @@ def main():
         model_dir = MODEL_DIR
 
     best_model_path = model_dir / "model_best.pt"
-    if not best_model_path.exists():
-        # Tenta o próprio path se for um arquivo
-        if model_dir.is_file():
-            best_model_path = model_dir
-            model_dir = model_dir.parent
+    
+    # 1. Lógica do Modelo: Se for arquivo, usa. Se for pasta, busca model_best.pt
+    if model_dir.is_file():
+        best_model_path = model_dir
+        model_dir = model_dir.parent
+    elif not best_model_path.exists():
+        # Fallback: Tenta buscar qualquer .pt se o model_best.pt nao existir
+        candidates = list(model_dir.glob("*.pt"))
+        if candidates:
+             best_model_path = candidates[0]
+             print(Fore.YELLOW + f"[AVISO] model_best.pt não encontrado. Usando {best_model_path.name}")
         else:
-            print(Fore.RED + f"[ERRO] Modelo model_best.pt nao encontrado em {model_dir}")
-            return
-            
-    # Determina diretório de vídeos (dataset)
-    # User quer teste/videos/ se for um dataset
+             print(Fore.RED + f"[ERRO] Modelo model_best.pt nao encontrado em {model_dir}")
+             return
+
+    # 2. Lógica do Dataset: Se for pasta do dataset, busca subpastas padrao
     video_input = Path(args.input_dir) if args.input_dir else DATASET_DIR
+    
+    # Se o usuario passou a raiz do dataset (ex: datasets/meu-dataset), ajustamos para vídeos
     if video_input.is_dir():
+        # Prioridade 1: teste/videos
         if (video_input / "teste" / "videos").exists():
-            video_input = video_input / "teste" / "videos"
+             video_input = video_input / "teste" / "videos"
+        # Prioridade 2: videos
         elif (video_input / "videos").exists():
-            video_input = video_input / "videos"
-            
-    # Labels ground-truth: busca automática
-    labels_gt_path = video_input.parent / "anotacoes" / "labels.json"
-    if not labels_gt_path.exists():
-        # Tenta na raiz do que foi selecionado
-        labels_gt_path = video_input / "teste" / "anotacoes" / "labels.json"
-    if not labels_gt_path.exists():
-        labels_gt_path = video_input / "anotacoes" / "labels.json"
-    if not labels_gt_path.exists():
-        labels_gt_path = LABELS_TEST_PATH
+             video_input = video_input / "videos"
+             
+    # 3. Lógica das Labels: Busca relativa ao dataset (não necessariamente aos videos)
+    # Voltar para a raiz do dataset se estivermos na pasta de videos
+    dataset_root = video_input
+    if video_input.name == "videos":
+        dataset_root = video_input.parent # volta para 'teste' ou raiz
+        if dataset_root.name == "teste":
+            dataset_root = dataset_root.parent # volta para raiz do dataset
+
+    # Tenta caminhos padrao de labels
+    possible_labels = [
+        dataset_root / "teste" / "anotacoes" / "labels.json",
+        dataset_root / "anotacoes" / "labels.json",
+        video_input.parent / "anotacoes" / "labels.json",  # Caso esteja em teste/videos
+        LABELS_TEST_PATH
+    ]
+    
+    labels_gt_path = LABELS_TEST_PATH # Fallback final
+    for p in possible_labels:
+        if p.exists():
+            labels_gt_path = p
+            break
 
     # Caminho do RTMPose (config_master)
     rtmpose_p = CM_RTMPOSE

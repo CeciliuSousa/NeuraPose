@@ -228,10 +228,14 @@ export default function ProcessamentoPage() {
                                             onChange={(e) => setConfig({ ...config, showPreview: e.target.checked })}
                                             className="sr-only peer"
                                         />
-                                        <div className="w-10 h-5 bg-muted rounded-full peer peer-checked:bg-primary transition-colors"></div>
-                                        <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
+                                        {/* Toggle Background: Cinza escuro OFF, Verde ON */}
+                                        <div className={`w-12 h-6 rounded-full transition-colors ${config.showPreview ? 'bg-green-500' : 'bg-gray-600'}`}></div>
+                                        {/* Toggle Circle */}
+                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-md ${config.showPreview ? 'left-7' : 'left-1'}`}></div>
                                     </div>
-                                    <span className="text-sm font-medium group-hover:text-primary transition-colors">Mostrar Preview em tempo real</span>
+                                    <span className={`text-sm font-medium transition-colors ${config.showPreview ? 'text-green-400' : 'text-muted-foreground'}`}>
+                                        {config.showPreview ? '✓ Preview Ativado' : 'Preview Desativado'}
+                                    </span>
                                 </label>
                             </div>
 

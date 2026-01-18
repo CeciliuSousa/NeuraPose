@@ -182,6 +182,10 @@ def gerar_video_predicao(
     frame_idx = 1 # frames humanos (1-based)
 
     while True:
+        # Verifica se foi solicitada parada
+        if state.stop_requested:
+            break
+            
         ok, frame = cap.read()
         if not ok:
             break

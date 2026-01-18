@@ -8,6 +8,7 @@ export interface ProcessingStatusContextType {
     setPageStatus: (page: string, status: PageStatus) => void;
     clearPageStatus: (page: string) => void;
     isAnyProcessing: boolean;
+    currentProcess: string | null;  // Qual processo está rodando agora
 }
 
 const ProcessingStatusContext = createContext<ProcessingStatusContextType | null>(null);
@@ -20,6 +21,7 @@ export function ProcessingStatusProvider({ children }: { children: ReactNode }) 
         const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
         return saved ? JSON.parse(saved) : {};
     });
+    const [currentProcess, setCurrentProcess] = useState<string | null>(null);
 
     const setPageStatus = useCallback((page: string, status: PageStatus) => {
         setStatuses(prev => {
@@ -35,6 +37,9 @@ export function ProcessingStatusProvider({ children }: { children: ReactNode }) 
             try {
                 const res = await APIService.healthCheck();
                 const { processing, current_process, process_status } = res.data;
+
+                // Atualiza qual processo está rodando
+                setCurrentProcess(processing ? current_process : null);
 
                 setStatuses(prev => {
                     const next = { ...prev };
@@ -88,7 +93,7 @@ export function ProcessingStatusProvider({ children }: { children: ReactNode }) 
     const isAnyProcessing = Object.values(statuses).some(s => s === 'processing');
 
     return (
-        <ProcessingStatusContext.Provider value={{ statuses, setPageStatus, clearPageStatus, isAnyProcessing }}>
+        <ProcessingStatusContext.Provider value={{ statuses, setPageStatus, clearPageStatus, isAnyProcessing, currentProcess }}>
             {children}
         </ProcessingStatusContext.Provider>
     );

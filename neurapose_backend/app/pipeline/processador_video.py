@@ -149,7 +149,7 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
         video_path=video_original,
         registros=records,
         video_out_path=pred_video_path,
-        show_preview=False,  # Evita duplicar preview se já foi mostrado antes
+        show_preview=show_preview,  # Passa o argumento corretamente
     )
 
     # ---------------- TRACKING REPORT ----------------

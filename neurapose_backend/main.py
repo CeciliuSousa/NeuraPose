@@ -77,13 +77,20 @@ HIDDEN_ENTRIES = {
 
 app = FastAPI(title="NeuraPose API", version="1.0.0")
 
+# Registra cleanup para encerramento forçado
+import atexit
+
+@atexit.register
+def cleanup_on_exit():
+    """Último recurso para garantir encerramento limpo."""
+    if state.is_running:
+        state.force_stop()
+
 @app.on_event("shutdown")
 def shutdown_event():
     """Executado quando a aplicação está encerrando (ex: Ctrl+C)."""
-    logger.info("Recebido sinal de desligamento. Solicitando parada de tarefas em segundo plano...")
-    state.stop_requested = True
-    state.is_running = False
-    state.kill_all_processes()
+    logger.info("Recebido sinal de desligamento. Forçando parada de tarefas...")
+    state.force_stop()
 
 
 # ==============================================================
@@ -158,6 +165,7 @@ class TestRequest(BaseModel):
     model_path: Optional[str] = None
     dataset_path: Optional[str] = None
     device: str = "cuda"
+    show_preview: bool = False  # Para preview em tempo real durante teste
 
 class ConvertRequest(BaseModel):
     dataset_path: str  # Caminho do dataset (datasets/<nome>)
@@ -276,7 +284,7 @@ def ensure_gpu_memory(required_gb: float = 2.0) -> bool:
 
 # HELPERS
 # ==============================================================
-from app.state import state
+from neurapose_backend.app.state import state
 
 # ==============================================================
 # RUNTIME CONFIGURATION (In-memory, resets on restart)
@@ -454,6 +462,10 @@ def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, 
     state.is_running = True
     state.current_process = 'process'
     state.process_status = 'processing'
+    state.show_preview = show  # Controla se yolo_detector gera frames de preview
+    
+    # DEBUG: Confirma valor do show_preview
+    print(f"[DEBUG] run_processing_thread - show_preview = {show}, state.show_preview = {state.show_preview}")
     
     # Atualiza o dispositivo no config_master para esta sessão
     cm.DEVICE = device if (device == "cpu" or torch.cuda.is_available()) else "cpu"
@@ -535,6 +547,7 @@ def run_testing_task(req: Dict[str, Any]):
     state.is_running = True
     state.current_process = 'test'
     state.process_status = 'processing'
+    state.show_preview = req.get("show_preview", False)  # Controla preview em tempo real
     
     with CaptureOutput(category="test"):
         logger.info("Iniciando fase de testes e validação...")
@@ -551,9 +564,11 @@ def run_testing_task(req: Dict[str, Any]):
             
             # Recarrega os modulos para garantir que peguem o novo sys.argv
             import importlib
-            import app.configuracao.config as config
-            import app.utils.ferramentas as tools
-            import app.testar_modelo as tm
+            # Recarrega os modulos para garantir que peguem o novo sys.argv
+            import importlib
+            import neurapose_backend.app.configuracao.config as config
+            import neurapose_backend.app.utils.ferramentas as tools
+            import neurapose_backend.app.testar_modelo as tm
             
             importlib.reload(config)
             importlib.reload(tools)
@@ -611,19 +626,49 @@ def generate_video_stream():
     """Generator that yields MJPEG frames from state.current_frame."""
     import cv2
     import time
+    import numpy as np
+    
+    # Cria um frame preto de placeholder (640x480)
+    placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+    
+    # Adiciona texto "Aguardando vídeo..."
+    cv2.putText(placeholder, "Aguardando video...", (150, 240),
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (80, 80, 80), 2)
+    
+    # Pré-codifica o placeholder
+    _, placeholder_jpeg = cv2.imencode('.jpg', placeholder, [cv2.IMWRITE_JPEG_QUALITY, 50])
+    placeholder_bytes = placeholder_jpeg.tobytes()
+    
+    last_yield_time = 0
     
     while True:
+        # Verifica se deve parar (shutdown ou stop requested)
+        if state.stop_requested:
+            break
+            
         frame = state.get_frame()
+        current_time = time.time()
+        
         if frame is not None:
-            # Encode frame as JPEG
-            _, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+            try:
+                # Encode frame as JPEG
+                success, jpeg = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                if success and jpeg is not None:
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + jpeg.tobytes() + b'\r\n')
+                    last_yield_time = current_time
+                else:
+                    time.sleep(0.01)
+            except Exception as e:
+                time.sleep(0.01)
         else:
-            # No frame available, send a small delay
-            time.sleep(0.05)
-            # Optionally yield an empty frame or placeholder
-            continue
+            # Sem frame real - envia placeholder a cada 1 segundo para manter stream vivo
+            if current_time - last_yield_time >= 1.0:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + placeholder_bytes + b'\r\n')
+                last_yield_time = current_time
+            else:
+                time.sleep(0.05)
 
 
 @app.get("/video_feed")
@@ -903,7 +948,7 @@ async def start_processing(req: ProcessRequest, background_tasks: BackgroundTask
     output_dir = cm.PROCESSING_OUTPUT_DIR / f"{dataset_name}-processado"
     
     # Define o caminho do modelo ONNX
-    onnx_path = Path(req.onnx_path) if req.onnx_path else Path(cm.YOLO_MODEL)
+    onnx_path = Path(req.onnx_path) if req.onnx_path else Path(cm.RTMPOSE_PATH)
     
     background_tasks.add_task(
         run_processing_thread, 

@@ -1,6 +1,201 @@
-Nada funciona como eu pede!
+O preview em tempo raal não deve ser no yolo! 
 
-Exemplo, quando ativei a pagina testar modelos!
+Yolo + botsort + osnet fazem suas funções sem exibir o vídeo, na hora que rodar o RTMPOSE então o sistema mostra o vídeo em tempo real e deve fucionar exatamente assim em testes! 
 
-- Troquei para outra página, voltei e as entradas de modelo e dataet sumiram.
-- O vídeo não foi exibido em tempo real durante seu processamento, isso funciona quando rodo um comando no terminal: uv run python -m neurapose_backend.app.testar_modelo --model tft --relatorio teste--input-dir neurapose_backend/datasets/teste-processado-v2-reidentificado/teste/videos --show. A flag --show exibi o vídeo em uma janela do python
+Yolo detecta as pessoas, botsort rastreia as pessoas e osnet persiste os IDs, depois disso o vídeo vai passar pelo RTMpose-l.
+
+Durante o RTMpose o sistema vai exibir o vídeo se o usuário marcar o toggle de preview em tempo real na página! 
+
+Crie um sistema de memória que guarda o estado atual da página como video preview se ativado, arquivos de entradas como datasets, modelos, configurações e etc. Se o usuário sair da página e voltar essas inforamações continuam aparecendo do mesmo jeito ou melhor, atualizadas dependendo do processamento no backend! 
+
+Se uma pagina está processando as outras não devem mostrar mensagens como se elas tivessem funcionando, teve casos que eu coloquei videos para rodar em processamentos de videos, as outras páginas quando eu entrava nelas como a página de teste e apreciar a mensagem amarela que estava processando no momento sendo que a verdadeira página que estava processando era a de processamento de vídeos! 
+
+Se uma pagina tiver processando as outras ficam travadas até o processamento terminal ou o usuário cancelar!
+
+Em todos e qualquer processo de backend, se por acaso alguma coisa falhar e o usuário apertar em algum botão de parar na página, esse processamento deve ser parado de forma forçada! 
+
+Se der ctrl + c no terminal para parar o backend, ele deve forçar a parada do python em qualquer tipo de processamento, tem casos que eu vou rodar o teste por exemplo, ai está dando errado, ai eu vou parar o servidor backend, aparece um erro e fica travado commo esse abaixo e o python não finaliza! 
+
+
+INFO:     127.0.0.1:64915 - "GET /system/info HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for connections to close. (CTRL+C to force quit)
+INFO:     Finished server process [11840]
+INFO:NeuraPoseAPI:Recebido sinal de desligamento. Solicitando parada de tarefas em segundo plano...
+ERROR:    Traceback (most recent call last):
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\_compat.py", line 60, in asyncio_run
+    return loop.run_until_complete(main)
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\base_events.py", line 636, in run_until_complete
+    self.run_forever()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\windows_events.py", line 321, in run_forever
+    super().run_forever()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\base_events.py", line 603, in run_forever
+    self._run_once()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\base_events.py", line 1909, in _run_once
+    handle._run()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\events.py", line 80, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\server.py", line 70, in serve
+    with self.capture_signals():
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\contextlib.py", line 142, in __exit__
+    next(self.gen)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\server.py", line 331, in capture_signals
+    signal.raise_signal(captured_signal)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\routing.py", line 701, in lifespan
+    await receive()
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\lifespan\on.py", line 137, in receive
+    return await self.receive_queue.get()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\queues.py", line 159, in get
+    await getter
+asyncio.exceptions.CancelledError
+
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\_compat.py", line 60, in asyncio_run
+    return loop.run_until_complete(main)
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\base_events.py", line 636, in run_until_complete
+    self.run_forever()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\windows_events.py", line 321, in run_forever
+    super().run_forever()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\base_events.py", line 603, in run_forever
+    self._run_once()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\base_events.py", line 1909, in _run_once
+    handle._run()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\events.py", line 80, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\server.py", line 70, in serve
+    with self.capture_signals():
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\contextlib.py", line 142, in __exit__
+    next(self.gen)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\server.py", line 331, in capture_signals
+    signal.raise_signal(captured_signal)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\fastapi\applications.py", line 1135, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\middleware\gzip.py", line 29, in __call__
+    await responder(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\middleware\gzip.py", line 130, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\middleware\gzip.py", line 46, in __call__
+    await self.app(scope, receive, self.send_with_compression)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\middleware\cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\fastapi\routing.py", line 102, in app
+    await response(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\responses.py", line 270, in __call__
+    async with anyio.create_task_group() as task_group:
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\anyio\_backends\_asyncio.py", line 787, in __aexit__
+    raise exc_val
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\anyio\_backends\_asyncio.py", line 755, in __aexit__
+    await self._on_completed_fut
+asyncio.exceptions.CancelledError
+ERROR:    Exception in ASGI application
+Traceback (most recent call last):
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\_compat.py", line 60, in asyncio_run
+    return loop.run_until_complete(main)
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\base_events.py", line 636, in run_until_complete
+    self.run_forever()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\windows_events.py", line 321, in run_forever
+    super().run_forever()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\base_events.py", line 603, in run_forever
+    self._run_once()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\base_events.py", line 1909, in _run_once
+    handle._run()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\events.py", line 80, in _run
+    self._context.run(self._callback, *self._args)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\server.py", line 70, in serve
+    with self.capture_signals():
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\contextlib.py", line 142, in __exit__
+    next(self.gen)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\server.py", line 331, in capture_signals
+    signal.raise_signal(captured_signal)
+KeyboardInterrupt
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 416, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\middleware\proxy_headers.py", line 60, in __call__
+    return await self.app(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\fastapi\applications.py", line 1135, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\applications.py", line 107, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\middleware\gzip.py", line 29, in __call__
+    await responder(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\middleware\gzip.py", line 130, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\middleware\gzip.py", line 46, in __call__
+    await self.app(scope, receive, self.send_with_compression)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\middleware\cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\routing.py", line 716, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\routing.py", line 736, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\routing.py", line 290, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\fastapi\routing.py", line 115, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\fastapi\routing.py", line 102, in app
+    await response(scope, receive, send)
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\responses.py", line 270, in __call__
+    async with anyio.create_task_group() as task_group:
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\anyio\_backends\_asyncio.py", line 787, in __aexit__
+    raise exc_val
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\responses.py", line 277, in __call__
+    await wrap(partial(self.listen_for_disconnect, receive))
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\responses.py", line 273, in wrap
+    await func()
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\starlette\responses.py", line 241, in listen_for_disconnect
+    message = await receive()
+  File "C:\Users\cecil\Documents\PROJETOS\dev-python\uv-projects\python-3.10.11\NeuraPose-App\.venv\lib\site-packages\uvicorn\protocols\http\httptools_impl.py", line 570, in receive
+    await self.message_event.wait()
+  File "C:\Users\cecil\AppData\Roaming\uv\python\cpython-3.10.11-windows-x86_64-none\lib\asyncio\locks.py", line 214, in wait
+    await fut
+asyncio.exceptions.CancelledError
+INFO:     127.0.0.1:61765 - "GET /video_feed?_t=1768696051159 HTTP/1.1" 500 Internal Server Error
