@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
-    TestTube2,
     PlayCircle,
-    ChevronRight,
     FolderInput,
     FileCode,
     Cpu,
