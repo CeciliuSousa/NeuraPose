@@ -26,7 +26,7 @@ class ProcessingState:
                 self._frame_count = 0
             self._frame_count += 1
             if self._frame_count % 100 == 1:  # Print a cada 100 frames
-                print(f"[DEBUG] state.set_frame() chamado - frame #{self._frame_count}")
+                # print(f"[DEBUG] state.set_frame() chamado - frame #{self._frame_count}")
 
     def get_frame(self):
         with self._lock:

@@ -112,6 +112,10 @@ export const APIService = {
     resumeProcess: () => api.post('/process/resume'),
     shutdown: () => api.post('/shutdown'),
 
+    // Preview dinâmico
+    togglePreview: (enabled: boolean) => api.post('/preview/toggle', null, { params: { enabled } }),
+    getPreviewStatus: () => api.get<{ show_preview: boolean, has_frame: boolean }>('/preview/status'),
+
     // ML Features
     listAnnotationVideos: (rootPath?: string) => api.get<{ videos: any[] }>('/annotate/list', { params: { root_path: rootPath } }),
     getAnnotationDetails: (videoId: string, rootPath?: string) => api.get<any>(`/annotate/${videoId}/details`, { params: { root_path: rootPath } }),

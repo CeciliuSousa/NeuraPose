@@ -83,7 +83,7 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
         sess=sess,
         input_name=input_name,
         id_map=id_map,
-        show_preview=show_preview,
+        show_preview=False,  # Preview desabilitado aqui - será feito em gerar_video_predicao após LSTM
         model=None,
         mu=None,
         sigma=None

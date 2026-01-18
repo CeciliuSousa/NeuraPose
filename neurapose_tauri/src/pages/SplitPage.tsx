@@ -41,7 +41,8 @@ export default function SplitPage() {
 
         // Restaurar estado se houver split em andamento
         APIService.healthCheck().then(res => {
-            if (res.data.processing) {
+            // Só mostra estado de loading se for ESTE processo (split)
+            if (res.data.processing && res.data.current_process === 'split') {
                 setLoading(true);
             }
         }).catch(() => { });

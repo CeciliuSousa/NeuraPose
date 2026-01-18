@@ -34,7 +34,8 @@ export default function ConverterPage() {
     useEffect(() => {
         // Restaurar estado se houver conversão em andamento
         APIService.healthCheck().then(res => {
-            if (res.data.processing) {
+            // Só mostra mensagem se for ESTE processo (convert)
+            if (res.data.processing && res.data.current_process === 'convert') {
                 setLoading(true);
                 setMessage({ text: '⏳ Conversão em andamento...', type: 'processing' });
             }

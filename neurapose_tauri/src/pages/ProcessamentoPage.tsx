@@ -10,6 +10,7 @@ import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { Terminal } from '../components/ui/Terminal';
 import { VideoPreviewPanel } from '../components/ui/VideoPreviewPanel';
+import { PreviewToggle } from '../components/ui/PreviewToggle';
 
 export default function ProcessamentoPage() {
     // Form State
@@ -219,25 +220,11 @@ export default function ProcessamentoPage() {
                             </div>
 
 
-                            <div className="pt-2">
-                                <label className="flex items-center gap-3 cursor-pointer group">
-                                    <div className="relative">
-                                        <input
-                                            type="checkbox"
-                                            checked={config.showPreview}
-                                            onChange={(e) => setConfig({ ...config, showPreview: e.target.checked })}
-                                            className="sr-only peer"
-                                        />
-                                        {/* Toggle Background: Cinza escuro OFF, Verde ON */}
-                                        <div className={`w-12 h-6 rounded-full transition-colors ${config.showPreview ? 'bg-green-500' : 'bg-gray-600'}`}></div>
-                                        {/* Toggle Circle */}
-                                        <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-md ${config.showPreview ? 'left-7' : 'left-1'}`}></div>
-                                    </div>
-                                    <span className={`text-sm font-medium transition-colors ${config.showPreview ? 'text-green-400' : 'text-muted-foreground'}`}>
-                                        {config.showPreview ? '✓ Preview Ativado' : 'Preview Desativado'}
-                                    </span>
-                                </label>
-                            </div>
+                            <PreviewToggle
+                                checked={config.showPreview}
+                                onChange={(value) => setConfig({ ...config, showPreview: value })}
+                                isProcessing={loading}
+                            />
 
                             <div className="pt-4 space-y-3">
                                 {!loading ? (

@@ -18,6 +18,7 @@ import { FileExplorerModal } from '../components/FileExplorerModal';
 import { Terminal } from '../components/ui/Terminal';
 import { StatusMessage } from '../components/ui/StatusMessage';
 import { VideoPreviewPanel } from '../components/ui/VideoPreviewPanel';
+import { PreviewToggle } from '../components/ui/PreviewToggle';
 import { useProcessingStatus } from '../hooks/useProcessingStatus';
 
 export default function TestesPage() {
@@ -40,7 +41,8 @@ export default function TestesPage() {
     useEffect(() => {
         // Restaurar estado se houver teste em andamento
         APIService.healthCheck().then(res => {
-            if (res.data.processing) {
+            // Só mostra mensagem se for ESTE processo (test)
+            if (res.data.processing && res.data.current_process === 'test') {
                 setLoading(true);
                 setMessage({ text: '⏳ Teste em andamento...', type: 'processing' });
                 setPageStatus('test', 'processing');
@@ -221,21 +223,11 @@ export default function TestesPage() {
                             </div>
 
                             {/* Preview Toggle */}
-                            <div className="pt-2">
-                                <label className="flex items-center gap-3 cursor-pointer group">
-                                    <div className="relative">
-                                        <input
-                                            type="checkbox"
-                                            checked={config.showPreview}
-                                            onChange={(e) => setConfig({ ...config, showPreview: e.target.checked })}
-                                            className="sr-only peer"
-                                        />
-                                        <div className="w-10 h-5 bg-muted rounded-full peer peer-checked:bg-primary transition-colors"></div>
-                                        <div className="absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform peer-checked:translate-x-5"></div>
-                                    </div>
-                                    <span className="text-sm font-medium group-hover:text-primary transition-colors">Mostrar Preview em tempo real</span>
-                                </label>
-                            </div>
+                            <PreviewToggle
+                                checked={config.showPreview}
+                                onChange={(value) => setConfig({ ...config, showPreview: value })}
+                                isProcessing={loading}
+                            />
                         </div>
 
                         {!loading ? (
@@ -266,7 +258,7 @@ export default function TestesPage() {
                         )}
                     </div>
 
-                    <div className="bg-primary/5 border border-primary/10 p-6 rounded-2xl">
+                    {/* <div className="bg-primary/5 border border-primary/10 p-6 rounded-2xl">
                         <h4 className="font-bold text-primary mb-2 flex items-center gap-2">
                             <TestTube2 className="w-5 h-5" />
                             O que será avaliado?
@@ -277,7 +269,7 @@ export default function TestesPage() {
                             <li className="flex items-center gap-2"><ChevronRight className="w-3 h-3 text-primary" /> Logs detalhados de predição em tempo real</li>
                             <li className="flex items-center gap-2"><ChevronRight className="w-3 h-3 text-primary" /> Tempo de inferência por frame</li>
                         </ul>
-                    </div>
+                    </div> */}
                 </div>
 
                 {/* Real-time Logs */}

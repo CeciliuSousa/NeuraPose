@@ -496,6 +496,8 @@ def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, 
                     if state.stop_requested: break
                     print(f"\n[{i}/{len(videos)}] Processando: {v.name}")
                     processar_video(v, sess, input_name, output_path, show=show)
+                    # Limpa frame entre vídeos para mostrar placeholder
+                    state.current_frame = None
 
             
             if state.stop_requested:
@@ -516,6 +518,7 @@ def run_training_task(req: TrainRequest):
     """Executa o pipeline de treinamento em segundo plano."""
     state.reset()
     state.is_running = True
+    state.current_process = 'train'  # Identifica este processo
     
     with CaptureOutput():
         logger.info(f"Iniciando treinamento: {req.model_name} (Dataset: {req.dataset_name})")
@@ -924,6 +927,19 @@ def pause_process():
 def resume_process():
     state.is_paused = False
     return {"status": "resumed"}
+
+@app.post("/preview/toggle")
+def toggle_preview(enabled: bool = True):
+    """Liga/desliga o preview em tempo real durante processamento."""
+    state.show_preview = enabled
+    if not enabled:
+        state.current_frame = None  # Limpa frame atual para parar stream
+    return {"status": "preview_enabled" if enabled else "preview_disabled", "show_preview": state.show_preview}
+
+@app.get("/preview/status")
+def get_preview_status():
+    """Retorna o estado atual do preview."""
+    return {"show_preview": state.show_preview, "has_frame": state.current_frame is not None}
 
 
 @app.post("/process")
