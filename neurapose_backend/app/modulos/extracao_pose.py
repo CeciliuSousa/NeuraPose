@@ -41,7 +41,7 @@ from neurapose_backend.app.modulos.inferencia_lstm import rodar_lstm_uma_sequenc
 from neurapose_backend.app.utils.visualizacao import desenhar_esqueleto, desenhar_info_predicao
 
 # Estado global para controle de parada
-from neurapose_backend.app.state import state
+from neurapose_backend.global.state import state
 
 
 

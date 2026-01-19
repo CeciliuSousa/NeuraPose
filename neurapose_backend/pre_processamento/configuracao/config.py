@@ -1,11 +1,15 @@
 # ==============================================================
-# neusapose-backend/pre_processamento/configuracao/config.py
+# pre_processamento/configuracao/config.py
+# ==============================================================
+# ATENCAO: NAO EDITE ESTE ARQUIVO!
+# Todas as configuracoes estao em: config_master.py (na raiz)
 # ==============================================================
 
-# Importa TUDO do config_master.py
-from neurapose_backend.config_master import (
-    # Parametros de processamento
+from pathlib import Path
 
+# Importa TUDO do config_master.py (usar import absoluto para estabilidade ao executar como módulo)
+from neurapose.config_master import (
+    # Parametros de processamento
     POSE_CONF_MIN,
     CLAMP_MARGIN,
     EMA_ALPHA,

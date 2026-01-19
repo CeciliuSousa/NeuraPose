@@ -33,7 +33,7 @@ from neurapose_backend.app.utils.gerar_graficos import gerar_todos_graficos
 from neurapose_backend.LSTM.modulos.fabrica_modelo import ClassifierFactory
 
 # Estado global para controle de parada
-from neurapose_backend.app.state import state
+from neurapose_backend.global.state import state
 
 
 colorama_init(autoreset=True)

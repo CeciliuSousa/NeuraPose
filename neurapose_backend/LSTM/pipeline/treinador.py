@@ -169,7 +169,7 @@ def main():
     history = []
 
     # Loop de treinamento
-    from app.state import state
+    from neurapose_backend.global.state import state
     print(Fore.CYAN + "\n[TREINO]")
     for epoch in range(1, args.epochs + 1):
         # Verifica interrupção

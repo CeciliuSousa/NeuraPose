@@ -11,7 +11,7 @@ from pathlib import Path
 from colorama import Fore
 
 from neurapose_backend.detector.yolo_detector import yolo_detector_botsort
-from neurapose_backend.pre_processamento.configuracao.config import (
+from neurapose_backend.config_master import (
     SIMCC_W, 
     SIMCC_H, 
     POSE_CONF_MIN,
@@ -31,7 +31,7 @@ from neurapose_backend.pre_processamento.modulos.suavizacao import EmaSmoother
 
 # Para integracao com o preview do site
 try:
-    from neurapose_backend.app.state import state as state_notifier
+    from neurapose_backend.global.state import state as state_notifier
 except:
     state_notifier = None
 
@@ -147,6 +147,9 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     sys.stdout.flush()
     time_rtmpose_start = time.time()
 
+    # Lista para armazenar frames processados (para gerar vídeo no final)
+    frames_processados = []
+
     while True:
         # Verifica se foi solicitada parada
         if state_notifier is not None and state_notifier.stop_requested:
@@ -158,10 +161,14 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
             break
 
         regs = results[frame_idx - 1].boxes if frame_idx - 1 < len(results) else None
+        
+        # Frame para preview (cópia para não modificar original se preview OFF)
+        frame_preview = frame.copy() if show else None
 
         # Checa se ha deteccoes e IDs validos
         if regs is None or len(regs) == 0 or regs.id is None:
-            writer_pred.write(frame)
+            # Armazena frame sem modificação
+            frames_processados.append(frame.copy())
             
             # Stream para preview mesmo sem detecções
             if show and state_notifier is not None:
@@ -179,6 +186,9 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
         boxes = regs.xyxy.cpu().numpy()
         confs = regs.conf.cpu().numpy()
         ids = regs.id.cpu().numpy()
+        
+        # Frame para desenho final (sempre desenhamos para o vídeo de saída)
+        frame_output = frame.copy()
 
         for box, conf, raw_tid in zip(boxes, confs, ids):
 
@@ -199,18 +209,7 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
             kps = np.concatenate([coords_fr, conf_arr[0][:, None]], axis=1)
             kps = smoother.step(pid, kps)
 
-            base_color = color_for_id(pid)
-            frame = desenhar_esqueleto(frame, kps, kp_thresh=POSE_CONF_MIN, base_color=base_color)
-
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0,255,0), 2)
-
-            # Texto: ID_P e Confianca (estilo reid-manual)
-            label = f"ID_P: {pid} | Pessoa: {conf:.2f}"
-            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-
-            cv2.rectangle(frame, (x1, y1 - th - 12), (x1 + tw + 10, y1), (255,255,255), -1)
-            cv2.putText(frame, label, (x1 + 5, y1 - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 2) 
-
+            # Salva registro (dados puros)
             registros.append({
                 "frame": frame_idx,
                 "botsort_id": int(raw_tid),
@@ -220,12 +219,32 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
                 "keypoints": kps.tolist()
             })
 
+            # Desenha no frame de saída (sempre para o vídeo final)
+            base_color = color_for_id(pid)
+            frame_output = desenhar_esqueleto(frame_output, kps, kp_thresh=POSE_CONF_MIN, base_color=base_color)
 
-        writer_pred.write(frame)
+            cv2.rectangle(frame_output, (x1, y1), (x2, y2), (0,255,0), 2)
+
+            # Texto: ID_P e Confianca (estilo reid-manual)
+            label = f"ID_P: {pid} | Pessoa: {conf:.2f}"
+            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+
+            cv2.rectangle(frame_output, (x1, y1 - th - 12), (x1 + tw + 10, y1), (255,255,255), -1)
+            cv2.putText(frame_output, label, (x1 + 5, y1 - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 2)
+            
+            # Se preview ativo, desenha também no frame de preview
+            if show:
+                frame_preview = desenhar_esqueleto(frame_preview, kps, kp_thresh=POSE_CONF_MIN, base_color=base_color)
+                cv2.rectangle(frame_preview, (x1, y1), (x2, y2), (0,255,0), 2)
+                cv2.rectangle(frame_preview, (x1, y1 - th - 12), (x1 + tw + 10, y1), (255,255,255), -1)
+                cv2.putText(frame_preview, label, (x1 + 5, y1 - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 2)
+
+        # Armazena frame processado para vídeo final
+        frames_processados.append(frame_output)
         
         # Stream para preview em tempo real (se ativado)
         if show and state_notifier is not None:
-            state_notifier.set_frame(frame)
+            state_notifier.set_frame(frame_preview)
 
         frame_idx += 1
         # Print de progresso a cada 10%
@@ -240,7 +259,16 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     print(Fore.GREEN + f"[OK] Inferencia concluida: {total_frames} frames processados.")
     sys.stdout.flush()
     cap.release()
+    
+    # ================== GERAR VÍDEO FINAL (UMA PASSADA) ==================
+    print(Fore.CYAN + f"[INFO] Gerando video final com {len(frames_processados)} frames...")
+    sys.stdout.flush()
+    
+    for f in frames_processados:
+        writer_pred.write(f)
+    
     writer_pred.release()
+    print(Fore.GREEN + f"[OK] Video salvo: {out_video.name}")
 
     # ============================================================
     # 1. SALVAR JSON BRUTO (Opcional, mas bom para debug)

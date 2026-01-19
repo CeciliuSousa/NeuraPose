@@ -4,7 +4,7 @@
 
 import cv2
 import numpy as np
-from neurapose_backend.pre_processamento.configuracao.config import (
+from neurapose_backend.config_master import (
     SIMCC_W, SIMCC_H, SIMCC_SPLIT_RATIO, MEAN, STD
 )
 

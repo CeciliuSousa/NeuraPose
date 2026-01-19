@@ -39,7 +39,7 @@ from pre_processamento.anotando_classes import (
 
 # Visualizacao de esqueletos (utilitários prontos)
 from pre_processamento.utils.visualizacao import desenhar_esqueleto, color_for_id
-from pre_processamento.configuracao.config import POSE_CONF_MIN
+from neurapose_backend.config_master import POSE_CONF_MIN
 
 
 # ==============================================================================

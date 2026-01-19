@@ -54,22 +54,16 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
     results = res["results"]
     id_map = res.get("id_map", {})
 
-    # Usa output_dir se fornecido, caso contrário usa fallback
-    if output_dir:
-        predicoes_dir = output_dir / "predicoes"
-        jsons_dir = output_dir / "jsons"
-        trackings_dir = output_dir / "trackings"
-        predicoes_dir.mkdir(parents=True, exist_ok=True)
-        jsons_dir.mkdir(parents=True, exist_ok=True)
-        trackings_dir.mkdir(parents=True, exist_ok=True)
-    else:
-        # Fallback para diretório local (usado em pré-processamento)
-        predicoes_dir = video_path.parent / "predicoes"
-        jsons_dir = video_path.parent / "jsons"
-        trackings_dir = video_path.parent / "trackings"
-        predicoes_dir.mkdir(parents=True, exist_ok=True)
-        jsons_dir.mkdir(parents=True, exist_ok=True)
-        trackings_dir.mkdir(parents=True, exist_ok=True)
+    # output_dir é obrigatório para evitar pastas extras
+    if not output_dir:
+        raise ValueError("output_dir é obrigatório para processar_video")
+    
+    predicoes_dir = output_dir / "predicoes"
+    jsons_dir = output_dir / "jsons"
+    trackings_dir = output_dir / "trackings"
+    predicoes_dir.mkdir(parents=True, exist_ok=True)
+    jsons_dir.mkdir(parents=True, exist_ok=True)
+    trackings_dir.mkdir(parents=True, exist_ok=True)
 
     pred_video_path = predicoes_dir / f"{video_path.stem}_pred.mp4"
     json_path = jsons_dir / f"{video_path.stem}.json"

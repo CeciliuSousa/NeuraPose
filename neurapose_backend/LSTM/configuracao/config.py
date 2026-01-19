@@ -5,7 +5,7 @@
 import argparse
 
 # Importa valores do config_master para usar como defaults
-from config_master import (
+from neurapose_backend.config_master import (
     EPOCHS,
     BATCH_SIZE,
     LEARNING_RATE,
@@ -21,7 +21,7 @@ from config_master import (
 
 
 # Importa classes de modelos
-from LSTM.models.models import (
+from neurapose_backend.LSTM.models.models import (
     LSTM, RobustLSTM, PooledLSTM, BILSTM, AttentionLSTM,
     TCN, TransformerModel, TemporalFusionTransformer, WaveNet
 )

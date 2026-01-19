@@ -3,7 +3,7 @@
 # ==============================================================
 
 import numpy as np
-from neurapose_backend.pre_processamento.configuracao.config import EMA_ALPHA, EMA_MIN_CONF
+from neurapose_backend.config_master import EMA_ALPHA, EMA_MIN_CONF
 
 
 class EmaSmoother:
