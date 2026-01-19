@@ -64,45 +64,46 @@ def desenhar_esqueleto(frame, keypoints, kp_thresh=0.3, base_color=(0, 255, 0), 
 def desenhar_info_predicao(frame, bbox, botsort_id, pid, gid, classe_id, conf, pred_name, modelo_nome="CLASSE"):
     """
     Desenha bounding box e labels informativos no frame.
-    Adiciona o argumento modelo_nome para ser exibido.
+    Estilo: 
+      - Linha 1: ID_P e Pessoa (confiança)
+      - Linha 2: Classe predita
     """
     x1, y1, x2, y2 = map(int, bbox)
     
     # ============================================================
     # CORES DINÂMICAS: Verde para NORMAL, Vermelho para CLASSE2
     # ============================================================
-    if classe_id == 1:    # CLASSE2
+    if classe_id == 1:    # CLASSE2 (ex: FURTO)
         cor_bbox = (0, 0, 255)       # vermelho
-        cor_label_top = (0, 0, 255)  # vermelho
-    else:                # CLASSE1
+        cor_label = (0, 0, 255)      # vermelho
+    else:                # CLASSE1 (ex: NORMAL)
         cor_bbox = (0, 255, 0)       # verde
-        cor_label_top = (0, 255, 0)  # verde
+        cor_label = (0, 255, 0)      # verde
 
     cv2.rectangle(frame, (x1, y1), (x2, y2), cor_bbox, 2)
 
     # ============================================================
-    # OVERLAY SUPERIOR: BoTSORT | conf (cor dinâmica)
+    # LINHA 1: ID_P | Pessoa: conf (estilo igual ao processamento)
     # ============================================================
-    label_top = f"BoTSORT {botsort_id} | conf {conf:.2f}"
+    label_linha1 = f"ID_P: {pid} | Pessoa: {conf:.2f}"
 
     # ============================================================
-    # OVERLAY INFERIOR: ID_P | MODELO | Classes (branco)
-    # CORRIGIDO: Usa o nome real do modelo dinâmico na label
+    # LINHA 2: Classe: NORMAL/FURTO (adicional para classificação)
     # ============================================================
-    label_bottom = f"ID_P: {pid} | {modelo_nome.upper()}: {pred_name}"
+    label_linha2 = f"Classe: {pred_name}"
 
-    # Caixa superior com cor dinâmica (verde ou vermelho)
-    (tw, th), _ = cv2.getTextSize(label_top, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+    # Desenha fundo da linha 1 (branco)
+    (tw1, th1), _ = cv2.getTextSize(label_linha1, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
     cv2.rectangle(
         frame,
-        (x1, max(0, y1 - th - 12)),
-        (x1 + tw + 10, y1),
-        cor_label_top,
+        (x1, max(0, y1 - th1 - 12)),
+        (x1 + tw1 + 10, y1),
+        (255, 255, 255),  # fundo branco
         -1,
     )
     cv2.putText(
         frame,
-        label_top,
+        label_linha1,
         (x1 + 5, y1 - 7),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.7,
@@ -111,22 +112,22 @@ def desenhar_info_predicao(frame, bbox, botsort_id, pid, gid, classe_id, conf, p
         cv2.LINE_AA,
     )
 
-    # Caixa inferior com fundo branco
-    (tw2, th2), _ = cv2.getTextSize(label_bottom, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+    # Desenha fundo da linha 2 (cor dinâmica: verde ou vermelho)
+    (tw2, th2), _ = cv2.getTextSize(label_linha2, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
     cv2.rectangle(
         frame,
         (x1, y1),
         (x1 + tw2 + 10, y1 + th2 + 12),
-        (255, 255, 255),  # fundo branco
+        cor_label,  # fundo verde ou vermelho
         -1,
     )
     cv2.putText(
         frame,
-        label_bottom,
+        label_linha2,
         (x1 + 5, y1 + th2 + 5),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.7,
-        (0, 0, 0),  # texto preto
+        (255, 255, 255),  # texto branco para contraste
         2,
         cv2.LINE_AA,
     )
