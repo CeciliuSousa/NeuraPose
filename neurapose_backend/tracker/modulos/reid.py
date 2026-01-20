@@ -45,15 +45,25 @@ class CustomReID:
         boxes_xyxy = xywh2xyxy(torch.from_numpy(dets[:, :4]))
         
         # Batching images
+        img_h, img_w = img.shape[:2]
         batch_crops = []
         valid_indices = []
         
         for i, box in enumerate(boxes_xyxy):
-            crop = save_one_box(box, img, save=False)
-            if crop is not None and crop.size > 0:
-                crop_resized = cv2.resize(crop, (128, 256))
-                # Convert to Tensor and Normalize
-                crop_t = torch.from_numpy(crop_resized.copy()).permute(2, 0, 1).float() / 255.0
+            # Recorte manual eficiente
+            x1, y1, x2, y2 = map(int, box)
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(img_w, x2), min(img_h, y2)
+            
+            if x2 <= x1 or y2 <= y1:
+                continue
+
+            crop = img[y1:y2, x1:x2]
+            if crop.size > 0:
+                # Resize direto
+                crop_resized = cv2.resize(crop, (128, 256), interpolation=cv2.INTER_LINEAR)
+                # Normalização e Permutação
+                crop_t = torch.from_numpy(crop_resized).permute(2, 0, 1).float() / 255.0
                 crop_t = self.norm(crop_t)
                 batch_crops.append(crop_t)
                 valid_indices.append(i)

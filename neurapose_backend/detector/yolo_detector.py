@@ -206,25 +206,29 @@ def yolo_detector_botsort(videos_dir=None):
                 print(Fore.YELLOW + "[STOP] Detecção interrompida pelo usuário.")
                 break
 
-            results.append(r)
-            
-            # Coleta de tracks por frame (substitui o loop while True posterior)
+            # Salva apenas metadados leves (numpy arrays)
+            # Isso evita crash de RAM em vídeos longos e é muito mais rápido
+            frame_res = {"boxes": None}
             if r.boxes is not None and len(r.boxes) > 0:
-                ids_tensor = r.boxes.id
-                if ids_tensor is not None:
-                    ids = ids_tensor.cpu().numpy()
-                    current_time = frame_idx / fps
+                # Extraímos apenas o que o RTMPose e o Tracker precisam
+                # data contém: [x1, y1, x2, y2, id, conf, cls]
+                boxes_data = r.boxes.data.cpu().numpy()
+                frame_res["boxes"] = boxes_data
+                
+                # Coleta de tracks por frame para fusão posterior
+                # r.boxes.id é o track_id vindo do BoTSORT
+                ids = boxes_data[:, 4] if boxes_data.shape[1] > 4 else None
+                current_time = frame_idx / fps
 
-                    for track_id in ids:
-                        if track_id is None or track_id < 0:
-                            continue
-
-                        tid = int(track_id)
+                if ids is not None:
+                    for i, tid_raw in enumerate(ids):
+                        if tid_raw is None or tid_raw < 0: continue
+                        tid = int(tid_raw)
                         
                         # Tenta pegar a feature do tracker se disponível
                         try:
                             f = tracker.tracks[tid].feat.copy()
-                        except Exception:
+                        except:
                             f = np.zeros(512, dtype=np.float32)
 
                         if tid not in track_data:
@@ -237,9 +241,10 @@ def yolo_detector_botsort(videos_dir=None):
                         else:
                             track_data[tid]["end"] = current_time
                             track_data[tid]["frames"].add(frame_idx)
-
                             if len(track_data[tid]["features"]) < 20:
                                 track_data[tid]["features"].append(f)
+            
+            results.append(frame_res)
 
         print(f"[YOLO] Tracking concluido! {len(results)} frames processados.")
         sys.stdout.flush()
@@ -247,8 +252,6 @@ def yolo_detector_botsort(videos_dir=None):
         cap.release()
         if state.stop_requested:
              break # Sai do loop de videos
-
-        cap.release()
 
         if not track_data:
             print("[WARN] Nenhum track valido.")

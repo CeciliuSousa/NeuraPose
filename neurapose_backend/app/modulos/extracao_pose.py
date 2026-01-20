@@ -111,19 +111,18 @@ def extrair_keypoints_rtmpose_padronizado(
         result = results[frame_idx]
         frame_idx += 1
 
-        if result.boxes is None or len(result.boxes) == 0:
+        # Agora result é um dict: {"boxes": numpy_array [N, 7]} ou None
+        # data contém: [x1, y1, x2, y2, id, conf, cls]
+        if result.get("boxes") is None or len(result["boxes"]) == 0:
             if show_preview:
                 state.set_frame(frame)  # Stream para browser
             pbar.update(1)
             continue
 
-        boxes = result.boxes.xyxy.cpu().numpy()
-        confs = result.boxes.conf.cpu().numpy()
-        ids = (
-            result.boxes.id.cpu().numpy()
-            if result.boxes.id is not None
-            else [-1] * len(boxes)
-        )
+        boxes_data = result["boxes"]
+        boxes = boxes_data[:, :4]
+        ids = boxes_data[:, 4]
+        confs = boxes_data[:, 5]
 
         # frame_id humano (1-based) para salvar nos registros
         frame_id = frame_idx

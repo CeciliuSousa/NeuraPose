@@ -29,32 +29,32 @@ export default function ProcessamentoPage() {
     const [roots, setRoots] = useState<Record<string, string>>({});
     const [progress, setProgress] = useState(0);
 
-    // Logs & Health Polling
+    // Carregamento inicial de caminhos e logs - apenas UMA VEZ na montagem
     useEffect(() => {
-        const savedConfig = localStorage.getItem('np_process_config');
-        // if (savedConfig) setConfig(JSON.parse(savedConfig)); // Desativado para sempre resetar inputPath
-        if (savedConfig) {
-            const parsed = JSON.parse(savedConfig);
-            // Mantém outras configs, mas ignora inputPath para forçar o default
-            setConfig(() => ({ ...parsed, inputPath: '' }));
-        }
-
         const savedLogs = localStorage.getItem('np_process_logs');
         if (savedLogs) setLogs(JSON.parse(savedLogs));
 
-        const savedLoading = localStorage.getItem('np_process_loading');
-        if (savedLoading === 'true') setLoading(true);
-
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
-                // const { videos } = res.data.paths;
                 setRoots(res.data.paths);
                 setConfig(prev => ({
                     ...prev,
-                    inputPath: '' // Mantém vazio para mostrar o placeholder
+                    inputPath: ''
                 }));
             }
         }).catch(err => console.error("Erro ao carregar caminhos do backend:", err));
+    }, []);
+
+    // Logs & Health Polling - apenas quando loading muda
+    useEffect(() => {
+        const savedConfig = localStorage.getItem('np_process_config');
+        if (savedConfig && !config.inputPath) {
+            const parsed = JSON.parse(savedConfig);
+            setConfig((prev: any) => ({ ...prev, ...parsed, inputPath: prev.inputPath }));
+        }
+
+        const savedLoading = localStorage.getItem('np_process_loading');
+        if (savedLoading === 'true' && !loading) setLoading(true);
 
         let interval: any;
 
