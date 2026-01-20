@@ -154,13 +154,13 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
         if not ok:
             break
 
-        regs = results[frame_idx - 1].boxes if frame_idx - 1 < len(results) else None
+        regs = results[frame_idx - 1].get("boxes") if frame_idx - 1 < len(results) else None
         
         # Frame para preview (cópia para não modificar original se preview OFF)
         frame_preview = frame.copy() if show else None
 
         # Checa se ha deteccoes e IDs validos
-        if regs is None or len(regs) == 0 or regs.id is None:
+        if regs is None or len(regs) == 0:
             # Escreve frame direto no vídeo (sem detecções)
             writer_pred.write(frame)
             
@@ -177,9 +177,9 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
                 last_progress = progress
             continue
 
-        boxes = regs.xyxy.cpu().numpy()
-        confs = regs.conf.cpu().numpy()
-        ids = regs.id.cpu().numpy()
+        boxes = regs[:, :4]
+        confs = regs[:, 5]
+        ids = regs[:, 4]
         
         # Frame para desenho final (sempre desenhamos para o vídeo de saída)
         frame_output = frame.copy()
