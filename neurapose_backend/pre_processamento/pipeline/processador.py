@@ -145,8 +145,7 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     sys.stdout.flush()
     time_rtmpose_start = time.time()
 
-    # Lista para armazenar frames processados (para gerar vídeo no final)
-    frames_processados = []
+    # Escreve frames diretamente no VideoWriter (otimizado - sem buffer)
 
     while True:
         # Verifica se foi solicitada parada
@@ -165,8 +164,8 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
 
         # Checa se ha deteccoes e IDs validos
         if regs is None or len(regs) == 0 or regs.id is None:
-            # Armazena frame sem modificação
-            frames_processados.append(frame.copy())
+            # Escreve frame direto no vídeo (sem detecções)
+            writer_pred.write(frame)
             
             # Stream para preview mesmo sem detecções
             if show and state_notifier is not None:
@@ -237,8 +236,8 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
                 cv2.rectangle(frame_preview, (x1, y1 - th - 12), (x1 + tw + 10, y1), (255,255,255), -1)
                 cv2.putText(frame_preview, label, (x1 + 5, y1 - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 2)
 
-        # Armazena frame processado para vídeo final
-        frames_processados.append(frame_output)
+        # Escreve frame processado diretamente no vídeo
+        writer_pred.write(frame_output)
         
         # Stream para preview em tempo real (se ativado)
         if show and state_notifier is not None:
@@ -258,13 +257,7 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     sys.stdout.flush()
     cap.release()
     
-    # ================== GERAR VÍDEO FINAL (UMA PASSADA) ==================
-    print(Fore.CYAN + f"[INFO] Gerando video final com {len(frames_processados)} frames...")
-    sys.stdout.flush()
-    
-    for f in frames_processados:
-        writer_pred.write(f)
-    
+    # Finaliza o vídeo
     writer_pred.release()
     print(Fore.GREEN + f"[OK] Video salvo: {out_video.name}")
 

@@ -75,7 +75,7 @@ export function ProcessingStatusProvider({ children }: { children: ReactNode }) 
                     return changed ? next : prev;
                 });
             } catch (e) { /* ignore */ }
-        }, 1000); // Polling mais rápido (1s) para resposta visual melhor
+        }, 10000); // Polling a cada 10s para evitar overhead durante processamento
 
         return () => clearInterval(interval);
     }, []);

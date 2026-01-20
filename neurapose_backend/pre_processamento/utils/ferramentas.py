@@ -22,9 +22,9 @@ def status_str(ok: bool):
 
 def imprimir_banner(onnx_path: Path):
     """Imprime banner informativo sobre o ambiente e modelos."""
-    print("\n================================================================")
+    print("\n===============================================================")
     print("PRÉ-PROCESSAMENTO — NEURAPOSE AI")
-    print("================================================================")
+    print("===============================================================")
 
     # YOLO (usa config_master)
     yolopath = PROJECT_ROOT / "detector" / "modelos" / YOLO_MODEL
@@ -43,7 +43,7 @@ def imprimir_banner(onnx_path: Path):
         f"{onnx_path.parent.name}/{onnx_path.name}"
     )
 
-    print("----------------------------------------------------------------")
+    print("---------------------------------------------------------------")
     # Dataset
     # print(f"Dataset               : {DATASET_NAME}")
 
@@ -53,7 +53,7 @@ def imprimir_banner(onnx_path: Path):
     else:
         print(Fore.YELLOW + "Dispositivo           : CPU (sem GPU)")
     
-    print("================================================================\n")
+    print("===============================================================\n")
 
 
 def baixar_video_ytdlp(url: str, pasta_saida: Path) -> Path:

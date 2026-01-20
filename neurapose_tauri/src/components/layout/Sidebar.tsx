@@ -97,8 +97,8 @@ export function Sidebar() {
         };
 
         fetchSystemInfo();
-        // 3s interval (alinhado com cache do backend de 2s)
-        const interval = setInterval(fetchSystemInfo, 3000);
+        // 20s interval para reduzir overhead durante processamento
+        const interval = setInterval(fetchSystemInfo, 20000);
         return () => clearInterval(interval);
     }, []);
 

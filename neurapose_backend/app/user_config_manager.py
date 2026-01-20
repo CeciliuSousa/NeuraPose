@@ -42,7 +42,7 @@ class UserConfigManager:
             "YOLO_MODEL": cm.YOLO_MODEL,
             "OSNET_MODEL": cm.OSNET_MODEL,
             "RTMPOSE_MODEL": cm.RTMPOSE_MODEL,
-            "TEMPORAL_MODEL": getattr(cm, "TEMPORAL_MODEL", "lstm"),
+            "TEMPORAL_MODEL": getattr(cm, "TEMPORAL_MODEL", "tft"),
             
             # Classes de Detecção
             "CLASSE1": cm.CLASSE1,
@@ -51,7 +51,7 @@ class UserConfigManager:
             
             # Configurações YOLO
             "DETECTION_CONF": cm.DETECTION_CONF,
-            "YOLO_IMGSZ": getattr(cm, "YOLO_IMGSZ", "1280"),
+            "YOLO_IMGSZ": getattr(cm, "YOLO_IMGSZ", "640"),
             
             # Configurações de Pose
             "POSE_CONF_MIN": cm.POSE_CONF_MIN,
