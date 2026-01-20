@@ -104,6 +104,8 @@ export default function ConfiguracaoPage() {
             items: [
                 { key: "YOLO_MODEL", label: "Modelo YOLO (Detecção)", type: "select", options: ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt"] },
                 { key: "OSNET_MODEL", label: "Modelo OSNet (Re-ID)", type: "path" },
+                { key: "RTMPOSE_MODEL", label: "Modelo RTMPose (Pose)", type: "path" },
+                { key: "RTMPOSE_INPUT_SIZE", label: "Resol. Entrada RTMPose", type: "select", options: ["256x192", "384x288"] },
                 { key: "TEMPORAL_MODEL", label: "Modelo Temporal", type: "select", options: ["tft", "lstm"] },
             ]
         },

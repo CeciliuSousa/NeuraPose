@@ -18,6 +18,7 @@ import { StatusMessage } from '../components/ui/StatusMessage';
 import { VideoPreviewPanel } from '../components/ui/VideoPreviewPanel';
 import { PreviewToggle } from '../components/ui/PreviewToggle';
 import { useProcessingStatus } from '../hooks/useProcessingStatus';
+import { PathSelector } from '../components/ui/PathSelector';
 
 export default function TestesPage() {
     const [loading, setLoading] = useState(false);
@@ -147,56 +148,24 @@ export default function TestesPage() {
                         <div className="space-y-6 mb-10">
                             {/* Model Selection */}
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Modelo Treinado (.pth / .pt)</label>
-                                <div className="flex gap-2">
-                                    <div className="flex-1 relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">
-                                            <FileCode className="w-4 h-4" />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            className="w-full pl-11 pr-4 py-3 rounded-xl bg-background border border-border text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 truncate cursor-pointer"
-                                            value={config.modelPath ? config.modelPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
-                                            title={config.modelPath}
-                                            readOnly
-                                            placeholder="Selecione o modelo para teste..."
-                                            onClick={() => setExplorerTarget('model')}
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={() => setExplorerTarget('model')}
-                                        className="px-4 py-3 bg-secondary rounded-xl border border-border hover:bg-primary/10 hover:text-primary transition-all shrink-0"
-                                    >
-                                        <FolderInput className="w-5 h-5" />
-                                    </button>
-                                </div>
+                                <PathSelector
+                                    label="Modelo Treinado (.pth / .pt)"
+                                    value={config.modelPath}
+                                    onSelect={() => setExplorerTarget('model')}
+                                    placeholder="Selecione o modelo para teste..."
+                                    icon={FileCode}
+                                />
                             </div>
 
                             {/* Dataset Selection */}
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Dataset de Teste</label>
-                                <div className="flex gap-2">
-                                    <div className="flex-1 relative">
-                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">
-                                            <Database className="w-4 h-4" />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            className="w-full pl-11 pr-4 py-3 rounded-xl bg-background border border-border text-xs font-mono outline-none focus:ring-2 focus:ring-primary/40 truncate cursor-pointer"
-                                            value={config.datasetPath ? config.datasetPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
-                                            title={config.datasetPath}
-                                            readOnly
-                                            placeholder="Selecione o dataset para teste..."
-                                            onClick={() => setExplorerTarget('dataset')}
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={() => setExplorerTarget('dataset')}
-                                        className="px-4 py-3 bg-secondary rounded-xl border border-border hover:bg-primary/10 hover:text-primary transition-all shrink-0"
-                                    >
-                                        <FolderInput className="w-5 h-5" />
-                                    </button>
-                                </div>
+                                <PathSelector
+                                    label="Dataset de Teste"
+                                    value={config.datasetPath}
+                                    onSelect={() => setExplorerTarget('dataset')}
+                                    placeholder="Selecione o dataset para teste..."
+                                    icon={Database}
+                                />
                             </div>
 
                             {/* Device Toggle */}

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
     FileOutput,
-    FolderInput,
     Play,
     RefreshCcw
 } from 'lucide-react';
@@ -10,6 +9,7 @@ import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { Terminal } from '../components/ui/Terminal';
 import { StatusMessage } from '../components/ui/StatusMessage';
+import { PathSelector } from '../components/ui/PathSelector';
 
 // Extensões disponíveis para conversão
 const EXTENSION_OPTIONS = [
@@ -115,26 +115,14 @@ export default function ConverterPage() {
                         <div className="space-y-5">
                             {/* Dataset Selection */}
                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Dataset de Entrada</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={datasetName}
-                                        title={datasetPath}
-                                        readOnly
-                                        className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
-                                        placeholder="Selecione o diretório para converter..."
-                                        onClick={() => setExplorerOpen(true)}
-                                    />
-                                    <button
-                                        onClick={() => setExplorerOpen(true)}
-                                        className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
-                                    >
-                                        <FolderInput className="w-4 h-4" />
-                                    </button>
-                                </div>
+                                <PathSelector
+                                    label="Dataset de Entrada"
+                                    value={datasetPath}
+                                    onSelect={() => setExplorerOpen(true)}
+                                    placeholder="Selecione o diretório para converter..."
+                                />
                                 {datasetName && (
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-xs text-muted-foreground mt-1">
                                         Dataset: <span className="font-mono text-primary">{datasetName}</span>
                                     </p>
                                 )}

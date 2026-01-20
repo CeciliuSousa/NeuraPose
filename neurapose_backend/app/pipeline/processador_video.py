@@ -7,6 +7,7 @@ import json
 import cv2
 from pathlib import Path
 from colorama import Fore
+import numpy as np
 
 # Importações do projeto
 from neurapose_backend.detector.yolo_detector import yolo_detector_botsort as yolo_detector
@@ -23,6 +24,13 @@ from neurapose_backend.app.modulos.inferencia_lstm import rodar_lstm_uma_sequenc
 from neurapose_backend.app.modulos.tracking import TrackHistory
 from neurapose_backend.app.utils.visualizacao import gerar_video_predicao
 
+# Funções auxiliares portadas do pré-processamento
+def calcular_deslocamento(p_inicial, p_final):
+    """Calcula a distancia em pixels entre o ponto inicial e final."""
+    p1 = np.array(p_inicial)
+    p2 = np.array(p_final)
+    return np.linalg.norm(p2 - p1)
+
 
 
 def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_preview=False, output_dir: Path = None):
@@ -35,6 +43,9 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
         "rtmpose_total": 0.0,
         "temporal_total": 0.0,
         "video_total": 0.0,
+        "yolo": 0.0,      # Compatibilidade com relatório antigo
+        "rtmpose": 0.0,   # Compatibilidade com relatório antigo
+        "total": 0.0      # Compatibilidade com relatório antigo
     }
     t0_video = time.time()
 
@@ -139,6 +150,7 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
     # print(Fore.GREEN + f"[OK] JSON de keypoints + classe salvo em: {json_path}")
 
     # ---------------- GERAR VÍDEO FINAL COM OVERLAY DE CLASSE ----------------
+    # (Adicionado filtro para só gerar vídeo se houver registros, mas gerar_video_predicao já lida com vazio se necessário)
     gerar_video_predicao(
         video_path=video_original,
         registros=records,
@@ -146,7 +158,89 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
         show_preview=show_preview,  # Passa o argumento corretamente
     )
 
-    # ---------------- TRACKING REPORT ----------------
+    # ============================================================
+    # 2. FILTRAGEM INTELIGENTE (LIMPEZA V6) - Portado do Pré-processamento
+    # ============================================================
+    # print(Fore.CYAN + "\n[INFO] Iniciando limpeza de IDs (V6)...")
+    
+    # Coleta estatisticas de cada ID Persistente
+    stats_id = {} 
+    for reg in records:
+        pid = reg["id_persistente"]
+        bbox = reg["bbox"]
+        # Calcula o centro da caixa (x, y)
+        centro = [(bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2]
+        
+        if pid not in stats_id:
+            stats_id[pid] = {"frames": 0, "inicio": centro, "fim": centro}
+        
+        stats_id[pid]["frames"] += 1
+        stats_id[pid]["fim"] = centro # Atualiza ultima posicao conhecida
+
+    # Define quem fica e quem sai
+    ids_validos = []
+    
+    for pid, dados in stats_id.items():
+        # REGRA A: Duracao (Ignora "fantasmas" rapidos como o ID 55)
+        # Se durou menos de 1 segundo (30 frames), e lixo.
+        if dados["frames"] < 30:
+            # print(Fore.YELLOW + f"  - ID {pid} removido (Curta duracao: {dados['frames']} frames)")
+            continue
+            
+        # REGRA B: Imobilidade (Ignora cadeiras fixas como o ID 12)
+        # Se moveu menos de 50 pixels no video todo, e lixo.
+        distancia = calcular_deslocamento(dados["inicio"], dados["fim"])
+        if distancia < 50.0:
+            # print(Fore.YELLOW + f"  - ID {pid} removido (Estatico: moveu apenas {distancia:.1f} px)")
+            continue
+            
+        ids_validos.append(pid)
+
+    # print(Fore.GREEN + f"[OK] IDs Mantidos: {ids_validos}")
+
+    # ============================================================
+    # 3. SALVAR TRACKING FINAL (Apenas IDs Validos) - Compatível com Pre-processamento
+    # ============================================================
+    # Filtra o mapa de IDs para remover os excluidos
+    id_map_limpo = {str(k): int(v) for k, v in id_map.items() if v in ids_validos}
+
+    tracking_analysis = {
+        "video": video_path.name,
+        "total_frames": len(results), # Aproximado pelo numero de dets YOLO
+        "id_map": id_map_limpo,
+        "tracking_by_frame": {}
+    }
+    
+    # Filtra os registros frame a frame
+    for reg in records:
+        # So adiciona se o ID estiver na lista de validos (Lógica V6)
+        if reg["id_persistente"] in ids_validos:
+            f_id = reg["frame"]
+            if f_id not in tracking_analysis["tracking_by_frame"]:
+                tracking_analysis["tracking_by_frame"][f_id] = []
+            
+            tracking_analysis["tracking_by_frame"][f_id].append({
+                "botsort_id": reg["botsort_id"],
+                "id_persistente": reg["id_persistente"],
+                "bbox": reg["bbox"],
+                "confidence": reg["confidence"]
+            })
+    
+    # Salva o arquivo final limpo de tracking JSON (Igual ao pre-processamento)
+    # Tenta obter FPS do vídeo original, fallback para 30
+    try:
+        cap_fps = cv2.VideoCapture(str(video_original))
+        fps_out = cap_fps.get(cv2.CAP_PROP_FPS) or 30.0
+        cap_fps.release()
+    except:
+        fps_out = 30.0
+
+    tracking_json_path = jsons_dir / f"{video_path.stem}_{int(fps_out)}fps_tracking.json"
+    with open(tracking_json_path, "w", encoding="utf-8") as f:
+        json.dump(tracking_analysis, f, indent=2, ensure_ascii=False)
+    # print(Fore.GREEN + f"[OK] JSON Tracking v6 salvo: {tracking_json_path.name}")
+
+    # ---------------- TRACKING REPORT (LEGADO - TXT) ----------------
     # Gera relatório de tracking (duração de cada ID)
     try:
         cap_fps = cv2.VideoCapture(str(video_original))
@@ -167,6 +261,24 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
         print(Fore.RED + f"[ERRO] Falha ao gerar relatório de tracking: {e}")
 
     tempos["video_total"] = time.time() - t0_video
+    
+    # Preenche chaves de compatibilidade para o relatório
+    tempos["yolo"] = tempos["detector_total"]
+    tempos["rtmpose"] = tempos["rtmpose_total"]
+    tempos["total"] = tempos["video_total"]
+
+    # ================== TABELA DE TEMPOS (Igual pre-processamento) ==================
+    print(Fore.CYAN + "\n" + "="*60)
+    print(Fore.CYAN + f"  TEMPOS DE PROCESSAMENTO (APP) - {video_path.name}")
+    print(Fore.CYAN + "="*60)
+    print(Fore.WHITE + f"  {'Etapa':<30} {'Tempo':>15}")
+    print(Fore.WHITE + "-"*60)
+    print(Fore.YELLOW + f"  {'YOLO + BoTSORT + OSNet':<30} {tempos['detector_total']:>12.2f} seg")
+    print(Fore.YELLOW + f"  {'RTMPose (Pose)':<30} {tempos['rtmpose_total']:>12.2f} seg")
+    print(Fore.YELLOW + f"  {'Classificação (LSTM/TFT)':<30} {tempos['temporal_total']:>12.2f} seg")
+    print(Fore.WHITE + "-"*60)
+    print(Fore.GREEN + f"  {'TOTAL VIDEO':<30} {tempos['video_total']:>12.2f} seg")
+    print(Fore.CYAN + "="*60 + "\n")
 
     # Resumo a nível de vídeo para métricas:
     # vídeo é CLASSE2 se pelo menos um ID foi classificado como classe 2

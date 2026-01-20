@@ -16,6 +16,19 @@ class UserConfigManager:
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     saved_config = json.load(f)
+                    
+                    # Parse RTMPOSE_INPUT_SIZE string to tuple if needed
+                    if "RTMPOSE_INPUT_SIZE" in saved_config and isinstance(saved_config["RTMPOSE_INPUT_SIZE"], str):
+                        try:
+                            w, h = map(int, saved_config["RTMPOSE_INPUT_SIZE"].split('x'))
+                            # O config_master define como (192, 256) onde 192=W, 256=H ?
+                            # config_master: SIMCC_W = RTMPOSE_INPUT_SIZE[0] # 192
+                            # Entao a tupla é (W, H).
+                            saved_config["RTMPOSE_INPUT_SIZE"] = (w, h)
+                        except:
+                            print("[WARN] Falha ao parsear RTMPOSE_INPUT_SIZE. Usando padrão.")
+                            del saved_config["RTMPOSE_INPUT_SIZE"]
+
                     # Merge: valores salvos sobrescrevem os padrões
                     defaults.update(saved_config)
                     return defaults
@@ -42,6 +55,7 @@ class UserConfigManager:
             "YOLO_MODEL": cm.YOLO_MODEL,
             "OSNET_MODEL": cm.OSNET_MODEL,
             "RTMPOSE_MODEL": cm.RTMPOSE_MODEL,
+            "RTMPOSE_INPUT_SIZE": getattr(cm, "RTMPOSE_INPUT_SIZE", "256x192"), # Default 256x192
             "TEMPORAL_MODEL": getattr(cm, "TEMPORAL_MODEL", "tft"),
             
             # Classes de Detecção

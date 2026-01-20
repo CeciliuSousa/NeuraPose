@@ -20,7 +20,34 @@ args, _ = parser.parse_known_args()
 # ------------------------------------------------------------------
 # Importa TUDO do config_master.py
 # ------------------------------------------------------------------
+# ------------------------------------------------------------------
+# Importa TUDO do config_master.py e SOBRESCREVE com UserConfigManager
+# ------------------------------------------------------------------
+import neurapose_backend.config_master as cm
+from neurapose_backend.app.user_config_manager import UserConfigManager
+
+# Carrega configurações do usuário (user_settings.json)
+user_config = UserConfigManager.load_config()
+
+# Atualiza atributos do cm com as configs do usuário
+for k, v in user_config.items():
+    if hasattr(cm, k):
+        setattr(cm, k, v)
+
+# Recalcula derivadas criticas (que sao inicializadas estaticamente no config_master)
+if hasattr(cm, "RTMPOSE_INPUT_SIZE"):
+    # Garante que seja tupla (se nao for, ja deve ter sido tratado no load_config, mas por seguranca)
+    if isinstance(cm.RTMPOSE_INPUT_SIZE, (tuple, list)) and len(cm.RTMPOSE_INPUT_SIZE) == 2:
+        cm.SIMCC_W = cm.RTMPOSE_INPUT_SIZE[0]
+        cm.SIMCC_H = cm.RTMPOSE_INPUT_SIZE[1]
+
+# Importa tudo do cm atualizado para o namespace local
+# Isso garante que quem importa de config.py pegue os valores atualizados
 from neurapose_backend.config_master import *
+
+# Sobrescreve localmente caso o import * não tenha pego (por segurança)
+for k, v in user_config.items():
+    globals()[k] = v
 
 
 # ------------------------------------------------------------------

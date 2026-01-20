@@ -311,13 +311,31 @@ def get_all_cm_config():
 
 def update_cm_runtime(updates: Dict[str, Any], persist: bool = True):
     global RUNTIME_CONFIG
+    
+    # Tratamento especial para RTMPOSE_INPUT_SIZE (string -> tuple)
+    if "RTMPOSE_INPUT_SIZE" in updates and isinstance(updates["RTMPOSE_INPUT_SIZE"], str):
+        try:
+            w, h = map(int, updates["RTMPOSE_INPUT_SIZE"].split('x'))
+            updates["RTMPOSE_INPUT_SIZE"] = (w, h)
+        except:
+            print("[WARN] Falha ao parsear RTMPOSE_INPUT_SIZE no update_cm_runtime.")
+            # Nao deletamos, deixamos falhar/ignorar ou mantemos string (que vai dar erro no uso)
+            pass
+
     RUNTIME_CONFIG.update(updates)
     
     # Sincroniza BOT_SORT_CONFIG
     for k, v in updates.items():
         if k in cm.BOT_SORT_CONFIG:
             cm.BOT_SORT_CONFIG[k] = v
-            
+    
+    # Recalcula derivadas criticas do RTMPose
+    if "RTMPOSE_INPUT_SIZE" in updates: # Se foi atualizado
+         if isinstance(RUNTIME_CONFIG["RTMPOSE_INPUT_SIZE"], (tuple, list)):
+             cm.SIMCC_W = RUNTIME_CONFIG["RTMPOSE_INPUT_SIZE"][0]
+             cm.SIMCC_H = RUNTIME_CONFIG["RTMPOSE_INPUT_SIZE"][1]
+             # print(f"[DEBUG] SIMCC recalibrado para: {cm.SIMCC_W}x{cm.SIMCC_H}")
+
     if persist:
         # Salva apenas as variáveis que queremos persistir (limpa caminhos dinâmicos se houver)
         UserConfigManager.save_config(RUNTIME_CONFIG)

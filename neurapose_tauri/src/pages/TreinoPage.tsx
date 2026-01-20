@@ -15,6 +15,7 @@ import { FileExplorerModal } from '../components/FileExplorerModal';
 import { shortenPath } from '../lib/utils';
 import { Terminal } from '../components/ui/Terminal';
 import { StatusMessage } from '../components/ui/StatusMessage';
+import { PathSelector } from '../components/ui/PathSelector';
 
 // Modelos disponíveis com nomes extensos
 const MODEL_OPTIONS = [
@@ -242,31 +243,15 @@ export default function TreinoPage() {
                         <div className="space-y-4">
                             {/* Dataset Path */}
                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Dataset (.pt)</label>
-                                <div className="flex gap-2">
-                                    <div className="flex-1 relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                                            <Dumbbell className="w-4 h-4" />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            value={shortenPath(datasetPath)}
-                                            title={datasetPath}
-                                            readOnly
-                                            className="w-full pl-9 pr-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer truncate"
-                                            placeholder="Selecione o diretório para treinar..."
-                                            onClick={() => setExplorerOpen('dataset')}
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={() => setExplorerOpen('dataset')}
-                                        className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
-                                    >
-                                        <FolderInput className="w-4 h-4" />
-                                    </button>
-                                </div>
+                                <PathSelector
+                                    label="Dataset (.pt)"
+                                    value={datasetPath}
+                                    onSelect={() => setExplorerOpen('dataset')}
+                                    placeholder="Selecione o diretório para treinar..."
+                                    icon={Dumbbell}
+                                />
                                 {datasetName && (
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-xs text-muted-foreground mt-1">
                                         Dataset: <span className="font-mono text-primary">{datasetName}</span>
                                     </p>
                                 )}
@@ -275,24 +260,12 @@ export default function TreinoPage() {
                             {/* Pretrained Model (only for retreinar) */}
                             {mode === 'retreinar' && (
                                 <div className="space-y-2 p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
-                                    <label className="text-sm font-medium text-orange-400">Modelo Pré-treinado</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={shortenPath(pretrainedPath)}
-                                            title={pretrainedPath}
-                                            readOnly
-                                            className="flex-1 px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer"
-                                            placeholder="Selecione um modelo para retreino..."
-                                            onClick={() => setExplorerOpen('pretrained')}
-                                        />
-                                        <button
-                                            onClick={() => setExplorerOpen('pretrained')}
-                                            className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
-                                        >
-                                            <FolderInput className="w-4 h-4" />
-                                        </button>
-                                    </div>
+                                    <PathSelector
+                                        label="Modelo Pré-treinado"
+                                        value={pretrainedPath}
+                                        onSelect={() => setExplorerOpen('pretrained')}
+                                        placeholder="Selecione um modelo para retreino..."
+                                    />
                                 </div>
                             )}
                         </div>

@@ -11,12 +11,8 @@ from pathlib import Path
 from colorama import Fore
 
 from neurapose_backend.detector.yolo_detector import yolo_detector_botsort
-from neurapose_backend.config_master import (
-    SIMCC_W, 
-    SIMCC_H, 
-    POSE_CONF_MIN,
-    FPS_TARGET,
-)
+import neurapose_backend.config_master as cm
+
 from neurapose_backend.pre_processamento.utils.geometria import (
     _calc_center_scale,
     get_affine_transform,
@@ -195,13 +191,13 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
 
             # Pose
             center, scale = _calc_center_scale(x1, y1, x2, y2)
-            trans = get_affine_transform(center, scale, 0, (SIMCC_W, SIMCC_H))
-            crop = cv2.warpAffine(frame, trans, (SIMCC_W, SIMCC_H))
+            trans = get_affine_transform(center, scale, 0, (cm.SIMCC_W, cm.SIMCC_H))
+            crop = cv2.warpAffine(frame, trans, (cm.SIMCC_W, cm.SIMCC_H))
 
             inp = preprocess_rtmpose_input(crop)
             simx, simy = sess.run(None, {input_name: inp})
             coords_in, conf_arr = decode_simcc_output(simx, simy)
-            coords_fr = transform_preds(coords_in[0], center, scale, (SIMCC_W, SIMCC_H))
+            coords_fr = transform_preds(coords_in[0], center, scale, (cm.SIMCC_W, cm.SIMCC_H))
 
             kps = np.concatenate([coords_fr, conf_arr[0][:, None]], axis=1)
             kps = smoother.step(pid, kps)
@@ -218,7 +214,7 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
 
             # Desenha no frame de saída (sempre para o vídeo final)
             base_color = color_for_id(pid)
-            frame_output = desenhar_esqueleto(frame_output, kps, kp_thresh=POSE_CONF_MIN, base_color=base_color)
+            frame_output = desenhar_esqueleto(frame_output, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
 
             cv2.rectangle(frame_output, (x1, y1), (x2, y2), (0,255,0), 2)
 
@@ -230,8 +226,9 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
             cv2.putText(frame_output, label, (x1 + 5, y1 - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 2)
             
             # Se preview ativo, desenha também no frame de preview
+            # Se preview ativo, desenha também no frame de preview
             if show:
-                frame_preview = desenhar_esqueleto(frame_preview, kps, kp_thresh=POSE_CONF_MIN, base_color=base_color)
+                frame_preview = desenhar_esqueleto(frame_preview, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
                 cv2.rectangle(frame_preview, (x1, y1), (x2, y2), (0,255,0), 2)
                 cv2.rectangle(frame_preview, (x1, y1 - th - 12), (x1 + tw + 10, y1), (255,255,255), -1)
                 cv2.putText(frame_preview, label, (x1 + 5, y1 - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 2)

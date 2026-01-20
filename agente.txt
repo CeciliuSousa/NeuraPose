@@ -1,0 +1,21 @@
+se o impacto do filtro é quase 0, pode duplicar esse filtro de id persistente do "pre_processamento" dentro do "app" para rodar em testes? 
+
+no "pre_processamento" na página de processar vídeos, mostra o tempo do yolo, botsort, osnet, rtmpose. pode duplicar támbem dentro do app para mostrar no terminal o tempo de processamento para cada vídeo e o tempo todal de cada um deles? 
+
+a diferença é que teste de modelos usa essas ferramentas de processamento mais um modelo LSTM então não esquece desse detalhe! essa tabela de tempo deve ser igual a de pre_processamento. assim como em processamentos de video, mostrar o tempo de cada um dos vídeos testados! 
+
+em configurações, faltou adicionar uma opção para escolher o rtmpose. já da para escolher o modelo yolo e o modelo osnet, adicione para escolher o rtmpose.
+
+pasta root do osnet com reset, pode ser /neurapose_backend/app/modelos/<modelos rtmpose aqui>/(buscar o onnx do rtmpose automaticamente assim que o usuário escolher a pasta do rmtpose que tem esse onnx dentro)
+
+rtmpose tem várias entradas diferentes correto? coloque um selecionador para o usuário escolher a entrada dependendo do modelo rtmpose que ele escolher! o modelo que tenho aqui por enquanto de teste é o rtmpose-l_simcc-body7_pt-body7_420e-256x192, então o tamanho dele é 256x192, correto? então coloque um selecionador para o usuário escolher o tamanho de entrada do rtmpose que ele escolher!
+
+ao escolher o rtmpose, o tamanho de entrada do modelo, essa configuração deve surtir efeito dentro do app ou pre_processamento, não adianta o usuário somente trocar o modelo nas configurações do aplicativo e não surtir efeito nos processamentos do sistema! 
+
+verifique os prints enviados, no aplicativo temos dois estilos para as entradas, uma com a cor parecida com o fundo do app outras mais escuras igual no print! gostei do estilo mais escuro, por aplicar em todas as entradas de todas as páginas que não estiverem igual? quero o estilo mais escuro em todas as páginas! 
+
+adicione ao plano, como a label de entrada é repetidas em várias páginas, transforme em um componente e reutilize em todas as páginas!
+
+depois disso pode começar as edições do app!
+
+você não tem permissão para rodar comandos no terminal.

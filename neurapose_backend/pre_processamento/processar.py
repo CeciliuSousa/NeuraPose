@@ -8,11 +8,24 @@ from pathlib import Path
 from colorama import Fore, init as colorama_init
 
 # Importa configuracoes centralizadas
-from neurapose_backend.config_master import (
-    PROCESSING_INPUT_DIR,
-    PROCESSING_OUTPUT_DIR,
-    RTMPOSE_PREPROCESSING_PATH,
-)
+import neurapose_backend.config_master as cm
+try:
+    from neurapose_backend.app.user_config_manager import UserConfigManager
+    # Carrega configs do usuário e atualiza CM
+    user_conf = UserConfigManager.load_config()
+    for k, v in user_conf.items():
+        if hasattr(cm, k): setattr(cm, k, v)
+    
+    # Recalcula derivadas criticas (SIMCC)
+    if hasattr(cm, "RTMPOSE_INPUT_SIZE") and isinstance(cm.RTMPOSE_INPUT_SIZE, (tuple, list)) and len(cm.RTMPOSE_INPUT_SIZE) == 2:
+        cm.SIMCC_W = cm.RTMPOSE_INPUT_SIZE[0]
+        cm.SIMCC_H = cm.RTMPOSE_INPUT_SIZE[1]
+        
+    print(f"[INFO] Configurações de usuário carregadas. RTMPose: {cm.RTMPOSE_MODEL} ({cm.SIMCC_W}x{cm.SIMCC_H})")
+except ImportError:
+    print(Fore.YELLOW + "[AVISO] Não foi possível carregar UserConfigManager. Usando padrões do config_master.")
+except Exception as e:
+    print(Fore.RED + f"[ERRO] Falha ao aplicar configurações do usuário: {e}")
 
 
 from neurapose_backend.pre_processamento.utils.ferramentas import imprimir_banner, carregar_sessao_onnx
@@ -34,13 +47,13 @@ def main():
 
     # Args para sobrescrever paths do config_master
     parser.add_argument("--input-video", type=str, help="Video unico para processar")
-    parser.add_argument("--input-folder", type=str, default=str(PROCESSING_INPUT_DIR), 
-                        help=f"Pasta de videos (default: {PROCESSING_INPUT_DIR})")
-    parser.add_argument("--output-root", type=str, default=str(PROCESSING_OUTPUT_DIR),
-                        help=f"Pasta de saida (default: {PROCESSING_OUTPUT_DIR})")
+    parser.add_argument("--input-folder", type=str, default=str(cm.PROCESSING_INPUT_DIR), 
+                        help=f"Pasta de videos (default: {cm.PROCESSING_INPUT_DIR})")
+    parser.add_argument("--output-root", type=str, default=str(cm.PROCESSING_OUTPUT_DIR),
+                        help=f"Pasta de saida (default: {cm.PROCESSING_OUTPUT_DIR})")
     parser.add_argument("--show", action="store_true", help="Mostrar preview")
-    parser.add_argument("--onnx", type=str, default=str(RTMPOSE_PREPROCESSING_PATH),
-                        help=f"Caminho do modelo ONNX (default: {RTMPOSE_PREPROCESSING_PATH})")
+    parser.add_argument("--onnx", type=str, default=str(cm.RTMPOSE_PREPROCESSING_PATH),
+                        help=f"Caminho do modelo ONNX (default: {cm.RTMPOSE_PREPROCESSING_PATH})")
 
     args = parser.parse_args()
 

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
     Scissors,
-    FolderInput,
     PieChart,
     Play,
     RefreshCcw
@@ -11,6 +10,7 @@ import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { Terminal } from '../components/ui/Terminal';
 import { StatusMessage } from '../components/ui/StatusMessage';
+import { PathSelector } from '../components/ui/PathSelector';
 
 // Opções de porcentagem para split
 const SPLIT_OPTIONS = [
@@ -27,7 +27,7 @@ export default function SplitPage() {
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'processing' } | null>(null);
 
     const [inputDir, setInputDir] = useState('');
-    const [trainPercent, setTrainPercent] = useState(80);
+    const [trainPercent, setTrainPercent] = useState(85);
     const [explorerOpen, setExplorerOpen] = useState(false);
     const [roots, setRoots] = useState<Record<string, string>>({});
 
@@ -125,33 +125,16 @@ export default function SplitPage() {
                         </h3>
 
                         <div className="space-y-5">
-                            {/* Input Dir */}
                             <div className="space-y-2">
-                                <label className="text-sm font-medium">Diretório de Entrada (Dados Reidentificados)</label>
-                                <div className="flex gap-2">
-                                    <div className="flex-1 relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                                            <Scissors className="w-4 h-4" />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            value={datasetName}
-                                            title={inputDir}
-                                            readOnly
-                                            className="w-full pl-9 pr-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer truncate"
-                                            placeholder="Selecione o diretório para split..."
-                                            onClick={() => setExplorerOpen(true)}
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={() => setExplorerOpen(true)}
-                                        className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
-                                    >
-                                        <FolderInput className="w-4 h-4" />
-                                    </button>
-                                </div>
+                                <PathSelector
+                                    label="Diretório de Entrada (Dados Reidentificados)"
+                                    value={inputDir}
+                                    onSelect={() => setExplorerOpen(true)}
+                                    placeholder="Selecione o diretório para split..."
+                                    icon={Scissors}
+                                />
                                 {datasetName && (
-                                    <p className="text-xs text-muted-foreground">
+                                    <p className="text-xs text-muted-foreground mt-1">
                                         Nome do dataset: <span className="font-mono text-primary">{datasetName}</span>
                                     </p>
                                 )}

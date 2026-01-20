@@ -4,13 +4,13 @@ import {
     Play,
     Pause,
     Square,
-    FolderInput,
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { Terminal } from '../components/ui/Terminal';
 import { VideoPreviewPanel } from '../components/ui/VideoPreviewPanel';
 import { PreviewToggle } from '../components/ui/PreviewToggle';
+import { PathSelector } from '../components/ui/PathSelector';
 
 export default function ProcessamentoPage() {
     // Form State
@@ -161,30 +161,13 @@ export default function ProcessamentoPage() {
                         <h2 className="text-lg font-semibold mb-6">Configuração de Diretórios</h2>
 
                         <div className="space-y-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-muted-foreground">Diretório de Entrada (Vídeos)</label>
-                                <div className="flex gap-2">
-                                    <div className="flex-1 relative">
-                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                                            <Video className="w-4 h-4" />
-                                        </div>
-                                        <input
-                                            type="text"
-                                            value={config.inputPath ? config.inputPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
-                                            readOnly
-                                            title={config.inputPath}
-                                            placeholder="Selecione o diretório para processar..."
-                                            className="w-full pl-9 bg-background border border-border rounded-md py-2 text-sm outline-none focus:ring-2 focus:ring-primary/50 transition-all font-mono cursor-pointer truncate"
-                                            onClick={() => openExplorer()}
-                                        />
-                                    </div>
-                                    <button
-                                        onClick={() => openExplorer()}
-                                        className="px-3 py-2 bg-secondary rounded-md border border-border hover:bg-secondary/80 transition-colors"
-                                    >
-                                        <FolderInput className="w-4 h-4" />
-                                    </button>
-                                </div>
+                            <div className="space-y-4">
+                                <PathSelector
+                                    label="Diretório de Entrada (Vídeos)"
+                                    value={config.inputPath}
+                                    onSelect={() => openExplorer()}
+                                    placeholder="Selecione o diretório para processar..."
+                                />
                             </div>
 
                             {/* <div className="space-y-2">
