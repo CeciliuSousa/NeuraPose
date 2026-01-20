@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-from config_master import CLASSE1, CLASSE2
+from neurapose_backend.config_master import CLASSE1, CLASSE2
 
 
 # --- Configuração da Animação ---

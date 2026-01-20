@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from collections import Counter
 from sklearn.metrics import classification_report, confusion_matrix, f1_score, accuracy_score
 
-from config_master import CLASSE1, CLASSE2
+from neurapose_backend.config_master import CLASSE1, CLASSE2
 
 
 def counts_from_labels(y_tensor):

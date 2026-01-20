@@ -16,8 +16,6 @@ from neurapose_backend.config_master import (
     SIMCC_H, 
     POSE_CONF_MIN,
     FPS_TARGET,
-    FRAME_DISPLAY_W,
-    FRAME_DISPLAY_H,
 )
 from neurapose_backend.pre_processamento.utils.geometria import (
     _calc_center_scale,

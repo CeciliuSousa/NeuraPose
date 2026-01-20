@@ -33,12 +33,12 @@ from app.user_config_manager import UserConfigManager
 # ==============================================================
 # Importamos diretamente do config_master que está na mesma pasta
 try:
-    import config_master as cm
-    from pre_processamento.pipeline.processador import processar_video
-    from pre_processamento.utils.ferramentas import carregar_sessao_onnx, imprimir_banner
+    import neurapose_backend.config_master as cm
+    from neurapose_backend.pre_processamento.pipeline.processador import processar_video
+    from neurapose_backend.pre_processamento.utils.ferramentas import carregar_sessao_onnx, imprimir_banner
 
     # Import logic for Manual ReID
-    from pre_processamento.reid_manual import (
+    from neurapose_backend.pre_processamento.reid_manual import (
         aplicar_processamento_completo, 
         renderizar_video_limpo, 
         carregar_pose_records,
@@ -47,7 +47,7 @@ try:
         renderizar_video_cortado_raw
     )
     # Import logic for Training
-    from LSTM.pipeline import treinador
+    from neurapose_backend.LSTM.pipeline import treinador
 except ImportError as e:
     print(f"CRITICAL ERROR: Could not import project modules.\\nImport failed: {e}")
     raise e

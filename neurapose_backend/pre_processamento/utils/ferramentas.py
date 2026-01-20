@@ -11,7 +11,7 @@ from yt_dlp import YoutubeDL
 from colorama import Fore
 
 # Importa do config_master (absoluto)
-from neurapose_backend.config_master import TRACKER_NAME, YOLO_MODEL, OSNET_PATH, DATASET_NAME, ROOT as PROJECT_ROOT
+from neurapose_backend.config_master import TRACKER_NAME, YOLO_MODEL, OSNET_PATH, ROOT as PROJECT_ROOT
 
 
 

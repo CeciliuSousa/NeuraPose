@@ -21,18 +21,18 @@ from sklearn.model_selection import StratifiedShuffleSplit
 import shutil
 
 # Imports do projeto
-from LSTM.configuracao.config import get_config
-from LSTM.modulos.dataset import load_data_pt
-from LSTM.utils.metricas import (
+from neurapose_backend.LSTM.configuracao.config import get_config
+from neurapose_backend.LSTM.modulos.dataset import load_data_pt
+from neurapose_backend.LSTM.utils.metricas import (
     counts_from_labels, evaluate, plot_curves, plot_confusion_matrix
 )
-from LSTM.modulos.treinamento import train_one_epoch, EarlyStopper
-from LSTM.modulos.loss import FocalLoss
-from LSTM.modulos.custom_dataset import AugmentedDataset
+from neurapose_backend.LSTM.modulos.treinamento import train_one_epoch, EarlyStopper
+from neurapose_backend.LSTM.modulos.loss import FocalLoss
+from neurapose_backend.LSTM.modulos.custom_dataset import AugmentedDataset
 
 
 # Configuracoes centralizadas
-from config_master import (
+from neurapose_backend.config_master import (
     MODEL_BEST_FILENAME,
     MODEL_FINAL_FILENAME,
     NORM_STATS_FILENAME,

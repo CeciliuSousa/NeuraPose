@@ -20,11 +20,9 @@ import torch
 
 
 # Configuracoes centralizadas
-from config_master import (
-    PROCESSING_DATASET,
+from neurapose_backend.config_master import (
     PROCESSING_JSONS_DIR,
     PROCESSING_ANNOTATIONS_DIR,
-    TEST_DATASETS_ROOT,
     MAX_FRAMES_PER_SEQUENCE,
     MIN_FRAMES_PER_ID,
     NUM_JOINTS,

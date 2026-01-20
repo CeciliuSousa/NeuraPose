@@ -15,7 +15,7 @@ from neurapose_backend.app.configuracao.config import (
     CLASSE2_THRESHOLD,
     MODEL_NAME
 )
-from colorama import Fore, Style, init
+from colorama import Fore, init
 
 init(autoreset=True)
 

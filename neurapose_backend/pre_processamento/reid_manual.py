@@ -22,14 +22,14 @@ from pathlib import Path
 from collections import Counter
 from colorama import Fore, init as colorama_init
 
-from config_master import (
+from neurapose_backend.config_master import (
     PROCESSING_OUTPUT_DIR,
     REID_MANUAL_SUFFIX,
     REID_MANUAL_LABELS_FILENAME,
 )
 
 
-from pre_processamento.anotando_classes import (
+from neurapose_backend.pre_processamento.anotando_classes import (
     listar_jsons,
     encontrar_video_para_json,
     carregar_pose_records,
@@ -38,7 +38,7 @@ from pre_processamento.anotando_classes import (
 
 
 # Visualizacao de esqueletos (utilitários prontos)
-from pre_processamento.utils.visualizacao import desenhar_esqueleto, color_for_id
+from neurapose_backend.pre_processamento.utils.visualizacao import desenhar_esqueleto, color_for_id
 from neurapose_backend.config_master import POSE_CONF_MIN
 
 

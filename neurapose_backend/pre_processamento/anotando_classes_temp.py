@@ -26,7 +26,7 @@ except:
 colorama_init(autoreset=True)
 
 # Configuracoes centralizadas (usar mesmos defaults que em anotando_classes.py)
-from config_master import (
+from neurapose_backend.config_master import (
     PROCESSING_OUTPUT_DIR,
     PROCESSING_ANNOTATIONS_DIR,
     MIN_FRAMES_PER_ID,

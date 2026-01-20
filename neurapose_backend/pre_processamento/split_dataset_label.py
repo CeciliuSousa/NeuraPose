@@ -13,13 +13,9 @@ import json
 import shutil
 import numpy as np
 from pathlib import Path
-from sklearn.model_selection import train_test_split
-
-# Adiciona root ao path
-
 
 # Configuracoes centralizadas (valores padrao)
-from config_master import (
+from neurapose_backend.config_master import (
     PROCESSING_DATASET,
     PROCESSING_OUTPUT_DIR,
     PROCESSING_VIDEOS_DIR,

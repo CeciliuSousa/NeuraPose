@@ -8,20 +8,19 @@ import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from pathlib import Path
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 from datetime import datetime
 from colorama import Fore, init
 
 # Importa configuracoes do config_master (via LSTM/configuracao/config.py)
-from LSTM.configuracao.config import get_config
-from LSTM.modulos.dataset import load_data_pkl
-from LSTM.modulos.treinamento import train_one_epoch
+from neurapose_backend.LSTM.configuracao.config import get_config
+from neurapose_backend.LSTM.modulos.dataset import load_data_pt
+from neurapose_backend.LSTM.modulos.treinamento import train_one_epoch
 
 
 # Importa paths e constantes do config_master
-from config_master import (
+from neurapose_backend.config_master import (
     RETRAIN_MODELS_DIR,
     CLASS_NAMES,
     DEVICE,
@@ -84,7 +83,7 @@ def main():
 
     # Carregar dataset - usa args.dataset que vem do config_master como default
     try:
-        dataset, y = load_data_pkl(args.dataset)
+        dataset, y = load_data_pt(args.dataset)
     except FileNotFoundError:
         print(Fore.RED + f"[ERRO] Dataset nao encontrado: {args.dataset}")
         return

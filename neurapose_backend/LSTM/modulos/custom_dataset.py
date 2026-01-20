@@ -4,7 +4,7 @@
 
 import torch
 from torch.utils.data import Dataset
-from LSTM.modulos.augmentation import TimeSeriesAugmenter
+from neurapose_backend.LSTM.modulos.augmentation import TimeSeriesAugmenter
 
 
 class AugmentedDataset(Dataset):

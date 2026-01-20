@@ -19,7 +19,7 @@ from colorama import Fore, init as colorama_init
 
 
 # Configuracoes centralizadas
-from config_master import (
+from neurapose_backend.config_master import (
     PROCESSING_OUTPUT_DIR,
     PROCESSING_ANNOTATIONS_DIR,
     MIN_FRAMES_PER_ID,
