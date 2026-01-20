@@ -284,7 +284,7 @@ def ensure_gpu_memory(required_gb: float = 2.0) -> bool:
 
 # HELPERS
 # ==============================================================
-from neurapose_backend.global.state import state
+from neurapose_backend.globals.state import state
 
 # ==============================================================
 # RUNTIME CONFIGURATION (In-memory, resets on restart)

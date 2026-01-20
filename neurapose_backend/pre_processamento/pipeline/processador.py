@@ -31,7 +31,7 @@ from neurapose_backend.pre_processamento.modulos.suavizacao import EmaSmoother
 
 # Para integracao com o preview do site
 try:
-    from neurapose_backend.global.state import state as state_notifier
+    from neurapose_backend.globals.state import state as state_notifier
 except:
     state_notifier = None
 

@@ -14,7 +14,7 @@ from ultralytics import YOLO
 from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomReID, save_temp_tracker_yaml
 
 # Importa state para controle de parada
-from neurapose_backend.global.state import state
+from neurapose_backend.globals.state import state
 from colorama import Fore
 
 # Importa nome do modelo YOLO e ROOT do config centralizado

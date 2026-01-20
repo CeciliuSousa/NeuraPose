@@ -19,7 +19,7 @@ from neurapose_backend.app.configuracao.config import (
 )
 
 # Estado global para streaming de vídeo
-from neurapose_backend.global.state import state
+from neurapose_backend.globals.state import state
 
 
 def _hash_to_color(i: int):
