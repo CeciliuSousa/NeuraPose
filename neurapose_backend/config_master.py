@@ -40,9 +40,9 @@ TEMPORAL_MODEL = "tft"
 # SEÇÃO 2: PARÂMETROS DE PRÉ-PROCESSAMENTO
 # ==============================================================
 
-DETECTION_CONF = 0.55               # Confiança YOLO (0.30-0.40 recomendado)
+DETECTION_CONF = 0.55               # Confiança YOLO
 POSE_CONF_MIN = 0.30                # Confiança keypoint
-CLAMP_MARGIN = 0.0                  # NÃO ALTERE (deve ser 0.0)
+CLAMP_MARGIN = 0.0                  # NÃO ALTERE
 EMA_ALPHA = 0.35                    # Suavização temporal
 EMA_MIN_CONF = 0.0                  # Conf mínima para EMA
 
@@ -50,8 +50,8 @@ EMA_MIN_CONF = 0.0                  # Conf mínima para EMA
 # SEÇÃO 3: CLASSES DE ANOTAÇÃO
 # ==============================================================
 
-CLASSE1 = "NORMAL"                  # Classe padrão (comportamento normal)
-CLASSE2 = "FURTO"                   # Classe anômala (a detectar)
+CLASSE1 = "NORMAL"                  # Classe padrão
+CLASSE2 = "FURTO"                   # Classe anômala
 CLASS_NAMES = [CLASSE1, CLASSE2]
 NUM_CLASSES = len(CLASS_NAMES)
 
@@ -85,8 +85,8 @@ TEST_SPLIT = "teste"
 # ==============================================================
 
 TIME_STEPS = 30                     # Janela temporal
-NUM_JOINTS = 17                     # Keypoints COCO (NÃO ALTERE)
-NUM_CHANNELS = 2                    # x, y (NÃO ALTERE)
+NUM_JOINTS = 17                     # Keypoints COCO
+NUM_CHANNELS = 2                    # x, y
 BATCH_SIZE = 32
 LEARNING_RATE = 0.0003
 EPOCHS = 100
@@ -199,7 +199,7 @@ STD = np.array([58.395, 57.12, 57.375], dtype=np.float32)
 
 # Pares de esqueleto COCO-17
 PAIRS = [
-    (5, 7), (7, 9), (6, 8), (8, 10),    # Braços
+    (5, 7), (7, 9), (6, 8), (8, 10),     # Braços
     (5, 6),                              # Ombros
     (11, 12),                            # Quadris
     (11, 13), (13, 15),                  # Perna esquerda

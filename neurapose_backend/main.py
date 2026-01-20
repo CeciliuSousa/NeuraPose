@@ -24,8 +24,8 @@ for p in [str(CURRENT_DIR), str(ROOT_DIR)]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from app.log_service import LogBuffer, CaptureOutput
-from app.user_config_manager import UserConfigManager
+from neurapose_backend.app.log_service import LogBuffer, CaptureOutput
+from neurapose_backend.app.user_config_manager import UserConfigManager
 
 
 # ==============================================================
@@ -523,7 +523,7 @@ def run_training_task(req: TrainRequest):
     with CaptureOutput():
         logger.info(f"Iniciando treinamento: {req.model_name} (Dataset: {req.dataset_name})")
         try:
-            from LSTM.pipeline.treinador import main as start_train
+            from neurapose_backend.LSTM.pipeline.treinador import main as start_train
             # NOTA: O treinador atual lê configurações via get_config().
             # Para integração total, precisaríamos que o treinador aceitasse os args do req.
             # Por enquanto, vamos atualizar o RUNTIME_CONFIG que o treinador pode vir a ler.
@@ -1008,7 +1008,7 @@ async def start_training(req: TrainRequest, background_tasks: BackgroundTasks):
 @app.post("/train/start")
 async def train_model_start(req: TrainStartRequest, background_tasks: BackgroundTasks):
     """Inicia treinamento de novo modelo com parâmetros configuráveis."""
-    from LSTM.pipeline.treinador import main as train_main
+    from neurapose_backend.LSTM.pipeline.treinador import main as train_main
     
     dataset_path = Path(req.dataset_path).resolve()
     if not dataset_path.exists():
@@ -1073,7 +1073,7 @@ async def train_model_start(req: TrainStartRequest, background_tasks: Background
 @app.post("/train/retrain")
 async def train_model_retrain(req: TrainRetrainRequest, background_tasks: BackgroundTasks):
     """Retreina modelo existente com novos dados ou mais épocas."""
-    from LSTM.pipeline.treinador import main as train_main
+    from neurapose_backend.LSTM.pipeline.treinador import main as train_main
     
     dataset_path = Path(req.dataset_path).resolve()
     pretrained_path = Path(req.pretrained_path).resolve()
@@ -1654,7 +1654,7 @@ def list_videos_to_annotate(root_path: Optional[str] = None):
 @app.get("/annotate/{video_id}/details")
 def get_annotation_details(video_id: str, root_path: Optional[str] = None):
     """Retorna detalhes dos IDs encontrados no vídeo para anotação."""
-    from pre_processamento.anotando_classes import carregar_pose_records, indexar_por_frame
+    from neurapose_backend.pre_processamento.anotando_classes import carregar_pose_records, indexar_por_frame
     
     root = Path(root_path).resolve() if root_path else cm.REID_OUTPUT_DIR
     logger.info(f"[ANNOTATE] root_path recebido: {root_path}")
@@ -1756,7 +1756,7 @@ def save_annotations(req: AnnotationRequest):
 @app.post("/dataset/split")
 async def split_dataset(req: SplitRequest, background_tasks: BackgroundTasks):
     """Inicia a divisão do dataset para treino e teste em segundo plano."""
-    from pre_processamento.split_dataset_label import run_split
+    from neurapose_backend.pre_processamento.split_dataset_label import run_split
     
     input_path = Path(req.input_dir_process).resolve()
     output_root = Path(req.output_root).resolve() if req.output_root else cm.TEST_DATASETS_ROOT.parent
@@ -1788,7 +1788,7 @@ async def split_dataset(req: SplitRequest, background_tasks: BackgroundTasks):
 @app.post("/convert/pt")
 async def convert_dataset_to_pt(req: ConvertRequest, background_tasks: BackgroundTasks):
     """Converte JSONs de anotações para formato PyTorch (.pt)."""
-    from pre_processamento.converte_pt import main as converte_main
+    from neurapose_backend.pre_processamento.converte_pt import main as converte_main
     
     dataset_path = Path(req.dataset_path).resolve()
     
@@ -1812,7 +1812,7 @@ async def convert_dataset_to_pt(req: ConvertRequest, background_tasks: Backgroun
         state.is_running = True
         with CaptureOutput(category="convert"):
             try:
-                import config_master as cm
+                import neurapose_backend.config_master as cm
                 original_jsons = cm.PROCESSING_JSONS_DIR
                 original_labels = cm.PROCESSING_ANNOTATIONS_DIR
                 
@@ -1823,7 +1823,7 @@ async def convert_dataset_to_pt(req: ConvertRequest, background_tasks: Backgroun
                 out_file = out_dir / f"data{req.extension}"
                 
                 # FORÇA a atualização das variáveis dentro do módulo converte_pt
-                import pre_processamento.converte_pt as cpt
+                import neurapose_backend.pre_processamento.converte_pt as cpt
                 
                 # Atualiza cm para qualquer outro import interno no converte_pt
                 cm.PROCESSING_JSONS_DIR = jsons_dir
