@@ -1,3 +1,0 @@
-teste rodando na página teste, até aparece a bolinha amarela na sidebar, porém em outras páginas mostra como se elas tivessem processando, mostra a mensagem amarela! corrija isso, se um página está processando as outras não devem mostrar nada não! 
-
-Os toggles, entradas e configurações nas páginas deve ter uma memória durante seus processamentos. As entradas de datasets, modelos e configurações somem quando começa a processar ou quando mudamos para outra página e voltamos, corrija! 

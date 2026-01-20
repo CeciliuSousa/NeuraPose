@@ -72,13 +72,3 @@ LABELS_TEST_PATH = ROOT / "datasets" / DATASET_NAME / "teste" / "anotacoes" / "l
 # Fallback caso não encontre na estrutura padrão /teste/anotacoes/
 if not LABELS_TEST_PATH.exists():
     LABELS_TEST_PATH = ROOT / "datasets" / DATASET_NAME / "anotacoes" / "labels.json"
-
-# Diretorios de saida para relatorios
-RELATORIOS_ROOT = ROOT / "relatorios-testes" / DATASET_NAME / RELATORIO
-PREDICOES_DIR = RELATORIOS_ROOT / "predicoes"
-JSONS_DIR = RELATORIOS_ROOT / "jsons"
-METRICAS_DIR = RELATORIOS_ROOT / "metricas"
-
-# Cria diretorios
-for p in [PREDICOES_DIR, JSONS_DIR, METRICAS_DIR]:
-    p.mkdir(parents=True, exist_ok=True)
