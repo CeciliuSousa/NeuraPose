@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
     PlayCircle,
-    FolderInput,
     FileCode,
     Cpu,
     Zap,

@@ -4,7 +4,6 @@ import {
     Dumbbell,
     Play,
     RefreshCcw,
-    FolderInput,
     Settings2,
     Zap,
     RotateCcw,
@@ -12,7 +11,6 @@ import {
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
-import { shortenPath } from '../lib/utils';
 import { Terminal } from '../components/ui/Terminal';
 import { StatusMessage } from '../components/ui/StatusMessage';
 import { PathSelector } from '../components/ui/PathSelector';
