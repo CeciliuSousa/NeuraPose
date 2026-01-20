@@ -13,6 +13,9 @@ from fastapi.responses import FileResponse, StreamingResponse
 import psutil
 import torch
 
+import warnings
+warnings.filterwarnings("ignore")
+
 # ==============================================================
 # SETUP PATHS
 # ==============================================================

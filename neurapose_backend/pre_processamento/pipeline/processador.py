@@ -21,6 +21,7 @@ from neurapose_backend.pre_processamento.utils.geometria import (
 from neurapose_backend.pre_processamento.utils.visualizacao import desenhar_esqueleto, color_for_id
 from neurapose_backend.pre_processamento.modulos.rtmpose import preprocess_rtmpose_input, decode_simcc_output
 from neurapose_backend.pre_processamento.modulos.suavizacao import EmaSmoother
+from neurapose_backend.config_master import FPS_TARGET
 
 
 # Para integracao com o preview do site
