@@ -1,115 +1,131 @@
 # ================================================================
 # NeuraPose - Makefile
 # ================================================================
-# Comandos úteis para desenvolvimento e deploy
+# Comandos rápidos para desenvolvimento e deploy
+#
+# Uso: make <comando>
+# ================================================================
 
-.PHONY: help install dev docker-build docker-up docker-down docker-logs test clean
+.PHONY: help dev backend frontend docker-build docker-up docker-down docker-logs clean install
 
-# Variáveis
-BACKEND_DIR = neurapose-backend
-PYTHON = python
-UVICORN = uvicorn
-
+# ================================================================
+# AJUDA
+# ================================================================
 help:
-	@echo "NeuraPose Backend - Comandos disponíveis:"
 	@echo ""
-	@echo "  make install       - Instala dependências do backend"
-	@echo "  make dev           - Inicia servidor de desenvolvimento"
-	@echo "  make docker-build  - Build da imagem Docker"
-	@echo "  make docker-up     - Sobe containers Docker"
-	@echo "  make docker-down   - Para containers Docker"
-	@echo "  make docker-logs   - Exibe logs dos containers"
-	@echo "  make test          - Executa testes"
-	@echo "  make clean         - Limpa arquivos temporários"
+	@echo "==============================================="
+	@echo "  NeuraPose - Comandos Disponíveis"
+	@echo "==============================================="
+	@echo ""
+	@echo "  DESENVOLVIMENTO:"
+	@echo "    make dev         - Inicia backend + frontend local"
+	@echo "    make backend     - Inicia apenas o backend"
+	@echo "    make frontend    - Inicia apenas o frontend"
+	@echo "    make tauri       - Inicia app Tauri (desktop)"
+	@echo ""
+	@echo "  DOCKER:"
+	@echo "    make docker-build  - Build das imagens Docker"
+	@echo "    make docker-up     - Sobe containers"
+	@echo "    make docker-down   - Para containers"
+	@echo "    make docker-logs   - Ver logs"
+	@echo ""
+	@echo "  UTILITÁRIOS:"
+	@echo "    make install     - Instala dependências"
+	@echo "    make clean       - Limpa arquivos temporários"
+	@echo "    make health      - Verifica status do backend"
 	@echo ""
 
 # ================================================================
-# Desenvolvimento Local
+# DESENVOLVIMENTO LOCAL
 # ================================================================
 
+# Inicia backend e frontend em paralelo
+dev:
+	@echo "Iniciando NeuraPose..."
+	@make -j2 backend frontend
+
+# Inicia apenas o backend (Python/FastAPI)
+backend:
+	@echo "[BACKEND] Iniciando servidor FastAPI..."
+	uv run uvicorn neurapose_backend.main:app --reload --host 127.0.0.1 --port 8000
+
+# Inicia apenas o frontend (React/Vite)
+frontend:
+	@echo "[FRONTEND] Iniciando Vite..."
+	cd neurapose_tauri && npm run dev
+
+# Inicia o app Tauri (desktop)
+tauri:
+	@echo "[TAURI] Iniciando aplicativo desktop..."
+	cd neurapose_tauri && npm run tauri dev
+
+# Build do app Tauri
+tauri-build:
+	@echo "[TAURI] Gerando build de produção..."
+	cd neurapose_tauri && npm run tauri build
+
+# ================================================================
+# INSTALAÇÃO
+# ================================================================
+
+# Instala todas as dependências
 install:
 	@echo "Instalando dependências do backend..."
-	cd $(BACKEND_DIR) && pip install -r requirements.txt
-	@echo "Instalação concluída!"
-
-dev:
-	@echo "Iniciando servidor de desenvolvimento..."
-	cd $(BACKEND_DIR) && $(UVICORN) main:app --reload --host 0.0.0.0 --port 8000
-
-run:
-	@echo "Iniciando servidor..."
-	cd $(BACKEND_DIR) && $(UVICORN) main:app --host 0.0.0.0 --port 8000
+	uv sync
+	@echo ""
+	@echo "Instalando dependências do frontend..."
+	cd neurapose_tauri && npm install
+	@echo ""
+	@echo "✓ Instalação concluída!"
 
 # ================================================================
-# Docker
+# DOCKER
 # ================================================================
 
 docker-build:
-	@echo "Construindo imagem Docker..."
-	cd $(BACKEND_DIR) && docker-compose build
+	@echo "Construindo imagens Docker..."
+	docker-compose build
 
 docker-up:
 	@echo "Subindo containers..."
-	cd $(BACKEND_DIR) && docker-compose up -d
-	@echo "API disponível em: http://localhost:8000"
-	@echo "Docs em: http://localhost:8000/docs"
+	docker-compose up -d
+	@echo ""
+	@echo "✓ Backend: http://localhost:8000"
+	@echo "✓ Frontend: http://localhost:1420"
+	@echo "✓ Docs API: http://localhost:8000/docs"
 
 docker-down:
 	@echo "Parando containers..."
-	cd $(BACKEND_DIR) && docker-compose down
+	docker-compose down
 
 docker-logs:
-	cd $(BACKEND_DIR) && docker-compose logs -f
+	docker-compose logs -f
 
 docker-restart:
 	@echo "Reiniciando containers..."
-	cd $(BACKEND_DIR) && docker-compose restart
+	docker-compose restart
 
 # ================================================================
-# Testes e Qualidade
+# UTILITÁRIOS
 # ================================================================
 
-test:
-	@echo "Executando testes..."
-	cd $(BACKEND_DIR) && $(PYTHON) -m pytest tests/ -v
+# Verifica saúde do backend
+health:
+	@curl -s http://localhost:8000/health | python -m json.tool 2>/dev/null || echo "Backend offline"
 
-lint:
-	@echo "Verificando código..."
-	cd $(BACKEND_DIR) && $(PYTHON) -m flake8 app/
-
-format:
-	@echo "Formatando código..."
-	cd $(BACKEND_DIR) && $(PYTHON) -m black app/
-
-# ================================================================
-# Limpeza
-# ================================================================
-
+# Limpa arquivos temporários
 clean:
 	@echo "Limpando arquivos temporários..."
-	find . -type f -name "*.pyc" -delete
+	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
-	@echo "Limpeza concluída!"
+	find . -type d -name "node_modules/.cache" -exec rm -rf {} + 2>/dev/null || true
+	@echo "✓ Limpeza concluída!"
 
-clean-jobs:
-	@echo "Limpando jobs antigos..."
-	rm -rf $(BACKEND_DIR)/data/jobs/*.json
-	@echo "Jobs limpos!"
-
-# ================================================================
-# Utilitários
-# ================================================================
-
-# Abre documentação da API no navegador
-docs:
-	@echo "Abrindo documentação..."
-	start http://localhost:8000/docs || xdg-open http://localhost:8000/docs || open http://localhost:8000/docs
-
-# Verifica saúde da API
-health:
-	curl -s http://localhost:8000/health | python -m json.tool
-
-# Exibe configuração atual
-config:
-	curl -s http://localhost:8000/api/v1/config | python -m json.tool
+# Limpa resultados de processamento
+clean-results:
+	@echo "Limpando resultados de processamento..."
+	rm -rf neurapose_backend/resultados-processamentos/* 2>/dev/null || true
+	rm -rf neurapose_backend/resultados-reidentificacoes/* 2>/dev/null || true
+	rm -rf neurapose_backend/relatorios-testes/* 2>/dev/null || true
+	@echo "✓ Resultados limpos!"

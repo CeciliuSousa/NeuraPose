@@ -1,21 +1,26 @@
 # ============================================================
 # docker-compose.yml - NeuraPose
 # ============================================================
-# Orquestra o container NeuraPose com GPU e volumes persistentes.
+# Orquestra backend (Python/FastAPI) e frontend (Tauri/React)
 #
 # Uso:
 #   docker-compose up -d          # Inicia em background
-#   docker-compose exec neurapose bash   # Acessa o container
-#   docker-compose down           # Para o container
+#   docker-compose logs -f        # Ver logs
+#   docker-compose down           # Para containers
 # ============================================================
 
 services:
-  neurapose:
+  # ============================================================
+  # BACKEND - Python/FastAPI com CUDA
+  # ============================================================
+  backend:
     build:
       context: .
-      dockerfile: Dockerfile
-    image: neurapose-teste:1.0.0
-    container_name: neurapose
+      dockerfile: neurapose_backend/Dockerfile
+    image: neurapose-backend:1.0.0
+    container_name: neurapose-backend
+    ports:
+      - "8000:8000"
 
     # Suporte a GPU NVIDIA
     deploy:
@@ -29,34 +34,59 @@ services:
     # Volumes persistentes
     volumes:
       # Videos de entrada
-      - ./neurapose/videos:/app/neurapose/videos
+      - ./neurapose_backend/videos:/app/neurapose_backend/videos
 
-      # Datasets processados
-      - ./neurapose/datasets:/app/neurapose/datasets
+      # Resultados do processamento
+      - ./neurapose_backend/resultados-processamentos:/app/neurapose_backend/resultados-processamentos
+      - ./neurapose_backend/resultados-reidentificacoes:/app/neurapose_backend/resultados-reidentificacoes
+      - ./neurapose_backend/resultados-anotacoes:/app/neurapose_backend/resultados-anotacoes
+
+      # Datasets
+      - ./neurapose_backend/datasets:/app/neurapose_backend/datasets
 
       # Modelos treinados
-      - ./neurapose/modelos-lstm-treinados:/app/neurapose/modelos-lstm-treinados
+      - ./neurapose_backend/modelos-lstm-treinados:/app/neurapose_backend/modelos-lstm-treinados
 
-      # Saida do pre-processamento
-      - ./neurapose/resultado_processamento:/app/neurapose/resultado_processamento
+      # Relatórios de teste
+      - ./neurapose_backend/relatorios-testes:/app/neurapose_backend/relatorios-testes
 
-      # Relatorios de teste
-      - ./neurapose/relatorios-testes:/app/neurapose/relatorios-testes
+      # Modelos pré-treinados (YOLO, RTMPose, OSNet)
+      - ./neurapose_backend/detector/modelos:/app/neurapose_backend/detector/modelos
+      - ./neurapose_backend/app/modelos:/app/neurapose_backend/app/modelos
+      - ./neurapose_backend/tracker/weights:/app/neurapose_backend/tracker/weights
+      - ./neurapose_backend/pre_processamento/modelos:/app/neurapose_backend/pre_processamento/modelos
 
-      # Modelos pre-treinados (YOLO, RTMPose, OSNet)
-      - ./neurapose/detector/models:/app/neurapose/detector/models
-      - ./neurapose/app/modelos:/app/neurapose/app/modelos
-      - ./neurapose/tracker/weights:/app/neurapose/tracker/weights
-      - ./neurapose/pre_processamento/modelos:/app/neurapose/pre_processamento/modelos
-
-    # Mantem container rodando
-    stdin_open: true
-    tty: true
-
-    # Variaveis de ambiente
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - PYTHONUNBUFFERED=1
 
-    # Reinicia automaticamente
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    restart: unless-stopped
+
+  # ============================================================
+  # FRONTEND - React/Vite (Dev Server para desenvolvimento)
+  # ============================================================
+  frontend:
+    build:
+      context: ./neurapose_tauri
+      dockerfile: Dockerfile
+    image: neurapose-frontend:1.0.0
+    container_name: neurapose-frontend
+    ports:
+      - "1420:1420"
+
+    volumes:
+      - ./neurapose_tauri/src:/app/src
+
+    environment:
+      - VITE_API_URL=http://backend:8000
+
+    depends_on:
+      - backend
+
     restart: unless-stopped
