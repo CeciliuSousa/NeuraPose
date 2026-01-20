@@ -43,23 +43,41 @@ class CustomReID:
             return []
 
         boxes_xyxy = xywh2xyxy(torch.from_numpy(dets[:, :4]))
-        crops = [save_one_box(box, img, save=False) for box in boxes_xyxy]
+        
+        # Batching images
+        batch_crops = []
+        valid_indices = []
+        
+        for i, box in enumerate(boxes_xyxy):
+            crop = save_one_box(box, img, save=False)
+            if crop is not None and crop.size > 0:
+                crop_resized = cv2.resize(crop, (128, 256))
+                # Convert to Tensor and Normalize
+                crop_t = torch.from_numpy(crop_resized.copy()).permute(2, 0, 1).float() / 255.0
+                crop_t = self.norm(crop_t)
+                batch_crops.append(crop_t)
+                valid_indices.append(i)
+        
+        if not batch_crops:
+            return [np.zeros(512, dtype=np.float32) for _ in range(len(boxes_xyxy))]
 
-        feats = []
-        for crop in crops:
-            if crop is None or crop.size == 0:
-                feats.append(np.zeros(512, dtype=np.float32))
-                continue
+        # Stack into a single tensor [B, C, H, W]
+        batch_t = torch.stack(batch_crops).to(self.device)
 
-            crop_resized = cv2.resize(crop, (128, 256))
-            crop_t = torch.from_numpy(crop_resized.copy()).permute(2, 0, 1).unsqueeze(0).float() / 255.0
+        with torch.no_grad():
+            batch_feats = self.model(batch_t)
+        
+        # Move back to CPU and convert to numpy
+        batch_feats = batch_feats.cpu().numpy()
 
-            crop_t = self.norm(crop_t)
+        # Reassemble features in original order
+        final_feats = [None] * len(boxes_xyxy)
+        for idx, i in enumerate(valid_indices):
+            final_feats[i] = batch_feats[idx]
+            
+        # Fill None with zero vectors
+        for i in range(len(final_feats)):
+            if final_feats[i] is None:
+                final_feats[i] = np.zeros(512, dtype=np.float32)
 
-            crop_t = crop_t.to(self.device)
-
-            with torch.no_grad():
-                f = self.model(crop_t)
-            feats.append(f.squeeze().cpu().numpy())
-
-        return feats
+        return final_feats

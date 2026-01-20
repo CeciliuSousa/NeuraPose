@@ -197,83 +197,56 @@ def yolo_detector_botsort(videos_dir=None):
         )
 
         results = []
+        track_data = {}
         
         # Itera sobre o stream
-        for r in tracking_stream:
+        for frame_idx, r in enumerate(tracking_stream):
             # Verifica Parada
             if state.stop_requested:
                 print(Fore.YELLOW + "[STOP] Detecção interrompida pelo usuário.")
                 break
 
             results.append(r)
-            # NOTA: Preview acontece durante RTMPose (extracao_pose.py), NÃO aqui
+            
+            # Coleta de tracks por frame (substitui o loop while True posterior)
+            if r.boxes is not None and len(r.boxes) > 0:
+                ids_tensor = r.boxes.id
+                if ids_tensor is not None:
+                    ids = ids_tensor.cpu().numpy()
+                    current_time = frame_idx / fps
+
+                    for track_id in ids:
+                        if track_id is None or track_id < 0:
+                            continue
+
+                        tid = int(track_id)
+                        
+                        # Tenta pegar a feature do tracker se disponível
+                        try:
+                            f = tracker.tracks[tid].feat.copy()
+                        except Exception:
+                            f = np.zeros(512, dtype=np.float32)
+
+                        if tid not in track_data:
+                            track_data[tid] = {
+                                "start": current_time,
+                                "end": current_time,
+                                "features": [f],
+                                "frames": {frame_idx},
+                            }
+                        else:
+                            track_data[tid]["end"] = current_time
+                            track_data[tid]["frames"].add(frame_idx)
+
+                            if len(track_data[tid]["features"]) < 20:
+                                track_data[tid]["features"].append(f)
 
         print(f"[YOLO] Tracking concluido! {len(results)} frames processados.")
         sys.stdout.flush()
 
+        cap.release()
         if state.stop_requested:
-             cap.release()
              break # Sai do loop de videos
-
-        if not results or not hasattr(results[0], "boxes"):
-            print("[ERRO] Sem resultados validos.")
-            cap.release()
-            continue
-
-        frame_idx = 0
-        track_data = {}
-
-        # ============================================================
-        # COLETA DE TRACKS POR FRAME (start, end, frames)
-        # ============================================================
-        while True:
-            # Se parou no meio, aborta
-            if state.stop_requested: 
-                break
-
-            ret, _ = cap.read()
-            if not ret or frame_idx >= len(results):
-                break
-
-            r = results[frame_idx]
-
-            if r.boxes is not None and len(r.boxes) > 0:
-                ids_tensor = r.boxes.id
-                if ids_tensor is None:
-                    frame_idx += 1
-                    continue
-
-                ids = ids_tensor.cpu().numpy()
-                current_time = frame_idx / fps
-
-                for track_id in ids:
-                    if track_id is None or track_id < 0:
-                        continue
-
-                    tid = int(track_id)
-
-                    # OBS: aqui nao precisamos mais de embeddings para fusao;
-                    # mantemos lista de features so para futuro, mas nao usamos.
-                    try:
-                        f = tracker.tracks[tid].feat.copy()
-                    except Exception:
-                        f = np.zeros(512, dtype=np.float32)
-
-                    if tid not in track_data:
-                        track_data[tid] = {
-                            "start": current_time,
-                            "end": current_time,
-                            "features": [f],
-                            "frames": {frame_idx},
-                        }
-                    else:
-                        track_data[tid]["end"] = current_time
-                        track_data[tid]["frames"].add(frame_idx)
-
-                        if len(track_data[tid]["features"]) < 20:
-                            track_data[tid]["features"].append(f)
-
-            frame_idx += 1
 
         cap.release()
 
