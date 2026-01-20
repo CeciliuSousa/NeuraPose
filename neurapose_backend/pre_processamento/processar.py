@@ -63,6 +63,17 @@ def main():
         sys.exit(1)
 
     onnx_path = Path(args.onnx)
+    
+    # Busca automática se for um diretório
+    if onnx_path.is_dir():
+        print(Fore.CYAN + f"[INFO] Buscando ONNX automaticamente em: {onnx_path}")
+        onnx_files = list(onnx_path.glob("**/*.onnx"))
+        if not onnx_files:
+            print(Fore.RED + f"[ERRO] Nenhum arquivo .onnx encontrado em {onnx_path}")
+            sys.exit(1)
+        onnx_path = onnx_files[0]
+        print(Fore.GREEN + f"[OK] Modelo encontrado: {onnx_path.name}")
+
     out_root = Path(args.output_root)
     
     imprimir_banner(onnx_path)

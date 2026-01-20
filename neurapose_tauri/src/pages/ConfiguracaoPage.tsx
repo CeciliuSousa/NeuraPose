@@ -14,6 +14,7 @@ export default function ConfiguracaoPage() {
     // File Explorer State
     const [explorerOpen, setExplorerOpen] = useState(false);
     const [activeKey, setActiveKey] = useState<string | null>(null);
+    const [activeRootKey, setActiveRootKey] = useState<string | null>(null);
     const [roots, setRoots] = useState<Record<string, string>>({});
 
 
@@ -55,8 +56,9 @@ export default function ConfiguracaoPage() {
         }
     };
 
-    const openExplorer = (key: string) => {
+    const openExplorer = (key: string, rootKey?: string) => {
         setActiveKey(key);
+        setActiveRootKey(rootKey || null);
         setExplorerOpen(true);
     };
 
@@ -66,6 +68,7 @@ export default function ConfiguracaoPage() {
         }
         setExplorerOpen(false);
         setActiveKey(null);
+        setActiveRootKey(null);
     };
 
     const handleReset = async () => {
@@ -244,7 +247,7 @@ export default function ConfiguracaoPage() {
                                                 className="flex-1 bg-background border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/40 transition-all text-xs font-mono"
                                             />
                                             <button
-                                                onClick={() => openExplorer(item.key)}
+                                                onClick={() => openExplorer(item.key, (item as any).rootKey)}
                                                 className="p-2.5 bg-secondary hover:bg-primary/20 hover:text-primary rounded-xl transition-all border border-border"
                                                 title="Procurar arquivo/diretório"
                                             >
@@ -284,7 +287,7 @@ export default function ConfiguracaoPage() {
                 onClose={() => setExplorerOpen(false)}
                 onSelect={onPathSelect}
                 initialPath={activeKey ? config[activeKey] : ''}
-                rootPath={roots.root}
+                rootPath={activeRootKey ? roots[activeRootKey] : roots.root}
                 title="Selecionar Arquivo ou Diretório"
             />
 
