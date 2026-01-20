@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
     FileBarChart,
-    FolderInput,
     Search,
     TrendingUp,
     Target,
@@ -12,8 +11,8 @@ import {
 } from 'lucide-react';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
-import { shortenPath } from '../lib/utils';
 import { StatusMessage } from '../components/ui/StatusMessage';
+import { PathSelector } from '../components/ui/PathSelector';
 
 export default function RelatoriosPage() {
     // Paths selecionados
@@ -124,28 +123,12 @@ export default function RelatoriosPage() {
                         Relatório de Treinamento
                     </h3>
                     <div className="space-y-4">
-                        <div className="flex gap-2">
-                            <div className="flex-1 relative">
-                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60">
-                                    <FileBarChart className="w-4 h-4" />
-                                </div>
-                                <input
-                                    type="text"
-                                    value={shortenPath(trainReportPath)}
-                                    title={trainReportPath}
-                                    readOnly
-                                    className="w-full pl-9 pr-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer truncate"
-                                    placeholder="Selecione relatorio de modelo treinado..."
-                                    onClick={() => setExplorerOpen('train')}
-                                />
-                            </div>
-                            <button
-                                onClick={() => setExplorerOpen('train')}
-                                className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
-                            >
-                                <FolderInput className="w-4 h-4" />
-                            </button>
-                        </div>
+                        <PathSelector
+                            value={trainReportPath}
+                            onSelect={() => setExplorerOpen('train')}
+                            placeholder="Selecione relatorio de modelo treinado..."
+                            icon={TrendingUp}
+                        />
                         {trainName && (
                             <p className="text-xs text-muted-foreground">
                                 Modelo: <span className="font-mono text-green-400">{trainName}</span>
@@ -161,28 +144,12 @@ export default function RelatoriosPage() {
                         Relatório de Teste
                     </h3>
                     <div className="space-y-4">
-                        <div className="flex gap-2">
-                            <div className="flex-1 relative">
-                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60">
-                                    <Target className="w-4 h-4" />
-                                </div>
-                                <input
-                                    type="text"
-                                    value={shortenPath(testReportPath)}
-                                    title={testReportPath}
-                                    readOnly
-                                    className="w-full pl-9 pr-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer truncate"
-                                    placeholder="Selecione relatorio de teste..."
-                                    onClick={() => setExplorerOpen('test')}
-                                />
-                            </div>
-                            <button
-                                onClick={() => setExplorerOpen('test')}
-                                className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
-                            >
-                                <FolderInput className="w-4 h-4" />
-                            </button>
-                        </div>
+                        <PathSelector
+                            value={testReportPath}
+                            onSelect={() => setExplorerOpen('test')}
+                            placeholder="Selecione relatorio de teste..."
+                            icon={Target}
+                        />
                         {testName && (
                             <p className="text-xs text-muted-foreground">
                                 Teste: <span className="font-mono text-blue-400">{testName}</span>

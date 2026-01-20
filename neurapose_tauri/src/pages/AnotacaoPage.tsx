@@ -3,7 +3,6 @@ import {
     Tag,
     Video as VideoIcon,
     Save,
-    FolderInput,
     RefreshCcw,
     Clock,
     CheckCircle2
@@ -14,6 +13,7 @@ import { VideoPlayer } from '../components/ui/VideoPlayer';
 import { FilterDropdown, FilterOption } from '../components/ui/FilterDropdown';
 import { StatusMessage } from '../components/ui/StatusMessage';
 import { TerminalModal } from '../components/ui/TerminalModal';
+import { PathSelector } from '../components/ui/PathSelector';
 
 interface VideoItem {
     video_id: string;
@@ -231,29 +231,12 @@ export default function AnotacaoPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    {/* Entrada */}
-                    <div className="flex items-center gap-2">
-                        <div className="relative">
-                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60">
-                                <Tag className="w-4 h-4" />
-                            </div>
-                            <input
-                                type="text"
-                                value={inputPath ? inputPath.replace(/\\/g, '/').split('/').pop() || '' : ''}
-                                title={inputPath}
-                                readOnly
-                                className="w-64 pl-9 pr-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm cursor-pointer truncate"
-                                placeholder="Selecione o diretório para anotar..."
-                                onClick={() => setExplorerOpen(true)}
-                            />
-                        </div>
-                        <button
-                            onClick={() => setExplorerOpen(true)}
-                            className="p-2 bg-secondary rounded-lg border border-border hover:bg-secondary/80"
-                        >
-                            <FolderInput className="w-4 h-4" />
-                        </button>
-                    </div>
+                    <PathSelector
+                        value={inputPath}
+                        onSelect={() => setExplorerOpen(true)}
+                        placeholder="Selecione o diretório para anotar..."
+                        icon={Tag}
+                    />
                     <button
                         onClick={loadVideos}
                         className="p-2 hover:bg-muted rounded-md transition-colors border border-transparent hover:border-border"

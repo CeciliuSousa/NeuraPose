@@ -18,7 +18,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # ==============================================================
 
 # YOLO (Detecção)
-YOLO_MODEL = "yolov8m.pt"           # yolov8n/s/m/l/x
+YOLO_MODEL = "yolov8l.pt"           # yolov8n/s/m/l/x
 YOLO_IMGSZ = 640                    # 640, 1280, 1920
 YOLO_CONF_THRESHOLD = 0.35
 YOLO_CLASS_PERSON = 0

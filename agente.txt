@@ -1,6 +1,0 @@
-Dentro do ui temos um PathSelector.tsx! Esse componente deve ser usado em todas as entradas de diretório do app para datasets, modelos e etc! 
-
-Todas essas entradas devem ter uma pasta root que reinicia sempre que o usuário abrir o expolorer para escolher algo! No caso, sempre que o usuário for adicionar uma entrada nova a pasta root é que vai ser atualizada!
-
-Cada página tem suas próprias entradas roots! 
-

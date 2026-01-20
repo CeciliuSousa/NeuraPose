@@ -103,10 +103,10 @@ export default function ConfiguracaoPage() {
             description: "Modelos usados para detecção, pose e re-identificação.",
             items: [
                 { key: "YOLO_MODEL", label: "Modelo YOLO (Detecção)", type: "select", options: ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt"] },
-                { key: "OSNET_MODEL", label: "Modelo OSNet (Re-ID)", type: "path" },
-                { key: "RTMPOSE_MODEL", label: "Modelo RTMPose (Pose)", type: "path" },
+                { key: "OSNET_MODEL", label: "Modelo OSNet (Re-ID)", type: "path", rootKey: "modelos_reid" },
+                { key: "RTMPOSE_MODEL", label: "Modelo RTMPose (Pose)", type: "path", rootKey: "modelos_pose" },
                 { key: "RTMPOSE_INPUT_SIZE", label: "Resol. Entrada RTMPose", type: "select", options: ["256x192", "384x288"] },
-                { key: "TEMPORAL_MODEL", label: "Modelo Temporal", type: "select", options: ["tft", "lstm"] },
+                { key: "TEMPORAL_MODEL", label: "Modelo Temporal", type: "select", options: ["lstm", "robust", "pooled", "bilstm", "attention", "tcn", "transformer", "tft", "wavenet"] },
             ]
         },
         {

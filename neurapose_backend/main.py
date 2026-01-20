@@ -777,6 +777,8 @@ def api_get_config():
             "datasets": str(cm.ROOT / "datasets"),
             "modelos": str(cm.TRAINED_MODELS_DIR),
             "modelos_treinados": str(cm.TRAINED_MODELS_DIR),
+            "modelos_reid": str(cm.OSNET_DIR),
+            "modelos_pose": str(cm.RTMPOSE_DIR),
             "relatorios_testes": str(cm.TEST_REPORTS_DIR),
             "anotacoes": str(cm.ANNOTATIONS_OUTPUT_DIR),
             "root": str(cm.ROOT)
