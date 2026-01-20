@@ -1,6 +1,3 @@
-import warnings
-warnings.filterwarnings("ignore")
-
 import sys
 import os
 from pathlib import Path

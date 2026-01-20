@@ -48,7 +48,7 @@ function Start-Frontend {
 function Start-Tauri {
     Write-Host "[TAURI] Iniciando aplicativo desktop..." -ForegroundColor Green
     Set-Location neurapose_tauri
-    npm run tauri de
+    npm run tauri dev
     Set-Location ..
 }
 
