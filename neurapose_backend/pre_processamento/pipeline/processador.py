@@ -102,9 +102,16 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
         (W, H)
     )
     if not writer_pred.isOpened():
-        print(Fore.RED + f"[ERRO] Falha ao iniciar VideoWriter (Pred) com codec avc1.")
-        # Fallback?
-        sys.exit(1)
+        print(Fore.RED + f"[ERRO] Falha ao iniciar VideoWriter (Pred) com codec avc1. Tentando fallback para mp4v...")
+        writer_pred = cv2.VideoWriter(
+            str(out_video),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            fps_out,
+            (W, H)
+        )
+        if not writer_pred.isOpened():
+             print(Fore.RED + f"[FATAL] Não foi possível criar o arquivo de vídeo de predições: {out_video}")
+             sys.exit(1)
 
     json_path = json_dir / f"{video_path.stem}_{int(fps_out)}fps.json"
 

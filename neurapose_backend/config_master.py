@@ -10,6 +10,7 @@
 import numpy as np
 from pathlib import Path
 import torch
+import os
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -97,11 +98,18 @@ EPOCHS = 100
 
 CLASSE2_THRESHOLD = 0.50            # Threshold para classificar como anômalo
 
+# Vídeo & Codecs
+OPENH264_DLL = "openh264-1.8.0-win64.dll"
+
 # ==============================================================
 # SEÇÃO 7: PATHS
 # ==============================================================
 
 ROOT = Path(__file__).resolve().parent
+
+# Adiciona ROOT ao PATH do sistema para encontrar DLLs (como OpenH264)
+if str(ROOT) not in os.environ["PATH"]:
+    os.environ["PATH"] = str(ROOT) + os.pathsep + os.environ["PATH"]
 
 # Modelos
 MODELS_DIR = ROOT / "detector" / "modelos"
@@ -231,6 +239,11 @@ def validar_configuracoes():
     
     if not YOLO_PATH.exists():
         erros.append(f"[AVISO] Modelo YOLO não encontrado: {YOLO_PATH.name}")
+    
+    # Valida DLL OpenH264
+    dll_path = ROOT / OPENH264_DLL
+    if not dll_path.exists():
+        erros.append(f"[AVISO] DLL OpenH264 não encontrada: {OPENH264_DLL}. O codec 'avc1' falhará (usará fallback 'mp4v').")
     
     return erros
 
