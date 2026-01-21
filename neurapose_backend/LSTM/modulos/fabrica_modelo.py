@@ -4,7 +4,7 @@
 
 import torch
 from pathlib import Path
-from neurapose_backend.app.configuracao.config import TIME_STEPS, NUM_CHANNELS, NUM_JOINTS
+import neurapose_backend.config_master as cm
 from neurapose_backend.LSTM.models.models import (
     LSTM, RobustLSTM, PooledLSTM, BILSTM, AttentionLSTM,
     TCN, TransformerModel, TemporalFusionTransformer, WaveNet
@@ -17,13 +17,13 @@ class ClassifierFactory:
         
         # Hyperparâmetros base, onde input_size=C*V e T=TIME_STEPS (30)
         self.hp = dict(
-            input_size=NUM_CHANNELS * NUM_JOINTS,
+            input_size=cm.NUM_CHANNELS * cm.NUM_JOINTS,
             hidden_size=128,
             num_layers=2,
             num_heads=8,
             dropout=0.3,
             num_classes=2,
-            time_steps=TIME_STEPS # 30
+            time_steps=cm.TIME_STEPS # 30
         )
 
     def _resolve_key(self, name: str) -> str:

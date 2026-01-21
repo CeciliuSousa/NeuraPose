@@ -44,8 +44,8 @@ def calcular_pesos(labels_json_path):
         data = json.load(f)
     
     # Usa nomes das classes do config_master
-    primeira_classe = CLASS_NAMES[0].lower()
-    segunda_classe = CLASS_NAMES[1].lower()
+    primeira_classe = cm.CLASS_NAMES[0].lower()
+    segunda_classe = cm.CLASS_NAMES[1].lower()
     
     classe1_count = sum(1 for v in data.values() for label in v.values() if label == primeira_classe)
     classe2_count = sum(1 for v in data.values() for label in v.values() if label == segunda_classe)
@@ -62,10 +62,10 @@ def calcular_pesos(labels_json_path):
 def main():
     args, ModelClass = get_config()
 
-    device = torch.device(DEVICE)
+    DEVICE = cm.DEVICE
 
     # micro-otimizacao: ativa benchmark para cuDNN quando em GPU (melhora throughput)
-    if device.type == 'cuda':
+    if DEVICE.type == 'cuda':
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
     
@@ -86,12 +86,12 @@ def main():
 
     # DataLoader otimizado
     num_workers = min(4, os.cpu_count() or 1)
-    pin_memory = True if device.type == 'cuda' else False
+    pin_memory = True if DEVICE.type == 'cuda' else False
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=num_workers, pin_memory=pin_memory)
 
     # Pesos - usa args.annotations que vem do config_master como default
     classe1_count, classe2_count, pesos = calcular_pesos(args.annotations)
-    weights = torch.tensor(pesos, dtype=torch.float32).to(device)
+    weights = torch.tensor(pesos, dtype=torch.float32).to(DEVICE)
     criterion = nn.CrossEntropyLoss(weight=weights)
 
     # Inicializar modelo
@@ -99,15 +99,15 @@ def main():
         model = ModelClass(input_size=args.input_size,
                            hidden_size=args.hidden_size,
                            num_layers=args.num_layers,
-                           dropout=args.dropout).to(device)
+                           dropout=args.dropout).to(DEVICE)
     except TypeError:
          # Fallback para modelos com assinaturas diferentes
-         model = ModelClass(input_size=args.input_size).to(device)
+         model = ModelClass(input_size=args.input_size).to(DEVICE)
 
     if args.pretrained and os.path.exists(args.pretrained):
         print(Fore.GREEN + f"[INFO] Carregando modelo salvo de: {args.pretrained}")
         try:
-            model.load_state_dict(torch.load(args.pretrained, map_location=device))
+            model.load_state_dict(torch.load(args.pretrained, map_location=DEVICE))
         except Exception as e:
              print(Fore.RED + f"[ERRO] Falha ao carregar pesos: {e}")
     
@@ -120,7 +120,7 @@ def main():
 
     for epoch in range(1, args.epochs + 1):
         with tqdm(total=1, desc=f"Epoca {epoch}", ncols=130) as pbar:
-            loss, acc, f1m, f1w = train_one_epoch(model, dataloader, optimizer, criterion, device)
+            loss, acc, f1m, f1w = train_one_epoch(model, dataloader, optimizer, criterion, DEVICE)
             history.append((epoch, loss, acc))
             pbar.set_postfix({"loss": f"{loss:.4f}", "acc": f"{acc:.4f}"})
             pbar.update(1)

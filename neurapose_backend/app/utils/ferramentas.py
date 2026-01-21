@@ -8,6 +8,7 @@ from pathlib import Path
 from yt_dlp import YoutubeDL
 from colorama import Fore
 import neurapose_backend.config_master as cm
+
 from neurapose_backend.app.configuracao.config import (
     BEST_MODEL_PATH,
     LABELS_TEST_PATH,

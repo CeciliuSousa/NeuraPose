@@ -51,10 +51,10 @@ def get_gpu_info():
 def main():
     """Pipeline principal de treinamento."""
     args, ModelClass = get_config()
-    device = torch.device(DEVICE)
+    DEVICE = cm.DEVICE
 
     # micro-otimizacao: ativa benchmark para cuDNN quando em GPU (melhora throughput)
-    if device.type == 'cuda':
+    if DEVICE.type == 'cuda':
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
     
@@ -68,8 +68,8 @@ def main():
     print("="*70 + "\n")
 
     # Nomes das classes
-    primeiraClasse = CLASS_NAMES[0].lower()
-    segundaClasse = CLASS_NAMES[1].lower()
+    primeiraClasse = cm.CLASS_NAMES[0].lower()
+    segundaClasse = cm.CLASS_NAMES[1].lower()
     
     # Carrega dataset
     DATA_PATH = args.dataset
@@ -122,7 +122,7 @@ def main():
 
     # Configuracao de DataLoader otimizada
     num_workers = min(4, os.cpu_count() or 1)
-    pin_memory = True if device.type == 'cuda' else False
+    pin_memory = True if DEVICE.type == 'cuda' else False
 
     if balanced_mode:
         train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=train_sampler, num_workers=num_workers, pin_memory=pin_memory)
@@ -131,14 +131,14 @@ def main():
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
 
     # Pesos para loss
-    inv_freq = torch.tensor([1.0 / n0, 1.0 / n1], device=device)
+    inv_freq = torch.tensor([1.0 / n0, 1.0 / n1], device=DEVICE)
     weights = inv_freq / inv_freq.sum() * 2
     
     print(Fore.YELLOW + f"\n[LOSS] Focal Loss (gamma=2.0)")
-    criterion = FocalLoss(alpha=weights, gamma=2.0).to(device)
+    criterion = FocalLoss(alpha=weights, gamma=2.0).to(DEVICE)
 
     # Modelo e otimizador
-    model = ModelClass(input_size=X_train.shape[2]).to(device)
+    model = ModelClass(input_size=X_train.shape[2]).to(DEVICE)
     optimizer = optim.AdamW(model.parameters(), lr=min(args.lr, 3e-4), weight_decay=1e-2)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=12, min_lr=1e-6)
 
@@ -172,8 +172,8 @@ def main():
             print(Fore.RED + f"\n[STOP] Treinamento interrompido pelo usuário na época {epoch}")
             break
 
-        tr_loss, tr_acc, tr_f1m, tr_f1w = train_one_epoch(model, train_loader, optimizer, criterion, device)
-        va_loss, va_acc, va_f1m, va_f1w, _, _, _, _ = evaluate(model, val_loader, device, criterion)
+        tr_loss, tr_acc, tr_f1m, tr_f1w = train_one_epoch(model, train_loader, optimizer, criterion, DEVICE)
+        va_loss, va_acc, va_f1m, va_f1w, _, _, _, _ = evaluate(model, val_loader, DEVICE, criterion)
 
         scheduler.step(va_f1m)
 
@@ -200,9 +200,9 @@ def main():
         return
 
     # Avaliacao final
-    model.load_state_dict(torch.load(best_model_path, map_location=device))
-    tr_loss, tr_acc, tr_f1m, tr_f1w, _, _, _, _ = evaluate(model, train_loader, device, criterion)
-    va_loss, va_acc, va_f1m, va_f1w, va_report, _, _, va_cm = evaluate(model, val_loader, device, criterion)
+    model.load_state_dict(torch.load(best_model_path, map_location=DEVICE))
+    tr_loss, tr_acc, tr_f1m, tr_f1w, _, _, _, _ = evaluate(model, train_loader, DEVICE, criterion)
+    va_loss, va_acc, va_f1m, va_f1w, va_report, _, _, va_cm = evaluate(model, val_loader, DEVICE, criterion)
 
     # Nomenclatura final do diretório: <dataset>-modelo_<abbr>-acc_<float>
     def get_model_abbr(m):
