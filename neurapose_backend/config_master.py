@@ -47,6 +47,9 @@ CLAMP_MARGIN = 0.0                  # NÃO ALTERE
 EMA_ALPHA = 0.35                    # Suavização temporal
 EMA_MIN_CONF = 0.0                  # Conf mínima para EMA
 
+# Filtros de Pós-Processamento
+MIN_POSE_ACTIVITY = 0.8             # StdDev médio mínimo (pixels) para considerar ID ativo
+
 # ==============================================================
 # SEÇÃO 3: CLASSES DE ANOTAÇÃO
 # ==============================================================

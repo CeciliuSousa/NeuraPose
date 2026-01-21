@@ -38,6 +38,42 @@ def calcular_deslocamento(p_inicial, p_final):
     p2 = np.array(p_final)
     return np.linalg.norm(p2 - p1)
 
+def calcular_pose_activity(kps_historico):
+    """
+    Calcula a variância média das juntas em relação ao centro da pose.
+    Isso ajuda a identificar se o 'esqueleto' está vivo (movendo-se internamente)
+    ou se é um objeto estático (cadeira/manequim).
+    
+    Args:
+        kps_historico: Lista de keypoints de N frames. Shape esperado aprox: (N, 17, 3) ou similar via lista.
+    Returns:
+        float: Média do desvio padrão das juntas (pixels).
+    """
+    if not kps_historico or len(kps_historico) < 5:
+        return 0.0
+
+    # Converter para numpy: (Frames, Juntas, 3) -> pegamos so x,y
+    # Remove confianca (idx 2) e foca em x,y
+    data = np.array(kps_historico)[:, :, :2] 
+    
+    # 1. Calcular centro de gravidade da pose em cada frame (média das juntas visíveis)
+    # Ignora juntas (0,0) se possível, mas aqui vamos simplificar usando todas
+    centers = np.mean(data, axis=1, keepdims=True) # (Frames, 1, 2)
+    
+    # 2. Centralizar pose (remove movimento global/câmera)
+    # Agora temos a posicao de cada junta RELATIVA ao centro do corpo naquele frame
+    data_centered = data - centers
+    
+    # 3. Calcular StdDev de cada junta ao longo do tempo (Frames)
+    # stds vai ter shape (Juntas, 2)
+    stds = np.std(data_centered, axis=0) 
+    
+    # 4. Média dos desvios (magnitude x+y)
+    # stds.sum(axis=1) soma o stdX e stdY de cada junta
+    avg_activity = np.mean(np.linalg.norm(stds, axis=1))
+    
+    return avg_activity
+
 
 def processar_video(video_path: Path, sess, input_name, out_root: Path, show=False):
     # ------------------ Diretorios -----------------------
@@ -283,35 +319,60 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     for reg in registros:
         pid = reg["id_persistente"]
         bbox = reg["bbox"]
+        kps = reg.get("keypoints", [])
+        
         # Calcula o centro da caixa (x, y)
         centro = [(bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2]
         
         if pid not in stats_id:
-            stats_id[pid] = {"frames": 0, "inicio": centro, "fim": centro}
+            stats_id[pid] = {
+                "frames": 0,
+                "path": [centro], # Historico de posicoes para calculo acumulado
+                "keypoints": []   # Historico de poses para analise de atividade
+            }
         
         stats_id[pid]["frames"] += 1
-        stats_id[pid]["fim"] = centro # Atualiza ultima posicao conhecida
+        stats_id[pid]["path"].append(centro)
+        stats_id[pid]["keypoints"].append(kps)
 
     # Define quem fica e quem sai
     ids_validos = []
     
     for pid, dados in stats_id.items():
-        # REGRA A: Duracao (Ignora "fantasmas" rapidos como o ID 55)
-        # Se durou menos de 1 segundo (30 frames), e lixo.
+        # REGRA A: Duracao (Ignora "fantasmas" rapidos)
         if dados["frames"] < 30:
             print(Fore.YELLOW + f"  - ID {pid} removido (Curta duracao: {dados['frames']} frames)")
             continue
             
-        # REGRA B: Imobilidade (Ignora cadeiras fixas como o ID 12)
-        # Se moveu menos de 50 pixels no video todo, e lixo.
-        distancia = calcular_deslocamento(dados["inicio"], dados["fim"])
-        if distancia < 50.0:
-            print(Fore.YELLOW + f"  - ID {pid} removido (Estatico: moveu apenas {distancia:.1f} px)")
+        # REGRA B: Deslocamento ACUMULADO (Soma dos passos)
+        # Corrige erro onde pessoa vai e volta para mesmo lugar
+        caminho = np.array(dados["path"])
+        # Calcula distancias entre pontos consecutivos: (P2-P1, P3-P2, ...)
+        steps = np.diff(caminho, axis=0) # shape (N-1, 2)
+        dist_steps = np.linalg.norm(steps, axis=1) # shape (N-1,)
+        distancia_total = np.sum(dist_steps)
+        
+        # Deslocamento absoluto (Inicio -> Fim) - Apenas informativo ou regra secundaria
+        dist_abs = calcular_deslocamento(caminho[0], caminho[-1])
+        
+        # Se moveu muito pouco no total (somando ida e volta), é estático.
+        if distancia_total < 80.0:  # Aumentamos um pouco pois é soma total
+            print(Fore.YELLOW + f"  - ID {pid} removido (Estatico: Moveu {distancia_total:.1f}px total / {dist_abs:.1f}px abs)")
+            continue
+
+        # REGRA C: Atividade de Pose (Respiração/Ajustes)
+        # Usa RTMPose para ver se o esqueleto "vibra" (vivo) ou é rígido (cadeira)
+        activity_score = calcular_pose_activity(dados["keypoints"])
+        
+        if activity_score < cm.MIN_POSE_ACTIVITY:
+            print(Fore.YELLOW + f"  - ID {pid} removido (Objeto Inanimado: Activity {activity_score:.2f} < {cm.MIN_POSE_ACTIVITY})")
             continue
             
         ids_validos.append(pid)
+        # Debug info dos que ficaram
+        print(Fore.BLUE + f"  + ID {pid} MANTIDO (Frames: {dados['frames']} | Dist: {distancia_total:.0f}px | Activity: {activity_score:.2f})")
 
-    print(Fore.GREEN + f"[OK] IDs Mantidos: {ids_validos}")
+    print(Fore.GREEN + f"[OK] IDs Finais Mantidos: {ids_validos}")
     sys.stdout.flush()
 
     # ============================================================
