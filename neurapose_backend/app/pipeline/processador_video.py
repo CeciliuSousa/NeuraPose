@@ -28,6 +28,78 @@ def calcular_deslocamento(p_inicial, p_final):
     return np.linalg.norm(p2 - p1)
 
 
+def calcular_iou(boxA, boxB):
+    """Calcula Intersection over Union (IoU) entre duas caixas [x1, y1, x2, y2]."""
+    xA = max(boxA[0], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[2], boxB[2])
+    yB = min(boxA[3], boxB[3])
+
+    interArea = max(0, xB - xA) * max(0, yB - yA)
+    boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+    boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+
+    iou = interArea / float(boxAArea + boxBArea - interArea + 1e-6)
+    return iou
+
+
+def filtrar_ghosting(records, iou_thresh=0.8):
+    """
+    Remove IDs duplicados (Ghosting) que ocupam o mesmo espaço físico no mesmo frame.
+    Mantém o ID com maior confiança ou, em caso de empate, o menor ID.
+    """
+    if not records:
+        return []
+
+    # Agrupa por frame
+    frames_dict = {}
+    for r in records:
+        fid = r["frame"]
+        if fid not in frames_dict:
+            frames_dict[fid] = []
+        frames_dict[fid].append(r)
+
+    records_filtrados = []
+    ids_removidos_count = 0
+
+    for fid, dets in frames_dict.items():
+        if len(dets) < 2:
+            records_filtrados.extend(dets)
+            continue
+        
+        # Marca para remoção
+        removidos_indices = set()
+        
+        # Compara par a par
+        for i in range(len(dets)):
+            if i in removidos_indices: continue
+            
+            for j in range(i + 1, len(dets)):
+                if j in removidos_indices: continue
+                
+                iou = calcular_iou(dets[i]["bbox"], dets[j]["bbox"])
+                if iou > iou_thresh:
+                    # Sobreposição detectada! Remove o de menor confiança
+                    conf_i = dets[i].get("confidence", 0)
+                    conf_j = dets[j].get("confidence", 0)
+                    
+                    if conf_i < conf_j:
+                        removidos_indices.add(i)
+                    else:
+                        removidos_indices.add(j)
+                        
+        for k, r in enumerate(dets):
+            if k not in removidos_indices:
+                records_filtrados.append(r)
+            else:
+                ids_removidos_count += 1
+                
+    if ids_removidos_count > 0:
+        print(Fore.YELLOW + f"[V5] Filtro Anti-Ghosting: {ids_removidos_count} detecções sobrepostas removidas.")
+        
+    return records_filtrados
+
+
 
 def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_preview=False, output_dir: Path = None):
     """
@@ -94,6 +166,9 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
 
     if not records:
         return None
+
+    # ---------------- FILTRAR GHOSTING (V5) ----------------
+    records = filtrar_ghosting(records, iou_thresh=0.8)
 
     # ---------------- LSTM / BATCH ----------------
     # Descobre todos os IDs presentes no vídeo

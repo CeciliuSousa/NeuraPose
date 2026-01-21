@@ -184,9 +184,9 @@ BOT_SORT_CONFIG = {
     "track_low_thresh": 0.1,
     "new_track_thresh": 0.5,
     "track_buffer": 300,
-    "match_thresh": 0.50,       # Aumentado de 0.30 para 0.50 (mais tolerante para fusão)
+    "match_thresh": 0.60,       # Aumentado para 0.60 (V5 - mais tolerante para fusão em oclusão)
     "appearance_thresh": 0.25,  # Aumentado de 0.20 (reduz exigência visual estrita)
-    "proximity_thresh": 0.6,
+    "proximity_thresh": 0.5,    # Reduzido para 0.5 (V5 - exige mais proximidade espacial)
     "gmc_method": "orb",
     "fuse_score": True,
     "with_reid": True,
