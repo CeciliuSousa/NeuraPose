@@ -88,93 +88,44 @@ def extrair_keypoints_rtmpose_padronizado(
         leave=False,
     )
 
+    # Batch Processing Variables
+    from neurapose_backend.app.configuracao.config import RTMPOSE_BATCH_SIZE
+    batch_crops = []
+    batch_meta = [] # (frame_img_copy, x1,y1,x2,y2, center, scale, pid, conf, raw_tid, gid, frame_id)
+    
     frame_idx = 0
 
-    while True:
-        # Verifica se foi solicitada parada
-        if state.stop_requested:
-            print(Fore.YELLOW + "[STOP] Processamento interrompido pelo usuário.")
-            break
+    def process_batch(crop_list, meta_list):
+        if not crop_list:
+            return
 
-        ok, frame = cap.read()
-        if not ok:
-            break
+        # Stack e Inferência
+        full_inp = np.concatenate(crop_list, axis=0)
+        
+        # Sessão ONNX Run
+        simx, simy = sess.run(None, {input_name: full_inp})
+        
+        # Post-Process Batch
+        coords_batch, conf_batch = decode_simcc_output(simx, simy)
 
-        # Se não há mais resultados, apenas avança
-        if frame_idx >= len(results):
-            if show_preview:
-                state.set_frame(frame)  # Stream para browser
-            pbar.update(1)
-            continue
-
-        # Pegamos resultados do YOLO+BoTSORT
-        result = results[frame_idx]
-        frame_idx += 1
-
-        # Agora result é um dict: {"boxes": numpy_array [N, 7]} ou None
-        # data contém: [x1, y1, x2, y2, id, conf, cls]
-        if result.get("boxes") is None or len(result["boxes"]) == 0:
-            if show_preview:
-                state.set_frame(frame)  # Stream para browser
-            pbar.update(1)
-            continue
-
-        boxes_data = result["boxes"]
-        boxes = boxes_data[:, :4]
-        ids = boxes_data[:, 4]
-        confs = boxes_data[:, 5]
-
-        # frame_id humano (1-based) para salvar nos registros
-        frame_id = frame_idx
-
-        # Vamos desenhar no preview somente se o usuário quiser
-        if show_preview:
-            frame_preview = frame.copy()
-        else:
-            frame_preview = None
-
-        for box, conf, track_id in zip(boxes, confs, ids):
-            if track_id is None or track_id < 0:
-                continue
-
-            raw_tid = int(track_id)
-
-            # ID persistente (BoTSORT + fusão)
-            pid = int(id_map.get(raw_tid, raw_tid))
-
-            # ID reindexado para LSTM (por vídeo)
-            if raw_tid not in id_reset_map:
-                id_reset_map[raw_tid] = next_id
-                next_id += 1
-            gid = int(id_reset_map[raw_tid])
-
-            x1, y1, x2, y2 = map(int, box)
-            center, scale = _calc_center_scale(x1, y1, x2, y2)
-            trans = get_affine_transform(center, scale, 0, (SIMCC_W, SIMCC_H))
-            crop = cv2.warpAffine(frame, trans, (SIMCC_W, SIMCC_H), flags=cv2.INTER_LINEAR)
-
-            inp = preprocess_rtmpose_input(crop)
-            simx, simy = sess.run(None, {input_name: inp})
-            coords_in, conf_arr = decode_simcc_output(simx, simy)
-            coords_fr = transform_preds(coords_in[0], center, scale, (SIMCC_W, SIMCC_H))
-
-            # (K,3)
-            kps = np.concatenate([coords_fr, conf_arr[0][:, None]], axis=1).astype(np.float32)
-
-            # EMA por ID pessoa
+        # Itera pelo batch
+        for i, (fr_img, x1, y1, x2, y2, c, s, pid, conf, r_tid, gid, fid) in enumerate(meta_list):
+            
+            # Transform Back
+            coords_fr = transform_preds(coords_batch[i], c, s, (SIMCC_W, SIMCC_H))
+            kps = np.concatenate([coords_fr, conf_batch[i][:, None]], axis=1).astype(np.float32)
             kps = smoother.step(gid, kps)
 
-            # Clamping
             if CLAMP_MARGIN > 0:
                 ex1, ey1, ex2, ey2 = _expand_bbox(x1, y1, x2, y2, CLAMP_MARGIN, W, H)
                 kps[:, 0] = np.clip(kps[:, 0], ex1, ex2)
                 kps[:, 1] = np.clip(kps[:, 1], ey1, ey2)
 
-            # Prepara registro
+            # Registro
             registro_atual = {
-                "frame": int(frame_id),
+                "frame": int(fid),
                 "id": int(gid),
-                "botsort_id": int(raw_tid),
+                "botsort_id": int(r_tid),
                 "id_persistente": int(pid),
                 "bbox": [x1, y1, x2, y2],
                 "confidence": float(conf),
@@ -182,28 +133,21 @@ def extrair_keypoints_rtmpose_padronizado(
             }
             registros.append(registro_atual)
 
-            # --- INFERÊNCIA ---
+            # Lógica LSTM e Classificação (Mantida original)
             classe_id = 0
             score = 0.0
             classe_nome = CLASSE1
 
             if model is not None:
-                # Atualiza histórico
                 if gid not in id_history:
                     id_history[gid] = []
                 id_history[gid].append(registro_atual)
-                
-                # Mantém apenas últimos 60 frames
                 if len(id_history[gid]) > 60:
                     id_history[gid].pop(0)
                 
-                # Tenta rodar inferência
                 seq_np = montar_sequencia_individual(id_history[gid], target_id=gid, min_frames=15)
-                
                 if seq_np is not None:
                     raw_score, _ = rodar_lstm_uma_sequencia(seq_np, model, mu, sigma)
-                    
-                    # Aplica suavização EMA no score
                     last_ema = id_score_ema.get(gid, 0.0)
                     if gid not in id_score_ema:
                         new_ema = raw_score
@@ -216,34 +160,136 @@ def extrair_keypoints_rtmpose_padronizado(
                     if score >= CLASSE2_THRESHOLD:
                         classe_id = 1
                         classe_nome = CLASSE2
-            
-            # Atualiza o registro com a classificação do momento
+
             registro_atual["classe_id"] = classe_id
             registro_atual["classe_predita"] = classe_nome
             registro_atual[f"score_{CLASSE2}_id"] = float(score)
 
-            if show_preview and frame_preview is not None:
-                # desenha o esqueleto
-                frame_preview = desenhar_esqueleto(frame_preview, kps, kp_thresh=POSE_CONF_MIN)
+            # Visualização (Preview)
+            # Como estamos em batch, o 'fr_img' é o frame correspondente a essa detecção
+            # Nota: Se tiver 2 pessoas no mesmo frame, desenharemos 2 vezes no mesmo array base?
+            # Precisamos coordenar o desenho se tiver multi-pessoas por frame, mas simples é desenhar direto
+            if show_preview and fr_img is not None:
+                # CUIDADO: fr_img aqui é uma cópia segura ou o frame original?
+                # Se for batch across frames, precisamos renderizar e enviar o frame SOMENTE qdo todas deteccoes daquele frame estiverem prontas.
+                # Simplificação: Desenhamos na copia local e enviamos (pode causar flicker se tiver 2 pessoas e enviar 2 vezes)
+                # Melhor: enviar apenas a última versão do frame processado.
                 
-                # Desenha bbox e labels usando função centralizada
-                frame_preview = desenhar_info_predicao(
-                    frame_preview,
-                    [x1, y1, x2, y2],
-                    raw_tid,
-                    pid,
-                    gid,
-                    classe_id,
-                    conf,
-                    classe_nome,
-                    modelo_nome
+                # Desenha esqueleto
+                desenhar_esqueleto(fr_img, kps, kp_thresh=POSE_CONF_MIN)
+                desenhar_info_predicao(
+                    fr_img, [x1, y1, x2, y2],
+                    r_tid, pid, gid, classe_id, conf, classe_nome, modelo_nome
                 )
 
-        if show_preview:
-            # Stream para browser via state.set_frame (MJPEG)
-            state.set_frame(frame_preview if frame_preview is not None else frame)
+    # Dicionário para controlar envio de preview por frame (evitar flicker/envio parcial)
+    # frame_id -> {image: img, pending_count: N}
+    pending_frames_preview = {}
 
+    while True:
+        if state.stop_requested:
+            print(Fore.YELLOW + "[STOP] Processamento interrompido pelo usuário.")
+            break
+
+        ok, frame = cap.read()
+        if not ok:
+            break
+
+        # Limite de segurança YOLO results
+        if frame_idx >= len(results):
+            pbar.update(1)
+            continue
+        
+        result = results[frame_idx]
+        frame_id = frame_idx + 1 # 1-based
+        frame_idx += 1
+
+        # Frame Preview Management
+        if show_preview:
+            # Mantém cópia para desenho
+            # Se houver detecções, vamos desenhar nela e enviar depois
+            # Se não houver, enviamos direto
+            frame_disp = frame.copy()
+        else:
+            frame_disp = None
+
+        if result.get("boxes") is None or len(result["boxes"]) == 0:
+            if show_preview:
+                state.set_frame(frame)
+            pbar.update(1)
+            continue
+
+        boxes_data = result["boxes"]
+        boxes = boxes_data[:, :4]
+        ids = boxes_data[:, 4]
+        confs = boxes_data[:, 5]
+        
+        valid_indices = [i for i, tid in enumerate(ids) if tid is not None and tid >= 0]
+        
+        if show_preview and len(valid_indices) > 0:
+            pending_frames_preview[frame_id] = {
+                "img": frame_disp,
+                "count": len(valid_indices)
+            }
+
+        for i in valid_indices:
+            box = boxes[i]
+            conf = confs[i]
+            raw_tid = int(ids[i])
+            
+            # ID Maps
+            pid = int(id_map.get(raw_tid, raw_tid))
+            if raw_tid not in id_reset_map:
+                id_reset_map[raw_tid] = next_id
+                next_id += 1
+            gid = int(id_reset_map[raw_tid])
+
+            x1, y1, x2, y2 = map(int, box)
+            center, scale = _calc_center_scale(x1, y1, x2, y2)
+            trans = get_affine_transform(center, scale, 0, (SIMCC_W, SIMCC_H))
+            crop = cv2.warpAffine(frame, trans, (SIMCC_W, SIMCC_H), flags=cv2.INTER_LINEAR)
+            
+            inp = preprocess_rtmpose_input(crop)
+            
+            # Adiciona ao batch
+            batch_crops.append(inp)
+            # Meta guardamos o frame_disp (referência) para desenhar direto nele
+            batch_meta.append((frame_disp, x1, y1, x2, y2, center, scale, pid, conf, raw_tid, gid, frame_id))
+            
+            # Flush se encher
+            if len(batch_crops) >= RTMPOSE_BATCH_SIZE:
+                process_batch(batch_crops, batch_meta)
+                
+                # Check Preview Flush
+                if show_preview:
+                    # Verifica quais frames já terminaram de ser processados neste lote
+                    # frames_processed = set([m[-1] for m in batch_meta])
+                    # Para cada frame tocado, decrementamos o contador
+                    for m in batch_meta:
+                        fid = m[-1]
+                        if fid in pending_frames_preview:
+                            pending_frames_preview[fid]["count"] -= 1
+                            # Se zerou, envia
+                            if pending_frames_preview[fid]["count"] <= 0:
+                                state.set_frame(pending_frames_preview[fid]["img"])
+                                del pending_frames_preview[fid]
+                                
+                batch_crops = []
+                batch_meta = []
+
+        # Se não usamos preview ou batch não encheu, o loop continua
+        # O preview só é enviado quando batch processa OU se não tinha boxes
         pbar.update(1)
+
+    # Final Flush
+    if batch_crops:
+        process_batch(batch_crops, batch_meta)
+        if show_preview:
+            for m in batch_meta:
+                fid = m[-1]
+                if fid in pending_frames_preview:
+                    state.set_frame(pending_frames_preview[fid]["img"])
+                    del pending_frames_preview[fid]
 
     pbar.close()
     cap.release()
