@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Folder, File, ChevronLeft, X, Check } from 'lucide-react';
+import { Folder, File, ChevronLeft, X, Check, Monitor } from 'lucide-react';
 import { APIService, BrowseResponse } from '../services/api';
 
 interface FileExplorerModalProps {
@@ -9,10 +9,23 @@ interface FileExplorerModalProps {
     initialPath?: string;
     rootPath?: string;
     title?: string;
+    showExternalPicker?: boolean;
     filterFn?: (item: { name: string, is_dir: boolean, path: string, currentPath?: string }) => boolean;
 }
 
-export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, rootPath, title = "Selecionar Pasta", filterFn }: FileExplorerModalProps) {
+// Helper para normalizar paths e facilitar comparacao (Windows/Linux)
+const normalize = (p: string) => p.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
+
+export function FileExplorerModal({
+    isOpen,
+    onClose,
+    onSelect,
+    initialPath,
+    rootPath,
+    title = "Selecionar Pasta",
+    showExternalPicker = false,
+    filterFn
+}: FileExplorerModalProps) {
     const [currentPath, setCurrentPath] = useState<string>(initialPath || '');
     const [data, setData] = useState<BrowseResponse | null>(null);
     const [loading, setLoading] = useState(false);
@@ -20,13 +33,11 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, root
 
     useEffect(() => {
         if (isOpen) {
-            // Se initialPath for fornecido, usa-o para resetar a navegação
             if (initialPath) {
                 setCurrentPath(initialPath);
                 loadPath(initialPath);
             }
-            // Se não, usa rootPath ou default
-            else if (rootPath && (!currentPath || !currentPath.startsWith(rootPath))) {
+            else if (rootPath && (!currentPath || !normalize(currentPath).startsWith(normalize(rootPath)))) {
                 loadPath(rootPath);
             } else if (!currentPath) {
                 APIService.getConfig().then(res => {
@@ -40,9 +51,6 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, root
     }, [isOpen, initialPath]);
 
     const loadPath = async (path: string) => {
-        // Normaliza paths para comparação simples (Windows/Linux)
-        const normalize = (p: string) => p.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
-
         if (rootPath) {
             const normRoot = normalize(rootPath);
             const normPath = normalize(path);
@@ -64,10 +72,22 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, root
         }
     };
 
+    const handleExternalPick = async () => {
+        try {
+            setLoading(true);
+            const res = await APIService.pickFolder(currentPath);
+            if (res.data.path) {
+                onSelect(res.data.path);
+            }
+        } catch (err: any) {
+            setError("Erro ao abrir seletor");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     if (!isOpen) return null;
 
-    // Check if we are at root to disable back button
-    const normalize = (p: string) => p.replace(/\\/g, '/').replace(/\/$/, '').toLowerCase();
     const isAtRoot = rootPath ? normalize(currentPath) === normalize(rootPath) : false;
 
     return (
@@ -125,7 +145,6 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, root
                                         )}
                                         <span className="truncate flex-1 font-mono text-xs">{item.name}</span>
                                     </button>
-
                                 ))}
                             {data?.items.length === 0 && (
                                 <div className="text-center py-10 text-muted-foreground italic">
@@ -137,9 +156,20 @@ export function FileExplorerModal({ isOpen, onClose, onSelect, initialPath, root
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-border flex justify-end items-center bg-muted/10">
+                <div className="p-4 border-t border-border flex justify-between items-center bg-muted/10">
+                    <div>
+                        {showExternalPicker && (
+                            <button
+                                onClick={handleExternalPick}
+                                className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-primary hover:bg-primary/10 rounded-md transition-all border border-primary/20"
+                                title="Abrir seletor de pastas nativo do Windows"
+                            >
+                                <Monitor className="w-4 h-4" />
+                                Abrir no Windows
+                            </button>
+                        )}
+                    </div>
                     <div className="flex gap-3">
-
                         <button
                             onClick={onClose}
                             className="px-4 py-2 text-sm font-medium hover:bg-secondary rounded-md transition-colors"

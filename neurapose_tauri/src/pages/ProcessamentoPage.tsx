@@ -269,6 +269,7 @@ export default function ProcessamentoPage() {
                 onSelect={handleSelectPath}
                 initialPath={roots.videos}
                 rootPath={roots.videos}
+                showExternalPicker={true}
                 title="Selecionar Diretório de Entrada (Vídeos)"
             />
         </div>

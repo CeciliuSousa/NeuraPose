@@ -826,6 +826,34 @@ def browse_path(path: str = "."):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/pick-folder")
+def pick_folder_endpoint(initial_dir: Optional[str] = None):
+    """Abre o seletor de pastas nativo do Windows usando tkinter (executado via subprocess)."""
+    import subprocess
+    import sys
+    
+    # Busca o script picker.py que deve estar na mesma pasta de main.py
+    picker_script = str(CURRENT_DIR / "picker.py")
+    
+    cmd = [sys.executable, picker_script]
+    if initial_dir:
+        cmd.append(initial_dir)
+        
+    try:
+        # Executa o script picker.py e captura a saída (o caminho escolhido)
+        # Usamos check_output para capturar o que o script printar no stdout
+        result = subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT).strip()
+        logger.info(f"[PICKER] Pasta selecionada: {result}")
+        return {"path": result}
+    except subprocess.CalledProcessError as e:
+        # Se retornou erro (ex: código 1 significa cancelado pelo usuário), o path é nulo
+        logger.info("[PICKER] Seleção cancelada ou falhou")
+        return {"path": None}
+    except Exception as e:
+        logger.error(f"Erro ao abrir seletor de pastas: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/ls")
 def list_directory(path: Optional[str] = None):
     """Lista diretórios para o explorador de arquivos customizado."""
