@@ -21,7 +21,8 @@ from neurapose_backend.pre_processamento.utils.geometria import (
 from neurapose_backend.pre_processamento.utils.visualizacao import desenhar_esqueleto, color_for_id
 from neurapose_backend.pre_processamento.modulos.rtmpose import preprocess_rtmpose_input, decode_simcc_output
 from neurapose_backend.pre_processamento.modulos.suavizacao import EmaSmoother
-from neurapose_backend.config_master import FPS_TARGET, RTMPOSE_BATCH_SIZE
+from neurapose_backend.pre_processamento.modulos.suavizacao import EmaSmoother
+# FPS_TARGET e RTMPOSE_BATCH_SIZE sao acessados via cm.* agora
 
 
 # Para integracao com o preview do site
@@ -103,7 +104,7 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     cap_in = cv2.VideoCapture(str(video_path))
     W = int(cap_in.get(cv2.CAP_PROP_FRAME_WIDTH))
     H = int(cap_in.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps_out = FPS_TARGET
+    fps_out = cm.FPS_TARGET
 
     norm_path = videos_dir / f"{video_path.stem}_{int(fps_out)}fps.mp4"
 
@@ -307,7 +308,7 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
         frame_idx += 1
 
         # Check Flush
-        if len(batch_crops) >= RTMPOSE_BATCH_SIZE or len(video_write_buffer) > 100:
+        if len(batch_crops) >= cm.RTMPOSE_BATCH_SIZE or len(video_write_buffer) > 100:
             # Roda inferência
             process_batch_rtmpose(batch_crops, batch_meta)
                         

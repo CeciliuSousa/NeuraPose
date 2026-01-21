@@ -4,12 +4,12 @@
 
 import cv2
 import numpy as np
-from neurapose_backend.config_master import (
-    SIMCC_W, SIMCC_H, SIMCC_SPLIT_RATIO, MEAN, STD
-)
+import neurapose_backend.config_master as cm
 
 
-def decode_simcc_output(simcc_x, simcc_y, split_ratio=SIMCC_SPLIT_RATIO):
+def decode_simcc_output(simcc_x, simcc_y, split_ratio=None):
+    if split_ratio is None:
+        split_ratio = cm.SIMCC_SPLIT_RATIO
     """
     Decodifica a saída SimCC do RTMPose para coordenadas (x, y).
     simcc_x/y: (B, K, Lx/Ly)
@@ -37,13 +37,13 @@ def preprocess_rtmpose_input(bgr_crop):
     Converte BGR->RGB, normaliza por mean/std, redimensiona e reordena para NCHW float32.
     """
     # 1️ Redimensiona para o tamanho padrão do modelo RTMPose
-    resized = cv2.resize(bgr_crop, (SIMCC_W, SIMCC_H))  # (W, H) = (192, 256)
+    resized = cv2.resize(bgr_crop, (cm.SIMCC_W, cm.SIMCC_H))  # (W, H)
 
     # 2️ Converte BGR → RGB
     rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB).astype(np.float32)
 
     # 3️ Normaliza com médias e desvios padrão (ImageNet)
-    rgb = (rgb - MEAN) / STD
+    rgb = (rgb - cm.MEAN) / cm.STD
 
     # 4️ Reordena para formato NCHW
     chw = rgb.transpose(2, 0, 1)[None]  # NCHW

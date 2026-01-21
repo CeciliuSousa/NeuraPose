@@ -5,16 +5,7 @@
 import cv2
 import numpy as np
 from tqdm import tqdm
-from neurapose_backend.app.configuracao.config import (
-    CLASSE1,
-    CLASSE2,
-    SIMCC_W,
-    SIMCC_H,
-    CLAMP_MARGIN,
-    POSE_CONF_MIN,
-    CLASSE2_THRESHOLD,
-    MODEL_NAME
-)
+import neurapose_backend.config_master as cm
 from colorama import Fore, init
 
 init(autoreset=True)
@@ -55,7 +46,7 @@ def extrair_keypoints_rtmpose_padronizado(
     model=None,
     mu=None,
     sigma=None,
-    modelo_nome: str = MODEL_NAME
+    modelo_nome: str = cm.TRAINED_MODEL_NAME
 ):
     """
     Usa as detecções (bbox + ids) vindas do YOLO+BoTSORT e aplica RTMPose.
@@ -89,7 +80,7 @@ def extrair_keypoints_rtmpose_padronizado(
     )
 
     # Batch Processing Variables
-    from neurapose_backend.app.configuracao.config import RTMPOSE_BATCH_SIZE
+    # from neurapose_backend.app.configuracao.config import RTMPOSE_BATCH_SIZE (Removed)
     batch_crops = []
     batch_meta = [] # (frame_img_copy, x1,y1,x2,y2, center, scale, pid, conf, raw_tid, gid, frame_id)
     
@@ -112,12 +103,12 @@ def extrair_keypoints_rtmpose_padronizado(
         for i, (fr_img, x1, y1, x2, y2, c, s, pid, conf, r_tid, gid, fid) in enumerate(meta_list):
             
             # Transform Back
-            coords_fr = transform_preds(coords_batch[i], c, s, (SIMCC_W, SIMCC_H))
+            coords_fr = transform_preds(coords_batch[i], c, s, (cm.SIMCC_W, cm.SIMCC_H))
             kps = np.concatenate([coords_fr, conf_batch[i][:, None]], axis=1).astype(np.float32)
             kps = smoother.step(gid, kps)
 
-            if CLAMP_MARGIN > 0:
-                ex1, ey1, ex2, ey2 = _expand_bbox(x1, y1, x2, y2, CLAMP_MARGIN, W, H)
+            if cm.CLAMP_MARGIN > 0:
+                ex1, ey1, ex2, ey2 = _expand_bbox(x1, y1, x2, y2, cm.CLAMP_MARGIN, W, H)
                 kps[:, 0] = np.clip(kps[:, 0], ex1, ex2)
                 kps[:, 1] = np.clip(kps[:, 1], ey1, ey2)
 
@@ -136,7 +127,7 @@ def extrair_keypoints_rtmpose_padronizado(
             # Lógica LSTM e Classificação (Mantida original)
             classe_id = 0
             score = 0.0
-            classe_nome = CLASSE1
+            classe_nome = cm.CLASSE1
 
             if model is not None:
                 if gid not in id_history:
@@ -157,13 +148,15 @@ def extrair_keypoints_rtmpose_padronizado(
                     id_score_ema[gid] = new_ema
                     score = new_ema
 
-                    if score >= CLASSE2_THRESHOLD:
+                    if score >= cm.CLASSE2_THRESHOLD:
                         classe_id = 1
-                        classe_nome = CLASSE2
+                        classe_nome = cm.CLASSE2
+                    else:
+                        classe_nome = cm.CLASSE1
 
             registro_atual["classe_id"] = classe_id
             registro_atual["classe_predita"] = classe_nome
-            registro_atual[f"score_{CLASSE2}_id"] = float(score)
+            registro_atual[f"score_{cm.CLASSE2}_id"] = float(score)
 
             # Visualização (Preview)
             # Como estamos em batch, o 'fr_img' é o frame correspondente a essa detecção
@@ -176,7 +169,7 @@ def extrair_keypoints_rtmpose_padronizado(
                 # Melhor: enviar apenas a última versão do frame processado.
                 
                 # Desenha esqueleto
-                desenhar_esqueleto(fr_img, kps, kp_thresh=POSE_CONF_MIN)
+                desenhar_esqueleto(fr_img, kps, kp_thresh=cm.POSE_CONF_MIN)
                 desenhar_info_predicao(
                     fr_img, [x1, y1, x2, y2],
                     r_tid, pid, gid, classe_id, conf, classe_nome, modelo_nome
@@ -246,8 +239,8 @@ def extrair_keypoints_rtmpose_padronizado(
 
             x1, y1, x2, y2 = map(int, box)
             center, scale = _calc_center_scale(x1, y1, x2, y2)
-            trans = get_affine_transform(center, scale, 0, (SIMCC_W, SIMCC_H))
-            crop = cv2.warpAffine(frame, trans, (SIMCC_W, SIMCC_H), flags=cv2.INTER_LINEAR)
+            trans = get_affine_transform(center, scale, 0, (cm.SIMCC_W, cm.SIMCC_H))
+            crop = cv2.warpAffine(frame, trans, (cm.SIMCC_W, cm.SIMCC_H), flags=cv2.INTER_LINEAR)
             
             inp = preprocess_rtmpose_input(crop)
             
@@ -257,7 +250,7 @@ def extrair_keypoints_rtmpose_padronizado(
             batch_meta.append((frame_disp, x1, y1, x2, y2, center, scale, pid, conf, raw_tid, gid, frame_id))
             
             # Flush se encher
-            if len(batch_crops) >= RTMPOSE_BATCH_SIZE:
+            if len(batch_crops) >= cm.RTMPOSE_BATCH_SIZE:
                 process_batch(batch_crops, batch_meta)
                 
                 # Check Preview Flush

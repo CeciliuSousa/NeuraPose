@@ -7,7 +7,7 @@ import numpy as np
 from pathlib import Path
 
 # Importa configuracoes centralizadas
-from neurapose_backend.config_master import BOT_SORT_CONFIG, BOTSORT_YAML_PATH
+import neurapose_backend.config_master as cm
 
 
 def cosine_similarity(a, b):
@@ -20,8 +20,8 @@ def save_temp_tracker_yaml():
     Salva o arquivo YAML de configuracao do BoTSORT.
     O path vem do config_master.py (BOTSORT_YAML_PATH).
     """
-    path = BOTSORT_YAML_PATH
+    path = cm.BOTSORT_YAML_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        yaml.dump(BOT_SORT_CONFIG, f, sort_keys=False, allow_unicode=True)
+        yaml.dump(cm.BOT_SORT_CONFIG, f, sort_keys=False, allow_unicode=True)
     return str(path)

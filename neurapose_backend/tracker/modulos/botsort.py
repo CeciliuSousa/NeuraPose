@@ -9,7 +9,7 @@ from ultralytics.trackers.utils.kalman_filter import KalmanFilterXYWH
 from ultralytics.trackers.utils import matching
 from ultralytics.trackers.utils.gmc import GMC
 
-from neurapose_backend.config_master import BOT_SORT_CONFIG
+import neurapose_backend.config_master as cm
 from neurapose_backend.tracker.modulos.reid import CustomReID
 
 
@@ -19,7 +19,7 @@ class CustomBoTSORT(BOTSORT_ORIGINAL):
             pass
 
         args = Args()
-        for k, v in BOT_SORT_CONFIG.items():
+        for k, v in cm.BOT_SORT_CONFIG.items():
             setattr(args, k, v)
 
         # Nao usamos o ReID nativo, usamos o nosso encoder

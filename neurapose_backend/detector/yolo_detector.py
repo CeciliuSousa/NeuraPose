@@ -19,7 +19,7 @@ from neurapose_backend.globals.state import state
 from colorama import Fore
 
 # Importa nome do modelo YOLO e ROOT do config centralizado
-from neurapose_backend.config_master import YOLO_PATH, YOLO_MODEL, ROOT, DETECTION_CONF, YOLO_CLASS_PERSON, DEVICE, YOLO_IMGSZ, YOLO_BATCH_SIZE
+import neurapose_backend.config_master as cm
 
 logging.getLogger("ultralytics").setLevel(logging.ERROR)
 os.environ["YOLO_VERBOSE"] = "False"
@@ -102,7 +102,7 @@ def merge_tracks(track_data, gap_thresh=1.5):
 # ================================================================
 # 2. YOLO + BoTSORT + coleta de IDs + fusao de IDs
 # ================================================================
-def yolo_detector_botsort(videos_dir=None, batch_size=YOLO_BATCH_SIZE):
+def yolo_detector_botsort(videos_dir=None, batch_size=None):
     """
     Roda YOLOv8x + CustomBoTSORT em varios videos com Processamento em LOTE.
     Retorna lista com:
@@ -114,26 +114,29 @@ def yolo_detector_botsort(videos_dir=None, batch_size=YOLO_BATCH_SIZE):
         - results (frame a frame)
     """
 
-    videos_path = Path(videos_dir or (ROOT / "videos"))
+    videos_path = Path(videos_dir or (cm.ROOT / "videos"))
+
+    if batch_size is None:
+        batch_size = cm.YOLO_BATCH_SIZE
 
     # ================================================================
     # MODELO YOLO - Usar caminho centralizado (config_master) e baixar se nao existir
     # ================================================================
-    model_path = YOLO_PATH
+    model_path = cm.YOLO_PATH
     model_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not model_path.exists():
-        model_base = YOLO_MODEL.replace('.pt', '')
+        model_base = cm.YOLO_MODEL.replace('.pt', '')
         try:
             temp_model = YOLO(model_base)
             temp_model.save(str(model_path))
         except Exception as e:
             if model_path.exists():
                 os.remove(model_path)
-            raise FileNotFoundError(f"Erro ao baixar {YOLO_PATH}: {e}")
+            raise FileNotFoundError(f"Erro ao baixar {cm.YOLO_PATH}: {e}")
     
     # Carrega o modelo
-    model = YOLO(str(model_path)).to(DEVICE)
+    model = YOLO(str(model_path)).to(cm.DEVICE)
 
     # Lista de videos
     if videos_path.is_file():
@@ -192,12 +195,12 @@ def yolo_detector_botsort(videos_dir=None, batch_size=YOLO_BATCH_SIZE):
             # persist=True mantém o tracking entre os batches sequenciais
             batch_results = model.track(
                 source=frames_batch,
-                imgsz=YOLO_IMGSZ,
-                conf=DETECTION_CONF,
-                device=DEVICE,
+                imgsz=cm.YOLO_IMGSZ,
+                conf=cm.DETECTION_CONF,
+                device=cm.DEVICE,
                 persist=True,
                 tracker=str(tracker_yaml_path),
-                classes=[YOLO_CLASS_PERSON],
+                classes=[cm.YOLO_CLASS_PERSON],
                 verbose=False,
                 half=True,
                 stream=False # Batch retorna lista completa imediatamente

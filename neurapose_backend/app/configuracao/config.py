@@ -43,7 +43,11 @@ if hasattr(cm, "RTMPOSE_INPUT_SIZE"):
 
 # Importa tudo do cm atualizado para o namespace local
 # Isso garante que quem importa de config.py pegue os valores atualizados
-from neurapose_backend.config_master import *
+# Importa tudo do cm atualizado para o namespace local
+# Isso garante que quem importa de config.py pegue os valores atualizados
+# Recarregamos vars() do cm para o globals() local
+cm_vars = {k: v for k, v in vars(cm).items() if not k.startswith("__")}
+globals().update(cm_vars)
 
 # Sobrescreve localmente caso o import * não tenha pego (por segurança)
 for k, v in user_config.items():
