@@ -6,7 +6,7 @@
 import cv2
 import numpy as np
 import hashlib
-from neurapose_backend.config_master import PAIRS
+import neurapose_backend.config_master as cm
 
 
 def _hash_to_color(i: int):
@@ -34,7 +34,7 @@ def desenhar_esqueleto(frame, keypoints, kp_thresh=0.3, base_color=(0, 255, 0), 
         edge_color = tuple(int(c * 0.6) for c in base_color)
 
     # Desenha conexões (limbs)
-    for a, b in PAIRS:
+    for a, b in cm.PAIRS:
         if keypoints[a][2] >= kp_thresh and keypoints[b][2] >= kp_thresh:
             pt1 = (int(keypoints[a][0]), int(keypoints[a][1]))
             pt2 = (int(keypoints[b][0]), int(keypoints[b][1]))

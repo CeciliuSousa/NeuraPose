@@ -3,7 +3,7 @@
 # ==============================================================
 
 import torch
-from neurapose_backend.app.configuracao.config import DEVICE
+import neurapose_backend.config_master as cm
 
 
 def rodar_lstm_uma_sequencia(seq_np, model, mu, sigma):
@@ -13,7 +13,7 @@ def rodar_lstm_uma_sequencia(seq_np, model, mu, sigma):
       score_classe2: probabilidade da classe 1 (CLASSE2)
       pred_raw: rótulo argmax (0 ou 1), sem threshold extra
     """
-    x = torch.tensor(seq_np, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+    x = torch.tensor(seq_np, dtype=torch.float32).unsqueeze(0).to(cm.DEVICE)
 
     # Normalização se mu/sigma existirem
     if mu is not None and sigma is not None:
@@ -21,8 +21,8 @@ def rodar_lstm_uma_sequencia(seq_np, model, mu, sigma):
         # Permuta para (B, T, C, V) -> (B, T, C*V) para igualar ao treino
         xf = x.permute(0, 2, 1, 3).reshape(B, T, C * V)
 
-        mu_f = mu.to(DEVICE).reshape(1, 1, 34)
-        sigma_f = sigma.to(DEVICE).reshape(1, 1, 34)
+        mu_f = mu.to(cm.DEVICE).reshape(1, 1, 34)
+        sigma_f = sigma.to(cm.DEVICE).reshape(1, 1, 34)
 
         # Aplica normalização
         xf = (xf - mu_f) / sigma_f.clamp_min(1e-6)

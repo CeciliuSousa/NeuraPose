@@ -10,13 +10,7 @@ import hashlib
 from pathlib import Path
 from tqdm import tqdm
 
-from neurapose_backend.app.configuracao.config import (
-    CLASSE1,
-    CLASSE2,
-    POSE_CONF_MIN,
-    TRACKER_NAME,
-    PAIRS
-)
+import neurapose_backend.config_master as cm
 
 # Estado global para streaming de vídeo
 from neurapose_backend.globals.state import state
@@ -47,7 +41,7 @@ def desenhar_esqueleto(frame, keypoints, kp_thresh=0.3, base_color=(0, 255, 0), 
         edge_color = tuple(int(c * 0.6) for c in base_color)
 
     # Desenha conexões (limbs)
-    for a, b in PAIRS:
+    for a, b in cm.PAIRS:
         if keypoints[a][2] >= kp_thresh and keypoints[b][2] >= kp_thresh:
             pt1 = (int(keypoints[a][0]), int(keypoints[a][1]))
             pt2 = (int(keypoints[b][0]), int(keypoints[b][1]))
@@ -203,10 +197,11 @@ def gerar_video_predicao(
             gid = int(r.get("id", 0))
 
             classe_id = int(r.get("classe_id", 0))
-            pred_name = r.get("classe_predita", CLASSE1 if classe_id == 0 else CLASSE2)
+            classe_id = int(r.get("classe_id", 0))
+            pred_name = r.get("classe_predita", cm.CLASSE1 if classe_id == 0 else cm.CLASSE2)
 
             # Desenha esqueleto
-            frame = desenhar_esqueleto(frame, kps, kp_thresh=POSE_CONF_MIN)
+            frame = desenhar_esqueleto(frame, kps, kp_thresh=cm.POSE_CONF_MIN)
 
             # Desenha bbox e labels usando função centralizada
             frame = desenhar_info_predicao(

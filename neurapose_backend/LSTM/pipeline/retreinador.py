@@ -20,11 +20,7 @@ from neurapose_backend.LSTM.modulos.treinamento import train_one_epoch
 
 
 # Importa paths e constantes do config_master
-from neurapose_backend.config_master import (
-    RETRAIN_MODELS_DIR,
-    CLASS_NAMES,
-    DEVICE,
-)
+import neurapose_backend.config_master as cm
 
 
 init(autoreset=True)
@@ -51,16 +47,16 @@ def calcular_pesos(labels_json_path):
     primeira_classe = CLASS_NAMES[0].lower()
     segunda_classe = CLASS_NAMES[1].lower()
     
-    normal_count = sum(1 for v in data.values() for label in v.values() if label == primeira_classe)
-    furto_count = sum(1 for v in data.values() for label in v.values() if label == segunda_classe)
+    classe1_count = sum(1 for v in data.values() for label in v.values() if label == primeira_classe)
+    classe2_count = sum(1 for v in data.values() for label in v.values() if label == segunda_classe)
     
-    if normal_count == 0 or furto_count == 0:
-        return normal_count, furto_count, [1.0, 1.0]
+    if classe1_count == 0 or classe2_count == 0:
+        return classe1_count, classe2_count, [1.0, 1.0]
 
-    total = normal_count + furto_count
-    weight_furto = total / (2 * furto_count)
-    weight_normal = total / (2 * normal_count)
-    return normal_count, furto_count, [weight_furto, weight_normal]
+    total = classe1_count + classe2_count
+    weight_furto = total / (2 * classe2_count)
+    weight_normal = total / (2 * classe1_count)
+    return classe1_count, classe2_count, [weight_furto, weight_normal]
 
 
 def main():
@@ -94,7 +90,7 @@ def main():
     dataloader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, num_workers=num_workers, pin_memory=pin_memory)
 
     # Pesos - usa args.annotations que vem do config_master como default
-    normal_count, furto_count, pesos = calcular_pesos(args.annotations)
+    classe1_count, classe2_count, pesos = calcular_pesos(args.annotations)
     weights = torch.tensor(pesos, dtype=torch.float32).to(device)
     criterion = nn.CrossEntropyLoss(weight=weights)
 
@@ -134,7 +130,7 @@ def main():
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
     # Diretorio e salvamento do modelo - Usa RETRAIN_MODELS_DIR do config_master
-    save_dir = RETRAIN_MODELS_DIR / (args.name or "modelo")
+    save_dir = cm.RETRAIN_MODELS_DIR / (args.name or "modelo")
     save_dir.mkdir(parents=True, exist_ok=True)
     save_path = save_dir / "model.pt"
     torch.save(model.state_dict(), save_path)
@@ -150,10 +146,10 @@ def main():
         f.write(f"Loss Final        : {history[-1][1]:.6f}\n")
         f.write(f"Acuracia Final    : {history[-1][2]:.4f}\n")
         f.write(f"Tempo Total (s)   : {elapsed:.2f}\n")
-        f.write("\n--- Distribuicao de Classes ---\n")
-        f.write(f"{CLASS_NAMES[0]}: {normal_count}\n")
-        f.write(f"{CLASS_NAMES[1]}: {furto_count}\n")
-        f.write(f"Pesos usados [{CLASS_NAMES[1].lower()}, {CLASS_NAMES[0].lower()}]: [{pesos[0]:.4f}, {pesos[1]:.4f}]\n")
+        f.write(f"\n--- Distribuicao de Classes ---\n")
+        f.write(f"{cm.CLASS_NAMES[0]}: {classe1_count}\n")
+        f.write(f"{cm.CLASS_NAMES[1]}: {classe2_count}\n")
+        f.write(f"Pesos usados [{cm.CLASS_NAMES[1].lower()}, {cm.CLASS_NAMES[0].lower()}]: [{pesos[0]:.4f}, {pesos[1]:.4f}]\n")
 
     print(Fore.GREEN + "\n[SUCESSO] Treinamento concluido.")
     print(f"Modelo usado          : {args.model.upper()}")

@@ -15,18 +15,7 @@ import numpy as np
 from pathlib import Path
 
 # Configuracoes centralizadas (valores padrao)
-from neurapose_backend.config_master import (
-    PROCESSING_DATASET,
-    PROCESSING_OUTPUT_DIR,
-    PROCESSING_VIDEOS_DIR,
-
-    PROCESSING_JSONS_DIR,
-    TEST_DATASETS_ROOT,
-    TRAIN_SPLIT,
-    TEST_SPLIT,
-    CLASSE1,
-    CLASSE2,
-)
+import neurapose_backend.config_master as cm
 
 
 def get_major_class(video_id, labels):

@@ -22,11 +22,7 @@ from pathlib import Path
 from collections import Counter
 from colorama import Fore, init as colorama_init
 
-from neurapose_backend.config_master import (
-    PROCESSING_OUTPUT_DIR,
-    REID_MANUAL_SUFFIX,
-    REID_MANUAL_LABELS_FILENAME,
-)
+import neurapose_backend.config_master as cm
 
 
 from neurapose_backend.pre_processamento.anotando_classes import (
@@ -39,7 +35,7 @@ from neurapose_backend.pre_processamento.anotando_classes import (
 
 # Visualizacao de esqueletos (utilitários prontos)
 from neurapose_backend.pre_processamento.utils.visualizacao import desenhar_esqueleto, color_for_id
-from neurapose_backend.config_master import POSE_CONF_MIN
+# from neurapose_backend.config_master import POSE_CONF_MIN (Removed)
 
 
 # ==============================================================================
@@ -223,7 +219,7 @@ def renderizar_video_limpo(video_in, video_out, registros_processados, cut_list)
                     try:
                         kps_arr = np.array(kps)
                         base_color = color_for_id(pid)
-                        frame = desenhar_esqueleto(frame, kps_arr, kp_thresh=POSE_CONF_MIN, base_color=base_color)
+                        frame = desenhar_esqueleto(frame, kps_arr, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
                     except Exception:
                         pass
 
@@ -480,7 +476,7 @@ def parse_range(rng_str, max_val=999999):
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="ReID manual: corrigir, limpar e recortar vídeos")
-    parser.add_argument("--input-dir", dest="root", default=str(PROCESSING_OUTPUT_DIR))
+    parser.add_argument("--input-dir", dest="root", default=str(cm.PROCESSING_OUTPUT_DIR))
     parser.add_argument("--output-dir", dest="out", default=None)
     args = parser.parse_args()
 
@@ -488,14 +484,14 @@ def main():
     if args.out:
         out_root = Path(args.out).resolve()
     else:
-        out_root = root.parent / (root.name + REID_MANUAL_SUFFIX)
+        out_root = root.parent / (root.name + cm.REID_MANUAL_SUFFIX)
 
     # Definição de pastas espelhadas
     json_dir, pred_dir, videos_dir = root / "jsons", root / "predicoes", root / "videos"
     out_json_dir, out_pred_dir, out_videos_dir = out_root / "jsons", out_root / "predicoes", out_root / "videos"
 
     for p in [out_json_dir, out_pred_dir, out_videos_dir]: p.mkdir(parents=True, exist_ok=True)
-    labels_path = out_root / REID_MANUAL_LABELS_FILENAME
+    labels_path = out_root / cm.REID_MANUAL_LABELS_FILENAME
 
     print(Fore.BLUE + f"[CONFIG] Input: {root}")
     print(Fore.BLUE + f"[CONFIG] Output: {out_root}")

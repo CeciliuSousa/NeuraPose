@@ -19,13 +19,7 @@ from colorama import Fore, init as colorama_init
 
 
 # Configuracoes centralizadas
-from neurapose_backend.config_master import (
-    PROCESSING_OUTPUT_DIR,
-    PROCESSING_ANNOTATIONS_DIR,
-    MIN_FRAMES_PER_ID,
-    CLASSE1,
-    CLASSE2
-)
+import neurapose_backend.config_master as cm
   
 
 colorama_init(autoreset=True)
@@ -176,20 +170,20 @@ def salvar_json(path: Path, data):
 def main():
     import argparse
     parser = argparse.ArgumentParser(description="Anotar IDs por video")
-    parser.add_argument("--root", default=str(PROCESSING_OUTPUT_DIR),
-                        help=f"Root de processamento (default: {PROCESSING_OUTPUT_DIR})")
+    parser.add_argument("--root", default=str(cm.PROCESSING_OUTPUT_DIR),
+                        help=f"Root de processamento (default: {cm.PROCESSING_OUTPUT_DIR})")
     parser.add_argument("--input-dir-process", "--input-dir", dest="root",
                         help="Alias para --root (diretório de processamento)")
 
-    parser.add_argument("--min-frames", type=int, default=MIN_FRAMES_PER_ID,
-                        help=f"Minimo de frames por ID (default: {MIN_FRAMES_PER_ID})")
-    parser.add_argument("--positive-class", default=CLASSE2.lower(),
+    parser.add_argument("--min-frames", type=int, default=cm.MIN_FRAMES_PER_ID,
+                        help=f"Minimo de frames por ID (default: {cm.MIN_FRAMES_PER_ID})")
+    parser.add_argument("--positive-class", default=cm.CLASSE2.lower(),
                         help="Classe positiva (default: furto)")
-    parser.add_argument("--negative-class", default=CLASSE1.lower(),
+    parser.add_argument("--negative-class", default=cm.CLASSE1.lower(),
                         help="Classe negativa (default: normal)")
 
-    parser.add_argument("--labels-out", default=str(PROCESSING_ANNOTATIONS_DIR / "labels.json"),
-                        help=f"Caminho para labels de saida (default: {PROCESSING_ANNOTATIONS_DIR / 'labels.json'})")
+    parser.add_argument("--labels-out", default=str(cm.PROCESSING_ANNOTATIONS_DIR / "labels.json"),
+                        help=f"Caminho para labels de saida (default: {cm.PROCESSING_ANNOTATIONS_DIR / 'labels.json'})")
     parser.add_argument("--output-dir-annotations", dest="labels_out",
                         help="Alias para --labels-out (arquivo de anotacoes de saida)")
 

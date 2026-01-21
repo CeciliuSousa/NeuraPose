@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 
-from neurapose_backend.config_master import CLASSE1, CLASSE2
+import neurapose_backend.config_master as cm
 
 
 # --- Configuração da Animação ---
@@ -22,8 +22,8 @@ texts = []
 
 file_path = "./datasets/data-labex/treino/data/data.pt"
 
-primeiraClasse = CLASSE1
-segundaClasse = CLASSE2
+primeiraClasse = cm.CLASSE1
+segundaClasse = cm.CLASSE2
 
 # Conexões dos 17 keypoints (Padrão COCO)
 CONNECTIONS = [

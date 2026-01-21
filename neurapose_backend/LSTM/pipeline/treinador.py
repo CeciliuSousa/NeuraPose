@@ -32,13 +32,8 @@ from neurapose_backend.LSTM.modulos.custom_dataset import AugmentedDataset
 
 
 # Configuracoes centralizadas
-from neurapose_backend.config_master import (
-    MODEL_BEST_FILENAME,
-    MODEL_FINAL_FILENAME,
-    NORM_STATS_FILENAME,
-    CLASS_NAMES,
-    DEVICE,
-)
+# Configuracoes centralizadas
+import neurapose_backend.config_master as cm
 
 
 init(autoreset=True)
@@ -152,13 +147,13 @@ def main():
     model_dir = Path(args.output_dir).parent / model_name
     model_dir.mkdir(parents=True, exist_ok=True)
     
-    best_model_path = model_dir / MODEL_BEST_FILENAME
-    final_model_path = model_dir / MODEL_FINAL_FILENAME
+    best_model_path = model_dir / cm.MODEL_BEST_FILENAME
+    final_model_path = model_dir / cm.MODEL_FINAL_FILENAME
     curves_path = model_dir / "curvas_treino_validacao.png"
     cm_val_path = model_dir / "matriz_confusao_validacao.png"
 
     # Salva estatisticas de normalizacao
-    torch.save({"mu": mu.cpu(), "sigma": sigma.cpu()}, model_dir / NORM_STATS_FILENAME)
+    torch.save({"mu": mu.cpu(), "sigma": sigma.cpu()}, model_dir / cm.NORM_STATS_FILENAME)
 
     print(Fore.CYAN + f"\n[PATHS]")
     print(f"  Modelo: {model_dir}")
@@ -234,10 +229,10 @@ def main():
     # Salva graficos e modelo final no novo dir
     plot_curves(history, final_model_dir / "curvas_treino_validacao.png")
     plot_confusion_matrix(va_cm, [primeiraClasse, segundaClasse], final_model_dir / "matriz_confusao_validacao.png")
-    torch.save(model.state_dict(), final_model_dir / MODEL_FINAL_FILENAME)
+    torch.save(model.state_dict(), final_model_dir / cm.MODEL_FINAL_FILENAME)
     # Move o model_best.pt e o norm_stats.pt
-    shutil.move(str(best_model_path), str(final_model_dir / MODEL_BEST_FILENAME))
-    shutil.move(str(model_dir / NORM_STATS_FILENAME), str(final_model_dir / NORM_STATS_FILENAME))
+    shutil.move(str(best_model_path), str(final_model_dir / cm.MODEL_BEST_FILENAME))
+    shutil.move(str(model_dir / cm.NORM_STATS_FILENAME), str(final_model_dir / cm.NORM_STATS_FILENAME))
 
     # Relatorio
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")

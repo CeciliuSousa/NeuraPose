@@ -10,11 +10,7 @@ from pathlib import Path
 from typing import Dict, Any
 from colorama import Fore
 
-from neurapose_backend.app.configuracao.config import (
-    CLASSE1,
-    CLASSE2,
-    TEMPORAL_MODEL
-)
+import neurapose_backend.config_master as cm
 
 
 # Configuração de estilo profissional
@@ -58,8 +54,8 @@ def gerar_grafico_matriz_confusao(cm: np.ndarray, metricas_dir: Path, modelo_nom
         cmap='Blues',
         cbar=True,
         square=True,
-        xticklabels=[CLASSE1, CLASSE2],
-        yticklabels=[CLASSE1, CLASSE2],
+        xticklabels=[cm.CLASSE1, cm.CLASSE2],
+        yticklabels=[cm.CLASSE1, cm.CLASSE2],
         linewidths=1,
         linecolor='gray'
     )
@@ -103,24 +99,14 @@ def gerar_grafico_distribuicao_classes(metricas: Dict[str, Any], metricas_dir: P
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
     
     # Gráfico 1: Ground Truth
-    categorias_gt = [CLASSE2, CLASSE1]
+    categorias_gt = [cm.CLASSE2, cm.CLASSE1]
     valores_gt = [total_classe2_real, total_classe1_real]
     colors_gt = [COLORS['success'], COLORS['danger']]
     
-    bars1 = ax1.bar(categorias_gt, valores_gt, color=colors_gt, alpha=0.8, edgecolor='black', linewidth=1.5)
-    ax1.set_title('Distribuição Real (Ground Truth)', fontweight='bold', pad=10)
-    ax1.set_ylabel('Quantidade de Vídeos', fontweight='bold')
-    ax1.grid(axis='y', alpha=0.3)
-    
-    # Adicionar valores nas barras
-    for bar in bars1:
-        height = bar.get_height()
-        ax1.text(bar.get_x() + bar.get_width()/2., height,
-                f'{int(height)}',
-                ha='center', va='bottom', fontweight='bold')
-    
+    # ...
+
     # Gráfico 2: Predições
-    categorias_pred = [CLASSE1, CLASSE2]
+    categorias_pred = [cm.CLASSE1, cm.CLASSE2]
     valores_pred = [total_classe1_pred, total_classe2_pred]
     colors_pred = [COLORS['success'], COLORS['danger']]
     
@@ -146,7 +132,7 @@ def gerar_grafico_distribuicao_classes(metricas: Dict[str, Any], metricas_dir: P
     print(Fore.GREEN + f"[OK] Gráfico de distribuição de classes salvo: {output_path}")
 
 
-def gerar_grafico_metricas_comparativas(metricas: Dict[str, Any], metricas_dir: Path, modelo_nome: str = TEMPORAL_MODEL):
+def gerar_grafico_metricas_comparativas(metricas: Dict[str, Any], metricas_dir: Path, modelo_nome: str = cm.TEMPORAL_MODEL):
     """
     Gera gráfico de barras comparando principais métricas.
     
@@ -156,11 +142,11 @@ def gerar_grafico_metricas_comparativas(metricas: Dict[str, Any], metricas_dir: 
         modelo_nome: Nome do modelo
     """
     # Selecionar métricas principais
-    metricas_nomes = ['Accuracy', f'Precision\n{CLASSE2}', f'Recall\n{CLASSE2}', 'F1 Macro', 'Balanced\nAccuracy']
+    metricas_nomes = ['Accuracy', f'Precision\n{cm.CLASSE2}', f'Recall\n{cm.CLASSE2}', 'F1 Macro', 'Balanced\nAccuracy']
     metricas_valores = [
         metricas.get('accuracy', 0),
-        metricas.get(f'precision_{CLASSE2}', 0),
-        metricas.get(f'recall_{CLASSE2}', 0),
+        metricas.get(f'precision_{cm.CLASSE2}', 0),
+        metricas.get(f'recall_{cm.CLASSE2}', 0),
         metricas.get('f1_macro', 0),
         metricas.get('balanced_accuracy', 0)
     ]
@@ -215,9 +201,10 @@ def gerar_grafico_distribuicao_confianca(resultados: list, labels: Dict[str, Any
             continue
         
         id_map = labels[stem]
+        id_map = labels[stem]
         # GT: 1 se qualquer ID for CLASSE2
-        gt = 1 if any(v.lower() == CLASSE2 for v in id_map.values()) else 0
-        score = r.get(f"score_{CLASSE2}", float(r["pred"]))
+        gt = 1 if any(v.lower() == cm.CLASSE2 for v in id_map.values()) else 0
+        score = r.get(f"score_{cm.CLASSE2}", float(r["pred"]))
         
         if gt == 0:
             score_classe1.append(score)
@@ -234,8 +221,8 @@ def gerar_grafico_distribuicao_confianca(resultados: list, labels: Dict[str, Any
     if score_classe1:
         ax1.hist(score_classe1, bins=20, color=COLORS['success'], alpha=0.7, edgecolor='black', linewidth=1)
         ax1.axvline(np.mean(score_classe1), color='darkgreen', linestyle='--', linewidth=2, label=f'Média: {np.mean(score_classe1):.3f}')
-        ax1.set_title(f'Distribuição de Scores - {CLASSE1}', fontweight='bold', pad=10)
-        ax1.set_xlabel(f'Score de Confiança {CLASSE1}', fontweight='bold')
+        ax1.set_title(f'Distribuição de Scores - {cm.CLASSE1}', fontweight='bold', pad=10)
+        ax1.set_xlabel(f'Score de Confiança {cm.CLASSE1}', fontweight='bold')
         ax1.set_ylabel('Frequência', fontweight='bold')
         ax1.legend()
         ax1.grid(axis='y', alpha=0.3)
@@ -244,8 +231,8 @@ def gerar_grafico_distribuicao_confianca(resultados: list, labels: Dict[str, Any
     if score_classe2:
         ax2.hist(score_classe2, bins=20, color=COLORS['danger'], alpha=0.7, edgecolor='black', linewidth=1)
         ax2.axvline(np.mean(score_classe2), color='darkred', linestyle='--', linewidth=2, label=f'Média: {np.mean(score_classe2):.3f}')
-        ax2.set_title(f'Distribuição de Scores - {CLASSE2}', fontweight='bold', pad=10)
-        ax2.set_xlabel(f'Score de Confiança {CLASSE2}', fontweight='bold')
+        ax2.set_title(f'Distribuição de Scores - {cm.CLASSE2}', fontweight='bold', pad=10)
+        ax2.set_xlabel(f'Score de Confiança {cm.CLASSE2}', fontweight='bold')
         ax2.set_ylabel('Frequência', fontweight='bold')
         ax2.legend()
         ax2.grid(axis='y', alpha=0.3)

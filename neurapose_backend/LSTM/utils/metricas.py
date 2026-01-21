@@ -10,14 +10,14 @@ import matplotlib.pyplot as plt
 from collections import Counter
 from sklearn.metrics import classification_report, confusion_matrix, f1_score, accuracy_score
 
-from neurapose_backend.config_master import CLASSE1, CLASSE2
+import neurapose_backend.config_master as cm
 
 
 def counts_from_labels(y_tensor):
     c = Counter(y_tensor.tolist())
     return c.get(0, 0), c.get(1, 0)
 
-def evaluate(model, dataloader, device, criterion=None, class_names=[CLASSE1, CLASSE2]):
+def evaluate(model, dataloader, device, criterion=None, class_names=[cm.CLASSE1, cm.CLASSE2]):
     model.eval()
     preds, labels = [], []
     total_loss = 0.0

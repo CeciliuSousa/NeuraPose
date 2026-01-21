@@ -10,7 +10,7 @@ from ultralytics.utils.ops import xywh2xyxy
 from ultralytics.utils.plotting import save_one_box
 
 import torchvision.transforms as T
-from neurapose_backend.config_master import DEVICE
+import neurapose_backend.config_master as cm
 
 
 class OSNetAIN(nn.Module):
@@ -27,11 +27,11 @@ class OSNetAIN(nn.Module):
 
 class CustomReID:
     def __init__(self, model_path):
-        ckpt = torch.load(model_path, map_location=DEVICE)
+        ckpt = torch.load(model_path, map_location=cm.DEVICE)
         state_dict = ckpt.get("state_dict", ckpt)
 
         self.model = OSNetAIN(state_dict)
-        self.device = DEVICE
+        self.device = cm.DEVICE
         self.model.to(self.device)
 
         self.norm = T.Compose([

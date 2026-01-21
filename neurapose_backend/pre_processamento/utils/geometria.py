@@ -6,7 +6,7 @@
 
 import cv2
 import numpy as np
-from neurapose_backend.config_master import SIMCC_W, SIMCC_H
+import neurapose_backend.config_master as cm
 
 
 def get_dir(src_point, rot_rad):
@@ -83,7 +83,7 @@ def _calc_center_scale(x1, y1, x2, y2):
     h = max(2, y2 - y1)
 
     center = np.array([(x1 + x2)/2.0, (y1 + y2)/2.0], dtype=np.float32)
-    aspect = SIMCC_W / SIMCC_H
+    aspect = cm.SIMCC_W / cm.SIMCC_H
 
     if w > aspect * h:
         h = w / aspect

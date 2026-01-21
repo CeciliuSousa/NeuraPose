@@ -7,15 +7,11 @@ import onnxruntime as ort
 from pathlib import Path
 from yt_dlp import YoutubeDL
 from colorama import Fore
+import neurapose_backend.config_master as cm
 from neurapose_backend.app.configuracao.config import (
-    YOLO_PATH,
-    OSNET_PATH,
-    RTMPOSE_PATH,
     BEST_MODEL_PATH,
     LABELS_TEST_PATH,
     DATASET_DIR,
-    TRACKER_NAME,
-    DEVICE,
     MODEL_NAME, 
     DATASET_NAME 
 )
@@ -34,9 +30,9 @@ def verificar_recursos():
     modelo_default = f"{MODEL_NAME}-{DATASET_NAME}"
     
     return {
-        "yolo": YOLO_PATH.exists(),
-        "osnet": OSNET_PATH.exists(),
-        "rtmpose": RTMPOSE_PATH.exists(),
+        "yolo": cm.YOLO_PATH.exists(),
+        "osnet": cm.OSNET_PATH.exists(),
+        "rtmpose": cm.RTMPOSE_PATH.exists(),
         "modelo_temporal": BEST_MODEL_PATH.exists(),
         "labels": LABELS_TEST_PATH.exists(),
         "dataset": DATASET_DIR.exists(),
@@ -55,12 +51,12 @@ def imprimir_banner(checks):
     print("SISTEMA DE DETECÇÃO — NEURAPOSE AI")
     print("============================================================")
     
-    print(f"YOLO                : {status_str(checks['yolo'])} {YOLO_PATH.name}")
-    print(f"TRACKER             : {status_str(True)} {TRACKER_NAME}")
-    print(f"OSNet ReID          : {status_str(checks['osnet'])} {OSNET_PATH.name}")
+    print(f"YOLO                : {status_str(checks['yolo'])} {cm.YOLO_PATH.name}")
+    print(f"TRACKER             : {status_str(True)} {cm.TRACKER_NAME}")
+    print(f"OSNet ReID          : {status_str(checks['osnet'])} {cm.OSNET_PATH.name}")
     print(
         f"RTMPose-l           : {status_str(checks['rtmpose'])} "
-        f"{RTMPOSE_PATH.parent.name}/{RTMPOSE_PATH.name}"
+        f"{cm.RTMPOSE_PATH.parent.name}/{cm.RTMPOSE_PATH.name}"
     )
     print(
         f"Modelo Temporal     : {status_str(checks['modelo_temporal'])} {checks['modelo_temporal_nome']}"
@@ -73,7 +69,7 @@ def imprimir_banner(checks):
     # Exibe caminhos completos de forma mais legível
     print(f"Modelo             : modelos-lstm-treinados/{checks['modelo_temporal_nome']}")
     print(f"Dataset de teste   : datasets/{checks.get('dataset_name', DATASET_NAME)}/teste/videos")
-    if DEVICE.startswith("cuda"):
+    if cm.DEVICE.startswith("cuda"):
         try:
             print(Fore.GREEN + f"GPU detectada      : {torch.cuda.get_device_name(0)}")
         except Exception:

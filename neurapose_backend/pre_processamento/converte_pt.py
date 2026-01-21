@@ -20,22 +20,14 @@ import torch
 
 
 # Configuracoes centralizadas
-from neurapose_backend.config_master import (
-    PROCESSING_JSONS_DIR,
-    PROCESSING_ANNOTATIONS_DIR,
-    MAX_FRAMES_PER_SEQUENCE,
-    MIN_FRAMES_PER_ID,
-    NUM_JOINTS,
-    NUM_CHANNELS,
-    CLASS_NAMES,
-)
+import neurapose_backend.config_master as cm
   
 
 # ------------------------------------------------------------
 # PATHS DINÂMICOS (PODEM SER SOBRESCRITOS PELO MAIN.PY)
 # ------------------------------------------------------------
-JSONS_DIR = PROCESSING_JSONS_DIR
-LABELS_PATH = PROCESSING_ANNOTATIONS_DIR / "labels.json"
+JSONS_DIR = cm.PROCESSING_JSONS_DIR
+LABELS_PATH = cm.PROCESSING_ANNOTATIONS_DIR / "labels.json"
 
 # Saída: sempre dentro de <pasta_do_labels>/../data/
 OUTPUT_BASE = LABELS_PATH.parent.parent
@@ -46,9 +38,9 @@ DEBUG_LOG = OUTPUT_BASE / "data" / "debug_log.txt"
 OUT_PT.parent.mkdir(parents=True, exist_ok=True)
 
 # Dimensoes da pose
-C, V = NUM_CHANNELS, NUM_JOINTS  # C=2 (x,y), V=17 keypoints
-max_frames = MAX_FRAMES_PER_SEQUENCE
-min_frames_validos = MIN_FRAMES_PER_ID
+C, V = cm.NUM_CHANNELS, cm.NUM_JOINTS  # C=2 (x,y), V=17 keypoints
+max_frames = cm.MAX_FRAMES_PER_SEQUENCE
+min_frames_validos = cm.MIN_FRAMES_PER_ID
 np.random.seed(42)
 
 
@@ -168,7 +160,7 @@ def main():
 
     data, y_labels, metadata, invalid = [], [], [], []
     processed = 0
-    positive_class = CLASS_NAMES[1].lower()  # ex: "furto"
+    positive_class = cm.CLASS_NAMES[1].lower()  # ex: "furto"
 
     for video_stem, id_map in sorted(labels.items()):
         processed += 1

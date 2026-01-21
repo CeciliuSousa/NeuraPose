@@ -12,11 +12,7 @@ import numpy as np
 # Importações do projeto
 from neurapose_backend.detector.yolo_detector import yolo_detector_botsort as yolo_detector
 
-from neurapose_backend.app.configuracao.config import (
-    CLASSE1,
-    CLASSE2,
-    CLASSE2_THRESHOLD,
-)
+import neurapose_backend.config_master as cm
 
 from neurapose_backend.app.modulos.extracao_pose import extrair_keypoints_rtmpose_padronizado
 from neurapose_backend.app.modulos.processamento_sequencia import montar_sequencia_individual
@@ -121,8 +117,8 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
         # Roda o modelo temporal para este ID
         score, pred_raw = rodar_lstm_uma_sequencia(seq_np, model, mu, sigma)
 
-        # Aplica threshold B: ID só vira a CLASSE2 se score >= CLASSE2_THRESHOLD
-        if score >= CLASSE2_THRESHOLD:
+        # Aplica threshold B: ID só vira a CLASSE2 se score >= cm.CLASSE2_THRESHOLD
+        if score >= cm.CLASSE2_THRESHOLD:
             classe_id = 1
         else:
             classe_id = 0
@@ -140,8 +136,8 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
         score_id = float(id_scores.get(gid, 0.0))
 
         r["classe_id"] = classe_id
-        r["classe_predita"] = CLASSE2 if classe_id == 1 else CLASSE1
-        r[F"score_{CLASSE2}_id"] = score_id
+        r["classe_predita"] = cm.CLASSE2 if classe_id == 1 else cm.CLASSE1
+        r[F"score_{cm.CLASSE2}_id"] = score_id
 
     # Salvar JSON já com keypoints + classe por ID
     with open(json_path, "w", encoding="utf-8") as f:

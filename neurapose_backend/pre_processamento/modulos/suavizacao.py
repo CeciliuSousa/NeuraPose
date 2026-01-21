@@ -3,16 +3,16 @@
 # ==============================================================
 
 import numpy as np
-from neurapose_backend.config_master import EMA_ALPHA, EMA_MIN_CONF
+import neurapose_backend.config_master as cm
 
 
 class EmaSmoother:
     """
     Suavizador de keypoints usando Média Móvel Exponencial (EMA).
     """
-    def __init__(self, alpha=EMA_ALPHA, min_conf=EMA_MIN_CONF):
-        self.alpha = alpha
-        self.min_conf = min_conf
+    def __init__(self, alpha=None, min_conf=None):
+        self.alpha = alpha if alpha is not None else cm.EMA_ALPHA
+        self.min_conf = min_conf if min_conf is not None else cm.EMA_MIN_CONF
         self.buf = {}
 
     def step(self, gid, kps):

@@ -20,10 +20,12 @@ warnings.filterwarnings("ignore")
 
 # Configuracoes
 from neurapose_backend.app.configuracao.config import (
-    CLASSE1, CLASSE2, DATASET_DIR, MODEL_DIR,
-    LABELS_TEST_PATH, DEVICE,
+    # CLASSE1, CLASSE2, # Removed (using cm)
+    DATASET_DIR, MODEL_DIR,
+    LABELS_TEST_PATH,
     args as config_args
 )
+import neurapose_backend.config_master as cm
 
 
 from neurapose_backend.app.utils.ferramentas import verificar_recursos, imprimir_banner, carregar_sessao_onnx
@@ -51,7 +53,7 @@ def classificar_video_por_label(video_label):
     """Classifica video: 1 se tem CLASSE1, 0 se CLASSE2."""
     if isinstance(video_label, dict):
         for label in video_label.values():
-            if label.lower() == CLASSE1:
+            if label.lower() == cm.CLASSE1:
                 return 1
         return 0
     return 0
@@ -63,7 +65,8 @@ def main():
     imprimir_banner(checks)
     
     # Se fornecido via argumento, usamos. Caso contrário, config_master
-    from neurapose_backend.config_master import TEST_REPORTS_DIR, RTMPOSE_PATH as CM_RTMPOSE
+    # Se fornecido via argumento, usamos. Caso contrário, config_master
+    # from neurapose_backend.config_master import TEST_REPORTS_DIR, RTMPOSE_PATH as CM_RTMPOSE (Using cm)
     
     # Determina diretório do modelo
     arg_model = getattr(args, 'model_dir', '')
@@ -123,14 +126,14 @@ def main():
             break
 
     # Caminho do RTMPose (config_master)
-    rtmpose_p = CM_RTMPOSE
+    rtmpose_p = cm.RTMPOSE_PATH
     if not rtmpose_p.exists():
         print(Fore.RED + f"[ERRO] RTMPose nao encontrado em {rtmpose_p}")
         return
 
     # Carrega modelo LSTM/TFT
     print(Fore.CYAN + f"\n[MODELO] Carregando modelo de: {model_dir}")
-    lstm_model, norm_stats = ClassifierFactory.load(model_dir, device=DEVICE)
+    lstm_model, norm_stats = ClassifierFactory.load(model_dir, device=cm.DEVICE)
     lstm_model.eval()
 
     # Carrega sessao ONNX
@@ -156,7 +159,7 @@ def main():
         labels_gt = carregar_labels_videos(labels_gt_path)
 
     # Output Dir para Relatórios: relatorios-testes / <nome_do_modelo>
-    out_report_dir = TEST_REPORTS_DIR / model_dir.name
+    out_report_dir = cm.TEST_REPORTS_DIR / model_dir.name
     out_report_dir.mkdir(parents=True, exist_ok=True)
     out_metricas_dir = out_report_dir / "metricas"
     out_metricas_dir.mkdir(parents=True, exist_ok=True)
@@ -203,7 +206,7 @@ def main():
                 y_pred.append(pred)
                 
                 # Exibe classe predita para cada vídeo
-                classe_pred = CLASSE2 if pred == 1 else CLASSE1
+                classe_pred = cm.CLASSE2 if pred == 1 else cm.CLASSE1
                 print(Fore.CYAN + f"[CLASSE] {classe_pred}")
 
         if y_true:

@@ -11,7 +11,7 @@ from yt_dlp import YoutubeDL
 from colorama import Fore
 
 # Importa do config_master (absoluto)
-from neurapose_backend.config_master import TRACKER_NAME, YOLO_MODEL, OSNET_PATH, ROOT as PROJECT_ROOT
+import neurapose_backend.config_master as cm
 
 
 
@@ -27,15 +27,15 @@ def imprimir_banner(onnx_path: Path):
     print("===============================================================")
 
     # YOLO (usa config_master)
-    yolopath = PROJECT_ROOT / "detector" / "modelos" / YOLO_MODEL
-    yolo_name = YOLO_MODEL.replace('.pt', '')
+    yolopath = cm.ROOT / "detector" / "modelos" / cm.YOLO_MODEL
+    yolo_name = cm.YOLO_MODEL.replace('.pt', '')
     print(f"YOLO                  : {status_str(yolopath.exists())} {yolo_name}")
 
     # Tracker
-    print(f"TRACKER               : {status_str(True)} {TRACKER_NAME}")
+    print(f"TRACKER               : {status_str(True)} {cm.TRACKER_NAME}")
 
     # OSNet (usa config_master)
-    print(f"OSNet ReID            : {status_str(OSNET_PATH.exists())} {OSNET_PATH.name}")
+    print(f"OSNet ReID            : {status_str(cm.OSNET_PATH.exists())} {cm.OSNET_PATH.name}")
 
     # RTMPose
     print(

@@ -5,19 +5,8 @@
 import argparse
 
 # Importa valores do config_master para usar como defaults
-from neurapose_backend.config_master import (
-    EPOCHS,
-    BATCH_SIZE,
-    LEARNING_RATE,
-    NUM_CLASSES,
-    NUM_JOINTS,
-    NUM_CHANNELS,
-    TEMPORAL_MODEL,
-    TRAINING_DATA_PATH,
-    TRAINING_LABELS_PATH,
-    MODEL_SAVE_DIR,
-    TRAINED_MODEL_NAME,
-)
+# Importa valores do config_master para usar como defaults
+import neurapose_backend.config_master as cm
 
 
 # Importa classes de modelos
@@ -34,27 +23,27 @@ def get_config():
     parser = argparse.ArgumentParser(description="Treinamento de Classificador Temporal (LSTM/Transformer)")
 
     # Parametros de Treino (defaults do config_master)
-    parser.add_argument("--epochs", type=int, default=EPOCHS, help=f"Numero de epocas (default: {EPOCHS})")
-    parser.add_argument("--batch_size", type=int, default=BATCH_SIZE, help=f"Tamanho do batch (default: {BATCH_SIZE})")
-    parser.add_argument("--lr", type=float, default=LEARNING_RATE, help=f"Learning rate (default: {LEARNING_RATE})")
-    parser.add_argument("--model", type=str, default=TEMPORAL_MODEL, help=f"Tipo de modelo (default: {TEMPORAL_MODEL})")
-    parser.add_argument("--name", type=str, default=TRAINED_MODEL_NAME, help=f"Nome para salvar o modelo (default: {TRAINED_MODEL_NAME})")
+    parser.add_argument("--epochs", type=int, default=cm.EPOCHS, help=f"Numero de epocas (default: {cm.EPOCHS})")
+    parser.add_argument("--batch_size", type=int, default=cm.BATCH_SIZE, help=f"Tamanho do batch (default: {cm.BATCH_SIZE})")
+    parser.add_argument("--lr", type=float, default=cm.LEARNING_RATE, help=f"Learning rate (default: {cm.LEARNING_RATE})")
+    parser.add_argument("--model", type=str, default=cm.TEMPORAL_MODEL, help=f"Tipo de modelo (default: {cm.TEMPORAL_MODEL})")
+    parser.add_argument("--name", type=str, default=cm.TRAINED_MODEL_NAME, help=f"Nome para salvar o modelo (default: {cm.TRAINED_MODEL_NAME})")
 
     # Hiperparametros do Modelo
     parser.add_argument('--dropout', type=float, default=0.3, help='Taxa de dropout')
     parser.add_argument('--hidden_size', type=int, default=128, help='Tamanho da camada oculta')
     parser.add_argument('--num_layers', type=int, default=2, help='Numero de camadas RNN')
     parser.add_argument('--num_heads', type=int, default=8, help='Numero de cabecas (Transformer/TFT)')
-    parser.add_argument('--num_channels', type=int, default=NUM_CHANNELS, help='Canais (TCN/WaveNet)')
+    parser.add_argument('--num_channels', type=int, default=cm.NUM_CHANNELS, help='Canais (TCN/WaveNet)')
     parser.add_argument('--kernel_size', type=int, default=5, help='Tamanho do kernel (TCN/WaveNet)')
-    parser.add_argument('--num_classes', type=int, default=NUM_CLASSES, help=f'Numero de classes (default: {NUM_CLASSES})')
-    parser.add_argument('--input_size', type=int, default=NUM_JOINTS * NUM_CHANNELS, help='Numero de features por timestep')
+    parser.add_argument('--num_classes', type=int, default=cm.NUM_CLASSES, help=f'Numero de classes (default: {cm.NUM_CLASSES})')
+    parser.add_argument('--input_size', type=int, default=cm.NUM_JOINTS * cm.NUM_CHANNELS, help='Numero de features por timestep')
 
     # Paths (defaults do config_master)
-    parser.add_argument('--dataset', type=str, default=str(TRAINING_DATA_PATH), help='Caminho do dataset .pt/.pkl')
-    parser.add_argument('--annotations', type=str, default=str(TRAINING_LABELS_PATH), help='Caminho para labels.json')
+    parser.add_argument('--dataset', type=str, default=str(cm.TRAINING_DATA_PATH), help='Caminho do dataset .pt/.pkl')
+    parser.add_argument('--annotations', type=str, default=str(cm.TRAINING_LABELS_PATH), help='Caminho para labels.json')
     parser.add_argument('--pretrained', type=str, required=False, help='Caminho do modelo pre-treinado (.pt)')
-    parser.add_argument('--output_dir', type=str, default=str(MODEL_SAVE_DIR), help='Diretorio de saida do modelo')
+    parser.add_argument('--output_dir', type=str, default=str(cm.MODEL_SAVE_DIR), help='Diretorio de saida do modelo')
 
     args, _ = parser.parse_known_args()
 
