@@ -30,6 +30,20 @@ try:
 except:
     state_notifier = None
 
+# ==============================================================
+# CARREGAR CONFIGURAÇÕES DO USUÁRIO (Override config_master)
+# ==============================================================
+# Isso garante que o pipeline offline respeite as configurações da UI.
+try:
+    from neurapose_backend.app.user_config_manager import UserConfigManager
+    user_config = UserConfigManager.load_config()
+    for k, v in user_config.items():
+        if hasattr(cm, k):
+            setattr(cm, k, v)
+    print(Fore.BLUE + f"[CONFIG] Configurações do usuário carregadas e aplicadas.")
+except Exception as e:
+    print(Fore.YELLOW + f"[CONFIG] Falha ao carregar configurações do usuário: {e}")
+
 
 
 def calcular_deslocamento(p_inicial, p_final):
@@ -156,7 +170,8 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     sys.stdout.flush()
     
     time_yolo_start = time.time()
-    res_list = yolo_detector_botsort(videos_dir=norm_path)
+    # Passamos batch_size explicitamente para usar o valor do cm atualizado (config user)
+    res_list = yolo_detector_botsort(videos_dir=norm_path, batch_size=cm.YOLO_BATCH_SIZE)
     time_yolo = time.time() - time_yolo_start
 
     print(Fore.GREEN + f"[OK] Deteccao concluida. Processando resultados...")
