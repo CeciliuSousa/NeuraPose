@@ -48,10 +48,14 @@ EMA_ALPHA = 0.35                    # Suavização temporal
 EMA_MIN_CONF = 0.0                  # Conf mínima para EMA
 
 # Filtros de Pós-Processamento
+MIN_POSDETECTION_CONF = 0.6  # Confiança mínima para detecção YOLO
+YOLO_CLASS_PERSON = 0 # Classe 'pessoa' no COCO dataset
+YOLO_BATCH_SIZE = 64  # Tamanho do batch para inferência YOLO (Otimização de Performance)
+RTMPOSE_BATCH_SIZE = 64 # Tamanho do batch para inferência Pose (Novo)
 MIN_POSE_ACTIVITY = 0.8             # StdDev médio mínimo (pixels) para considerar ID ativo
 
-# ==============================================================
-# SEÇÃO 3: CLASSES DE ANOTAÇÃO
+# ================================================================
+# 3. CONFIGURAÇÕES DE TRACKING (BoTSORT / ReID / OSNet)
 # ==============================================================
 
 CLASSE1 = "NORMAL"                  # Classe padrão
@@ -180,15 +184,14 @@ BOT_SORT_CONFIG = {
     "track_low_thresh": 0.1,
     "new_track_thresh": 0.5,
     "track_buffer": 300,
-    "match_thresh": 0.30,
-    "appearance_thresh": 0.20,
+    "match_thresh": 0.50,       # Aumentado de 0.30 para 0.50 (mais tolerante para fusão)
+    "appearance_thresh": 0.25,  # Aumentado de 0.20 (reduz exigência visual estrita)
     "proximity_thresh": 0.6,
     "gmc_method": "orb",
     "fuse_score": True,
     "with_reid": True,
     "model": str(OSNET_PATH),
 }
-
 # Paths legados (compatibilidade)
 DATASETS_ROOT = TEST_DATASETS_ROOT
 TRAIN_DIR = TEST_DATASETS_ROOT / TRAIN_SPLIT / "videos"

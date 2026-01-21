@@ -503,6 +503,34 @@ export default function ReidPage() {
                                 )}
                             </div>
 
+                            {/* Tabela de IDs Persistentes (NOVO) */}
+                            {reidData && reidData.id_counts && (
+                                <div className="p-4 bg-muted/10 border border-border rounded-xl">
+                                    <h4 className="font-bold text-xs uppercase mb-3 text-muted-foreground flex items-center gap-2">
+                                        <ScanFace className="w-4 h-4" /> IDs Persistentes Detectados (Bruto)
+                                    </h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {Object.entries(reidData.id_counts)
+                                            .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
+                                            .map(([id, count]) => (
+                                                <div key={id} className="flex items-center gap-2 bg-background border border-border px-3 py-1.5 rounded-md text-xs group hover:border-primary transition-colors">
+                                                    <span className="font-bold text-primary">ID {id}</span>
+                                                    <span className="w-px h-3 bg-border"></span>
+                                                    <span className="text-muted-foreground">{count} frames</span>
+                                                    {/* Botão rápido para preencher form de exclusão */}
+                                                    <button
+                                                        onClick={() => setDelForm({ ...delForm, id })}
+                                                        className="ml-1 opacity-0 group-hover:opacity-100 text-orange-500 hover:bg-orange-500/10 p-0.5 rounded transition-all"
+                                                        title="Preencher para excluir"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                    </div>
+                                </div>
+                            )}
+
 
                             {!isDeleted && (
                                 <div className="space-y-6">

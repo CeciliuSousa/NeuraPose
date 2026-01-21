@@ -3,6 +3,7 @@
 # ================================================================
 
 import os
+import sys
 import cv2
 import torch
 import logging
@@ -18,7 +19,7 @@ from neurapose_backend.globals.state import state
 from colorama import Fore
 
 # Importa nome do modelo YOLO e ROOT do config centralizado
-from neurapose_backend.config_master import YOLO_PATH, YOLO_MODEL, ROOT, DETECTION_CONF, YOLO_CLASS_PERSON, DEVICE, YOLO_IMGSZ
+from neurapose_backend.config_master import YOLO_PATH, YOLO_MODEL, ROOT, DETECTION_CONF, YOLO_CLASS_PERSON, DEVICE, YOLO_IMGSZ, YOLO_BATCH_SIZE
 
 logging.getLogger("ultralytics").setLevel(logging.ERROR)
 os.environ["YOLO_VERBOSE"] = "False"
@@ -101,9 +102,9 @@ def merge_tracks(track_data, gap_thresh=1.5):
 # ================================================================
 # 2. YOLO + BoTSORT + coleta de IDs + fusao de IDs
 # ================================================================
-def yolo_detector_botsort(videos_dir=None):
+def yolo_detector_botsort(videos_dir=None, batch_size=YOLO_BATCH_SIZE):
     """
-    Roda YOLOv8x + CustomBoTSORT em varios videos.
+    Roda YOLOv8x + CustomBoTSORT em varios videos com Processamento em LOTE.
     Retorna lista com:
         - video
         - fps
@@ -119,31 +120,19 @@ def yolo_detector_botsort(videos_dir=None):
     # MODELO YOLO - Usar caminho centralizado (config_master) e baixar se nao existir
     # ================================================================
     model_path = YOLO_PATH
-
-    # Criar diretorio de modelos se nao existir
     model_path.parent.mkdir(parents=True, exist_ok=True)
 
     if not model_path.exists():
-        # Extrai o nome base do modelo (ex: "yolov8l" de "yolov8l.pt")
         model_base = YOLO_MODEL.replace('.pt', '')
-
         try:
-            # Ultralytics baixa automaticamente quando voce instancia com nome
             temp_model = YOLO(model_base)
-
-            # Salva o modelo baixado no local correto
             temp_model.save(str(model_path))
-
         except Exception as e:
-            # Se o download falhar, remove o arquivo parcial/corrompido
             if model_path.exists():
                 os.remove(model_path)
-            raise FileNotFoundError(
-                f"Erro ao baixar modelo {YOLO_PATH}. "
-                f"Verifique sua conexao com a internet ou se o modelo nao esta corrompido.\nErro: {e}"
-            )
+            raise FileNotFoundError(f"Erro ao baixar {YOLO_PATH}: {e}")
     
-    # Carrega o modelo (local ou recem-baixado)
+    # Carrega o modelo
     model = YOLO(str(model_path)).to(DEVICE)
 
     # Lista de videos
@@ -161,108 +150,129 @@ def yolo_detector_botsort(videos_dir=None):
 
     resultados_finais = []
 
-    # ============================================================
-    # Loop para todos os videos
-    # ============================================================
     for video in videos:
         cap = cv2.VideoCapture(str(video))
         fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+        # Reset Tracker State for new video
         tracker = CustomBoTSORT(frame_rate=int(fps))
         model.tracker = tracker
-
+        
+        # Configure Tracker YAML
         tracker_yaml_path = save_temp_tracker_yaml()
-        logging.getLogger("neurapose.tracker").info(f"Usando BoTSORT YAML: {tracker_yaml_path}")
-
-        print(f"[YOLO] Iniciando tracking em: {video.name}")
-        # print(f"[YOLO] Isso pode demorar alguns minutos dependendo do tamanho do video e se esta usando GPU ou CPU...")
-        import sys
+        
+        # print(Fore.CYAN + f"[YOLO] Iniciando tracking (Batch {batch_size}) em: {video.name}")
         sys.stdout.flush()
-
-        # Execucao do YOLO + tracking (stream=True para feedback e controle)
-        # Usamos stream=True para iterar frame a frame, permitindo:
-        # 1. Checar solicitação de parada (Stop)
-        # 2. Atualizar o preview no frontend (state.set_frame)
-        tracking_stream = model.track(
-            source=str(video),
-            imgsz=YOLO_IMGSZ,
-            conf=DETECTION_CONF,
-            device=DEVICE,
-            persist=True,
-            tracker=str(tracker_yaml_path),
-            classes=[YOLO_CLASS_PERSON],
-            verbose=False,
-            half=True,  # FP16 para acelerar inferência na GPU
-            stream=True # Retorna gerador
-        )
 
         results = []
         track_data = {}
         
-        # Itera sobre o stream
-        for frame_idx, r in enumerate(tracking_stream):
-            # Verifica Parada
+        frame_idx_global = 0
+        last_progress = 0
+
+        while True:
+            # Check Stop
             if state.stop_requested:
-                print(Fore.YELLOW + "[STOP] Detecção interrompida pelo usuário.")
+                print(Fore.YELLOW + "[STOP] Detecção interrompida.")
                 break
 
-            # Salva apenas metadados leves (numpy arrays)
-            # Isso evita crash de RAM em vídeos longos e é muito mais rápido
-            frame_res = {"boxes": None}
-            if r.boxes is not None and len(r.boxes) > 0:
-                # Extraímos apenas o que o RTMPose e o Tracker precisam
-                # data contém: [x1, y1, x2, y2, id, conf, cls]
-                boxes_data = r.boxes.data.cpu().numpy()
-                frame_res["boxes"] = boxes_data
+            # 1. Carregar Batch de Frames
+            frames_batch = []
+            for _ in range(batch_size):
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                frames_batch.append(frame)
+
+            if not frames_batch:
+                break # Fim do vídeo
+
+            # 2. Inferência em Batch (Bloqueante mas muito rápida na GPU)
+            # persist=True mantém o tracking entre os batches sequenciais
+            batch_results = model.track(
+                source=frames_batch,
+                imgsz=YOLO_IMGSZ,
+                conf=DETECTION_CONF,
+                device=DEVICE,
+                persist=True,
+                tracker=str(tracker_yaml_path),
+                classes=[YOLO_CLASS_PERSON],
+                verbose=False,
+                half=True,
+                stream=False # Batch retorna lista completa imediatamente
+            )
+
+            # 3. Processar Resultados do Batch
+            for i, r in enumerate(batch_results):
+                current_frame_idx = frame_idx_global + i
                 
-                # Coleta de tracks por frame para fusão posterior
-                # r.boxes.id é o track_id vindo do BoTSORT
-                ids = boxes_data[:, 4] if boxes_data.shape[1] > 4 else None
-                current_time = frame_idx / fps
+                # Feedback visual para o frontend (opcional, pega o último do batch)
+                if i == len(batch_results) - 1:
+                     # Apenas marcamos progresso, não enviamos imagem para não travar
+                     pass
 
-                if ids is not None:
-                    for i, tid_raw in enumerate(ids):
-                        if tid_raw is None or tid_raw < 0: continue
-                        tid = int(tid_raw)
-                        
-                        # Tenta pegar a feature do tracker se disponível
-                        try:
-                            f = tracker.tracks[tid].feat.copy()
-                        except:
-                            f = np.zeros(512, dtype=np.float32)
+                # Extrai dados leves
+                frame_res = {"boxes": None}
+                
+                if r.boxes is not None and len(r.boxes) > 0:
+                    boxes_data = r.boxes.data.cpu().numpy()
+                    frame_res["boxes"] = boxes_data
+                    
+                    ids = boxes_data[:, 4] if boxes_data.shape[1] > 4 else None
+                    current_time = current_frame_idx / fps
 
-                        if tid not in track_data:
-                            track_data[tid] = {
-                                "start": current_time,
-                                "end": current_time,
-                                "features": [f],
-                                "frames": {frame_idx},
-                            }
-                        else:
-                            track_data[tid]["end"] = current_time
-                            track_data[tid]["frames"].add(frame_idx)
-                            if len(track_data[tid]["features"]) < 20:
-                                track_data[tid]["features"].append(f)
+                    if ids is not None:
+                        for tid_raw in ids:
+                            if tid_raw is None or tid_raw < 0: continue
+                            tid = int(tid_raw)
+                            
+                            # Feature extraction (se disponível)
+                            try:
+                                # Acesso direto interno ao tracker do Ultralytics
+                                # Pode variar dependendo da versão, protegemos com try
+                                trk = tracker.tracks[tid]
+                                f = trk.feat.copy() if hasattr(trk, 'feat') else np.zeros(512)
+                            except:
+                                f = np.zeros(512, dtype=np.float32)
+
+                            if tid not in track_data:
+                                track_data[tid] = {
+                                    "start": current_time,
+                                    "end": current_time,
+                                    "features": [f],
+                                    "frames": {current_frame_idx},
+                                }
+                            else:
+                                track_data[tid]["end"] = current_time
+                                track_data[tid]["frames"].add(current_frame_idx)
+                                if len(track_data[tid]["features"]) < 20:
+                                    track_data[tid]["features"].append(f)
+                
+                results.append(frame_res)
+
+            # Atualiza Indices
+            frame_idx_global += len(frames_batch)
             
-            results.append(frame_res)
-
-        print(f"[YOLO] Tracking concluido! {len(results)} frames processados.")
-        sys.stdout.flush()
+            # Progress Print
+            prog = int((frame_idx_global / total_frames) * 100)
+            if prog >= last_progress + 10:
+                print(f"[YOLO] Progresso: {prog}% ({frame_idx_global}/{total_frames})")
+                sys.stdout.flush()
+                last_progress = prog
 
         cap.release()
+        
+        # Merge Tracks
         if state.stop_requested:
-             break # Sai do loop de videos
+            break
 
         if not track_data:
-            print("[WARN] Nenhum track valido.")
+            print("[WARN] Nenhum track valido identificado.")
             continue
 
-        # ============================================================
-        # FUSAO FINAL DE IDs
-        # ============================================================
         merged_tracks, id_map = merge_tracks(track_data)
 
-        # Salva tudo organizado
         resultados_finais.append({
             "video": str(video),
             "fps": fps,
@@ -271,5 +281,10 @@ def yolo_detector_botsort(videos_dir=None):
             "id_map": id_map,
             "results": results,
         })
+        
+        # Clean Memory
+        del model.tracker
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     return resultados_finais

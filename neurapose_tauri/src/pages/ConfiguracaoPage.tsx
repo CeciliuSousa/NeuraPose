@@ -127,6 +127,7 @@ export default function ConfiguracaoPage() {
             items: [
                 { key: "DETECTION_CONF", label: "Confiança YOLO (0-1)", type: "number", step: 0.01 },
                 { key: "YOLO_IMGSZ", label: "Resolução de Entrada", type: "select", options: ["640", "1280", "1920"] },
+                { key: "YOLO_BATCH_SIZE", label: "Batch Size (GPU)", type: "number" },
             ]
         },
         {
