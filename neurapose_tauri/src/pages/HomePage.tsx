@@ -69,10 +69,10 @@ export default function HomePage() {
             <div className="flex justify-between items-center bg-card/30 p-6 rounded-2xl border border-border shadow-sm">
                 <div>
                     <h2 className="text-4xl font-black tracking-tight bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
-                        NeuraPose Control
+                        NeuraPose
                     </h2>
                     <p className="text-muted-foreground mt-1">
-                        Pipeline de Visão Computacional de Alta Performance
+                        Pipeline de Visão Computacional para deteção de anomalias em estimação de pose
                     </p>
                 </div>
 

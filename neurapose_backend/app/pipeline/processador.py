@@ -6,6 +6,9 @@
 # ==============================================================
 
 import time
+import os
+# Silencia logs verbosos do OpenCV/FFmpeg
+os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 import json
 import cv2
 import numpy as np
@@ -60,12 +63,10 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
     if not output_dir: raise ValueError("output_dir obrigatório")
     predicoes_dir = output_dir / "predicoes"
     jsons_dir = output_dir / "jsons"
-    trackings_dir = output_dir / "trackings"
     videos_norm_dir = output_dir / "videos_norm" # Separado para nao poluir
     
     predicoes_dir.mkdir(parents=True, exist_ok=True)
     jsons_dir.mkdir(parents=True, exist_ok=True)
-    trackings_dir.mkdir(parents=True, exist_ok=True)
     videos_norm_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. NORMALIZAÇÃO DE VÍDEO
@@ -220,32 +221,7 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
         modelo_nome=cm.TEMPORAL_MODEL.upper()
     )
     
-    # Relatório Tracking JSON (V6 Clean)
-    # Limpa map de IDs
-    id_map_limpo = {str(k): int(v) for k, v in id_map.items() if v in ids_validos}
-    
-    tracking_analysis = {
-        "video": video_path.name,
-        "total_frames": frame_idx - 1,
-        "id_map": id_map_limpo,
-        "tracking_by_frame": {}
-    }
-    
-    for reg in records:
-        f_id = reg["frame"]
-        if f_id not in tracking_analysis["tracking_by_frame"]:
-            tracking_analysis["tracking_by_frame"][f_id] = []
-        
-        tracking_analysis["tracking_by_frame"][f_id].append({
-            "botsort_id": reg.get("botsort_id"),
-            "id_persistente": reg["id_persistente"],
-            "bbox": reg["bbox"],
-            "confidence": reg["confidence"]
-        })
-        
-    tracking_json_path = jsons_dir / f"{video_path.stem}_tracking.json"
-    with open(tracking_json_path, "w", encoding="utf-8") as f:
-        json.dump(tracking_analysis, f, indent=2, ensure_ascii=False)
+
 
     tempos["video_total"] = time.time() - t0_video
     
@@ -259,9 +235,9 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
     print(Fore.CYAN + f"  TEMPOS DE PROCESSAMENTO (APP MODULAR) - {video_path.name}")
     print(Fore.CYAN + "="*60)
     print(Fore.YELLOW + f"  {'Normalização':<30} {tempos['normalizacao']:>12.2f} seg")
-    print(Fore.YELLOW + f"  {'YOLO + BoTSORT':<30} {tempos['detector_total']:>12.2f} seg")
-    print(Fore.YELLOW + f"  {'RTMPose (Modular)':<30} {tempos['rtmpose_total']:>12.2f} seg")
-    print(Fore.YELLOW + f"  {'Classificação':<30} {tempos['temporal_total']:>12.2f} seg")
+    print(Fore.YELLOW + f"  {'YOLO + BoTSORT + OSNet':<30} {tempos['detector_total']:>12.2f} seg")
+    print(Fore.YELLOW + f"  {'RTMPose':<30} {tempos['rtmpose_total']:>12.2f} seg")
+    print(Fore.YELLOW + f"  {str(cm.TEMPORAL_MODEL).upper():<30} {tempos['temporal_total']:>12.2f} seg")
     print(Fore.WHITE + "-"*60)
     print(Fore.GREEN + f"  {'TOTAL VIDEO':<30} {tempos['video_total']:>12.2f} seg")
     print(Fore.CYAN + "="*60 + "\n")

@@ -1,5 +1,8 @@
 import sys
 import os
+# Silencia logs verbosos do OpenCV/FFmpeg
+os.environ["OPENCV_LOG_LEVEL"] = "OFF"
+
 from pathlib import Path
 import logging
 import json
@@ -500,7 +503,7 @@ def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, 
         logger.info(f"Iniciando processamento: {input_path} -> {output_path}")
         
         try:
-            sess, input_name = carregar_sessao_onnx(str(onnx_path))
+            # sess, input_name = carregar_sessao_onnx(str(onnx_path)) # Removido - Modular
             
             if input_path.is_file():
                 v_name = input_path.stem
@@ -508,15 +511,16 @@ def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, 
                 if final_out == Path(cm.PROCESSING_OUTPUT_DIR):
                      final_out = output_path / v_name
                 print(f"[INFO] Processando 1 vídeo: {input_path.name}")
-                processar_video(input_path, sess, input_name, final_out, show=show)
+                processar_video(input_path, final_out, show=show)
             elif input_path.is_dir():
                 videos = sorted(input_path.glob("*.mp4"))
                 output_path.mkdir(parents=True, exist_ok=True)
-                print(f"[INFO] Encontrados {len(videos)} vídeos em {input_path}")
+                # print(f"[INFO] Encontrados {len(videos)} vídeos em {input_path}")
+                print(f"[INFO] Encontrados {len(videos)} vídeos")
                 for i, v in enumerate(videos, 1):
                     if state.stop_requested: break
                     print(f"\n[{i}/{len(videos)}] Processando: {v.name}")
-                    processar_video(v, sess, input_name, output_path, show=show)
+                    processar_video(v, output_path, show=show)
                     # Limpa frame entre vídeos para mostrar placeholder
                     state.current_frame = None
 

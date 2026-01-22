@@ -132,12 +132,9 @@ def main():
         return
 
     # Carrega modelo LSTM/TFT
-    print(Fore.CYAN + f"\n[MODELO] Carregando modelo de: {model_dir}")
+    # print(Fore.CYAN + f"\n[MODELO] Carregando modelo de: {model_dir}")
     lstm_model, norm_stats = ClassifierFactory.load(model_dir, device=cm.DEVICE)
     lstm_model.eval()
-
-    # Carrega sessao ONNX
-    sess, input_name = carregar_sessao_onnx(str(rtmpose_p))
 
     # Lista videos
     if video_input.is_file():
@@ -150,12 +147,12 @@ def main():
         print(Fore.YELLOW + f"[AVISO] Nenhum vídeo encontrado em {video_input}")
         return
 
-    print(Fore.CYAN + f"[INFO] {len(video_list)} videos para processar")
+    print(Fore.CYAN + f"[INFO] {len(video_list)} videos encontrados para testes...")
 
     # Carrega labels ground-truth
     labels_gt = {}
     if labels_gt_path.exists():
-        print(Fore.BLUE + f"[LABELS] Usando Ground Truth: {labels_gt_path}")
+        # print(Fore.BLUE + f"[LABELS] Usando Ground Truth: {labels_gt_path}")
         labels_gt = carregar_labels_videos(labels_gt_path)
 
     # Output Dir para Relatórios: relatorios-testes / <nome_do_modelo>
@@ -176,8 +173,6 @@ def main():
         
         predictions = processar_video(
             video_path=video_path,
-            sess=sess,
-            input_name=input_name,
             model=lstm_model,
             mu=norm_stats.get("mu"),
             sigma=norm_stats.get("sigma"),

@@ -137,4 +137,71 @@ Gerando video cena-furto-027_30fps:   0%|                                       
 
 - COrrija esses erros do terminal: <Simbolo>[32m, 36m e etc! ]
 
-- Nos terminais, os caminhos ainda aparecem aboslutos, assim como nas entradas igual nos prints, resolva isso. Mostrar somente como eu pedir, exemplo! 
+- Nos terminais, os caminhos ainda aparecem aboslutos, assim como nas entradas igual nos prints, resolva isso. Mostrar somente como eu pedir, de /neurapose_backend para frente exemplo: "/neurapose_backend/....."
+
+
+------
+
+Pergunta: como funciona o processo em processamento de videos?
+
+ele segue um fluxo mais ou menos assim? 
+
+- Normalização
+- Yolo + BotSort + OSNet
+- RTMPose
+- Filtragem antes de salvar o json
+- Salvar o json
+- Salvar vídeo predito, videos normalizados, jsons brutos e trackings?
+- Se usuário escolher exibir o vídeo (mostra depois de salvo no aplicativo?) 
+
+Pergunta: como funciona o processo te teste de modelos?
+
+ele segue um fluxo mais ou menos assim? 
+
+- Normalização
+- Yolo + BotSort + OSNet
+- RTMPose
+- Filtragem antes de salvar o json
+- Salvar o json
+- LSTM para classifica a classe
+- Salvar vídeo predito, metricas do teste, jsons brutos e trackings? Aqui tem um detalhe, em testes ele salva uma pasta /trackings/<arquivos em txt>. essa parte pode remover para mim! Salvar somente /<jsons, metricas, predicoes>
+- Se usuário escolher exibir o vídeo (mostra depois de salvo no aplicativo?) 
+
+-----
+
+video não está sendo exibido, no lugar fica dando um warn no terminal: 
+
+....
+[OK] JSON Final salvo: cena-furto-027_30fps.json
+[INFO] Gerando vídeo visualização...
+Gerando video cena-furto-027_30fps:   0%|                                  | 0/910 [00:00<?, ?it/s][ WARN:0@205.623] global cap_ffmpeg_impl.hpp:2528 writeFrame write frame skipped - expected 3 channels but got 1
+[ WARN:0@205.625] global cap_ffmpeg.cpp:198 write FFmpeg: Failed to write frame
+[ WARN:0@205.633] global cap_ffmpeg_impl.hpp:2528 writeFrame write frame skipped - expected 3 channels but got 1
+[ WARN:0@205.634] global cap_ffmpeg.cpp:198 write FFmpeg: Failed to write frame
+[ WARN:0@205.640] global cap_ffmpeg_impl.hpp:2528 writeFrame write frame skipped - expected 3 channels but got 1
+....
+
+[ WARN:0@208.725] global cap_ffmpeg.cpp:198 write FFmpeg: Failed to write frame
+[ WARN:0@208.728] global cap_ffmpeg_impl.hpp:2528 writeFrame write frame skipped - expected 3 channels but got 1
+[ WARN:0@208.728] global cap_ffmpeg.cpp:198 write FFmpeg: Failed to write frame
+[ WARN:0@208.731] global cap_ffmpeg_impl.hpp:2528 writeFrame write frame skipped - expected 3 channels but got 1
+[ WARN:0@208.731] global cap_ffmpeg.cpp:198 write FFmpeg: Failed to write frame
+                                                                                                   
+============================================================
+  TEMPOS DE PROCESSAMENTO - cena-furto-027.mp4
+============================================================
+  Normalização video 30 FPS                     27.11 seg
+  YOLO + BoTSORT + OSNet                       121.39 seg
+  RTMPose                                       55.55 seg
+------------------------------------------------------------
+  TOTAL                                        204.04 seg
+============================================================
+
+INFO:NeuraPoseAPI:Processamento concluido.
+INFO:     127.0.0.1:65201 - "GET /logs?category=process HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65201 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65284 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54465 - "GET /system/info HTTP/1.1" 200 OK
+.....
+
+Copiei para dentro do projeto a pasta /neurapose_backend_antigo/ que era o sistema não modularizado! nele funcionava muito bem e o vídeo era exibido corretamente nas paginas "Processamentos de Vídeos" e pagina de "Teste de Modelos". comparece o /neurapose_backend_antigo/ com o /neurapose_backend/ e veja o que falta o que pode está causando o erro de exibição de vídeo nessas paginas, adicione linhas de comando para remover esse esses "WARN" 

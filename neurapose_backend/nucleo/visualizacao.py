@@ -189,17 +189,21 @@ def gerar_video_predicao(
                 classe_id=classe_id
             )
 
+
+
         writer.write(frame)
 
         # Preview Callback (Decoupled)
         if show_preview:
+            # Integração com API de Streaming (State Global)
+            try:
+                from neurapose_backend.globals.state import state
+                state.set_frame(frame)
+            except ImportError:
+                pass
+
             if preview_callback:
                 preview_callback(frame)
-            else:
-                # Debug local simples
-                # cv2.imshow("Preview", cv2.resize(frame, (800, 600)))
-                # cv2.waitKey(1)
-                pass
 
         frame_idx += 1
         pbar.update(1)

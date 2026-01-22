@@ -3,6 +3,10 @@
 # ======================================================
 
 import sys
+import os
+# Silencia logs verbosos do OpenCV/FFmpeg
+os.environ["OPENCV_LOG_LEVEL"] = "OFF"
+
 import argparse
 from pathlib import Path
 from colorama import Fore, init as colorama_init
@@ -79,8 +83,7 @@ def main():
     imprimir_banner(onnx_path)
     sys.stdout.flush()
 
-    sess, input_name = carregar_sessao_onnx(str(onnx_path))
-    sys.stdout.flush()
+
 
     if args.input_video:
         v = Path(args.input_video)
@@ -95,7 +98,7 @@ def main():
             sys.stdout.flush()
             return
 
-        processar_video(v, sess, input_name, out_root, show=args.show)
+        processar_video(v, out_root, show=args.show)
         return
 
     if args.input_folder:
@@ -103,7 +106,8 @@ def main():
         out_root.mkdir(parents=True, exist_ok=True)
 
         videos = sorted(folder.glob("*.mp4"))
-        print(Fore.CYAN + f"[INFO] Encontrados {len(videos)} videos em {folder}")
+        # print(Fore.CYAN + f"[INFO] Encontrados {len(videos)} videos em {folder}")
+        print(Fore.CYAN + f"[INFO] Encontrados {len(videos)} videos")
         sys.stdout.flush()
         
         # Acumulador de tempos
@@ -119,7 +123,7 @@ def main():
                 print(Fore.YELLOW + f"[SKIP] Video já processado: {v.name}")
                 continue
 
-            times = processar_video(v, sess, input_name, out_root, show=args.show)
+            times = processar_video(v, out_root, show=args.show)
             if times:
                 total_times["yolo"] += times["yolo"]
                 total_times["rtmpose"] += times["rtmpose"]

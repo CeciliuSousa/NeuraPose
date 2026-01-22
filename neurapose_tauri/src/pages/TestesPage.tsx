@@ -130,7 +130,7 @@ export default function TestesPage() {
     return (
         <div className="space-y-6 max-w-6xl mx-auto">
             <PageHeader
-                title="Validação e Performance"
+                title="Teste de Modelos"
                 description="Execute testes de precisão em modelos treinados e valide o desempenho real."
             />
 

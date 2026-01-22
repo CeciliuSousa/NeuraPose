@@ -38,7 +38,7 @@ class ExtratorPoseRTMPose:
         # Inicializa suavizador
         self.smoother = EmaSmoother()
         
-        print(Fore.CYAN + f"[RTMPOSE] Inicializado. Modelo: {Path(self.model_path).name}")
+        # print(Fore.CYAN + f"[RTMPOSE] Inicializado. Modelo: {Path(self.model_path).name}")
 
     def _carregar_sessao(self):
         """Configura e carrega a sessão ONNXRuntime."""

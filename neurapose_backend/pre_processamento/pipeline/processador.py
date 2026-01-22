@@ -39,7 +39,7 @@ except Exception as e:
     print(Fore.YELLOW + f"[CONFIG] Falha ao carregar configurações do usuário: {e}")
 
 
-def processar_video(video_path: Path, sess, input_name, out_root: Path, show=False):
+def processar_video(video_path: Path, out_root: Path, show=False):
     """
     Processa um vídeo para gerar dataset de treinamento.
     Usa a mesma arquitetura modular do App para garantir consistência (RTMPose + Filtros V6).
@@ -85,7 +85,7 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     res_list = yolo_detector_botsort(videos_dir=norm_path, batch_size=cm.YOLO_BATCH_SIZE)
     time_yolo = time.time() - time_yolo_start
 
-    print(Fore.GREEN + f"[OK] Deteccao concluida. Processando resultados...")
+    print(Fore.GREEN + f"[OK] Deteccao concluida. Processando resultados.")
     
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
@@ -101,7 +101,7 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
 
     # 3. EXTRAÇÃO DE POSE (RTMPose Modular)
     # --------------------------------------------------------
-    print(Fore.CYAN + f"[INFO] Iniciando inferencia RTMPose (Modular)...")
+    print(Fore.CYAN + f"[INFO] Iniciando inferencia RTMPos...")
     sys.stdout.flush()
     time_rtmpose_start = time.time()
 
