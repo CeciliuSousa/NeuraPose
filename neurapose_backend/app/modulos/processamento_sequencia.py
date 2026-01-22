@@ -26,8 +26,7 @@ class EmaSmoother:
     def __init__(self, alpha=None, min_conf=None):
         self.alpha = alpha if alpha is not None else cm.EMA_ALPHA
         self.min_conf = min_conf if min_conf is not None else cm.EMA_MIN_CONF
-        self.alpha = alpha
-        self.min_conf = min_conf
+
         self.buf = {}
 
     def step(self, gid, kps):

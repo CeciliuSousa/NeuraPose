@@ -130,7 +130,7 @@ export default function TreinoPage() {
                         setMessage({ text: '✅ Treinamento concluído!', type: 'success' });
                     }
                 } catch (e) { console.error(e); }
-            }, 1000);
+            }, 5000);
         }
         return () => { if (interval) clearInterval(interval); };
     }, [loading]);

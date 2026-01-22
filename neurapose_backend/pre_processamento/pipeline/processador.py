@@ -22,26 +22,19 @@ from neurapose_backend.pre_processamento.utils.visualizacao import desenhar_esqu
 from neurapose_backend.pre_processamento.modulos.rtmpose import preprocess_rtmpose_input, decode_simcc_output
 from neurapose_backend.pre_processamento.modulos.suavizacao import EmaSmoother
 from neurapose_backend.pre_processamento.modulos.suavizacao import EmaSmoother
-# FPS_TARGET e RTMPOSE_BATCH_SIZE sao acessados via cm.* agora
 
-
-# Para integracao com o preview do site
 try:
     from neurapose_backend.globals.state import state as state_notifier
 except:
     state_notifier = None
 
-# ==============================================================
-# CARREGAR CONFIGURAÇÕES DO USUÁRIO (Override config_master)
-# ==============================================================
-# Isso garante que o pipeline offline respeite as configurações da UI.
 try:
     from neurapose_backend.app.user_config_manager import UserConfigManager
     user_config = UserConfigManager.load_config()
     for k, v in user_config.items():
         if hasattr(cm, k):
             setattr(cm, k, v)
-    print(Fore.BLUE + f"[CONFIG] Configurações do usuário carregadas e aplicadas.")
+    # print(Fore.BLUE + f"[CONFIG] Configurações do usuário carregadas e aplicadas.")
 except Exception as e:
     print(Fore.YELLOW + f"[CONFIG] Falha ao carregar configurações do usuário: {e}")
 
@@ -103,7 +96,7 @@ def filtrar_ghosting(records, iou_thresh=0.8):
                 
                 iou = calcular_iou(dets[i]["bbox"], dets[j]["bbox"])
                 if iou > iou_thresh:
-                    # Sobreposição detectada! Remove o de menor confiança
+
                     conf_i = dets[i].get("confidence", 0)
                     conf_j = dets[j].get("confidence", 0)
                     
@@ -137,24 +130,14 @@ def calcular_pose_activity(kps_historico):
     if not kps_historico or len(kps_historico) < 5:
         return 0.0
 
-    # Converter para numpy: (Frames, Juntas, 3) -> pegamos so x,y
-    # Remove confianca (idx 2) e foca em x,y
     data = np.array(kps_historico)[:, :, :2] 
     
-    # 1. Calcular centro de gravidade da pose em cada frame (média das juntas visíveis)
-    # Ignora juntas (0,0) se possível, mas aqui vamos simplificar usando todas
-    centers = np.mean(data, axis=1, keepdims=True) # (Frames, 1, 2)
+    centers = np.mean(data, axis=1, keepdims=True)
     
-    # 2. Centralizar pose (remove movimento global/câmera)
-    # Agora temos a posicao de cada junta RELATIVA ao centro do corpo naquele frame
     data_centered = data - centers
     
-    # 3. Calcular StdDev de cada junta ao longo do tempo (Frames)
-    # stds vai ter shape (Juntas, 2)
     stds = np.std(data_centered, axis=0) 
     
-    # 4. Média dos desvios (magnitude x+y)
-    # stds.sum(axis=1) soma o stdX e stdY de cada junta
     avg_activity = np.mean(np.linalg.norm(stds, axis=1))
     
     return avg_activity
@@ -170,7 +153,6 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     preds_dir.mkdir(parents=True, exist_ok=True)
     json_dir.mkdir(parents=True, exist_ok=True)
 
-    # ------------------ Normalizar FPS (usa FPS_TARGET do config) ----------------
     cap_in = cv2.VideoCapture(str(video_path))
     W = int(cap_in.get(cv2.CAP_PROP_FRAME_WIDTH))
     H = int(cap_in.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -291,17 +273,9 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
                 "keypoints": kps.tolist()
             })
 
-            # Desenha no frame de saída (recuperar frame original?)
-            # O problema do batch no pipeline é que precisamos desenhar no vídeo LINEARMENTE (writer_pred.write).
-            # Se processamos fora de ordem ou em blocos, precisamos ter o frame disponível na hora da escrita.
-            # SOLUÇÃO: O pipeline original escreve Frame a Frame seguindo o `cap`.
-            # Se fizermos batch de inferência, precisamos "segurar" a escrita até ter o resultado.
-            # Isso complica pois teríamos que bufferizar FRAMES também.
             pass
 
-    # Para manter a escrita de vídeo síncrona e correta, vamos bufferizar FRAMES também.
-    # Buffer de frames para escrita posterior
-    video_write_buffer = [] # [(frame_img, frame_idx, detections_in_this_frame)]
+    video_write_buffer = []
 
     while True:
         if state_notifier is not None and state_notifier.stop_requested:
@@ -319,15 +293,6 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
         frame_preview = frame.copy() if show else None
         frame_output = frame.copy()
 
-        # Se não tem detecção, escrevemos direto (se o buffer estiver vazio) OU adicionamos ao buffer
-        # para manter a ordem se já tivermos frames pendentes.
-        # Mas para simplificar a lógica de batch: 
-        # Vamos processar Frames em blocos de X, coletar todos crops, rodar, e depois escrever os X frames.
-        
-        # A lógica atual do loop "While True" lê 1 frame.
-        # Vamos mudar a estratégia para ler e processar linearmente, mas segurar RTMPose.
-        
-        # Coleta detecções
         detections_active = False
 
         if regs is not None and len(regs) > 0:
@@ -351,8 +316,6 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
                 # Guardamos índice do frame para associar depois
                 batch_meta.append((x1, y1, x2, y2, center, scale, pid, conf, raw_tid, frame_idx))
 
-        # Adiciona frame ao buffer de escrita (aguardando inferencia)
-        # Precisamos saber quais IDs/Boxes pertencem a este frame para desenhar depois.
         video_write_buffer.append({
             "frame": frame_output,
             "preview": frame_preview,

@@ -35,12 +35,12 @@ COLORS = {
 }
 
 
-def gerar_grafico_matriz_confusao(cm: np.ndarray, metricas_dir: Path, modelo_nome: str = "ROBUST-LSTM"):
+def gerar_grafico_matriz_confusao(conf_matrix: np.ndarray, metricas_dir: Path, modelo_nome: str = "ROBUST-LSTM"):
     """
     Gera e salva gráfico da matriz de confusão como heatmap.
     
     Args:
-        cm: Matriz de confusão (2x2)
+        conf_matrix: Matriz de confusão (2x2)
         metricas_dir: Diretório para salvar o gráfico
         modelo_nome: Nome do modelo para incluir no título
     """
@@ -48,7 +48,7 @@ def gerar_grafico_matriz_confusao(cm: np.ndarray, metricas_dir: Path, modelo_nom
     
     # Criar heatmap com anotações
     sns.heatmap(
-        cm,
+        conf_matrix,
         annot=True,
         fmt='d',
         cmap='Blues',

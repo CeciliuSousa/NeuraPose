@@ -198,16 +198,30 @@ def main():
         for video_stem, preds in all_predictions.items():
             if preds is None:
                 continue
-            if video_stem in labels_gt:
-                gt = classificar_video_por_label(labels_gt[video_stem])
-                # preds é um dict retornado por processar_video, com chave "pred" (0 ou 1)
-                pred = preds.get("pred", 0)
-                y_true.append(gt)
-                y_pred.append(pred)
+            
+            # Buscar mapa de labels para este vídeo (ex: {"1": "normal", "6": "furto"})
+            gt_map = labels_gt.get(video_stem, {})
+            # Se não tiver labels para o vídeo, ignora
+            if not gt_map:
+                continue
+
+            # Iterar sobre cada ID predito no vídeo
+            for p_info in preds.get("ids_predicoes", []):
+                pid = str(p_info["id"])
                 
-                # Exibe classe predita para cada vídeo
-                classe_pred = cm.CLASSE2 if pred == 1 else cm.CLASSE1
-                print(Fore.CYAN + f"[CLASSE] {classe_pred}")
+                # Só avalia se existe label para este ID específico
+                if pid in gt_map:
+                    label_str = gt_map[pid]
+                    # Converter label string para ID numérico (ex: "furto" -> 1)
+                    gt_id = cm.CLASS_TO_ID.get(label_str, 0)
+                    
+                    pred_id = p_info["classe_id"]
+                    
+                    y_true.append(gt_id)
+                    y_pred.append(pred_id)
+                    
+                    classe_pred_str = cm.CLASSE2 if pred_id == 1 else cm.CLASSE1
+                    print(Fore.CYAN + f"[ID {pid}] Real: {label_str.upper()} | Pred: {classe_pred_str}")
 
         if y_true:
             acc = accuracy_score(y_true, y_pred)
@@ -216,7 +230,7 @@ def main():
             rec = recall_score(y_true, y_pred, average='macro', zero_division=0)
             bacc = balanced_accuracy_score(y_true, y_pred)
             mcc = matthews_corrcoef(y_true, y_pred)
-            cm = confusion_matrix(y_true, y_pred)
+            conf_matrix = confusion_matrix(y_true, y_pred)
 
             print(Fore.GREEN + "\n" + "="*50)
             print("METRICAS DE VALIDAÇÃO")
@@ -227,13 +241,13 @@ def main():
             print(f"Recall: {rec:.4f}")
             print(f"Balanced Acc: {bacc:.4f}")
             print(f"MCC: {mcc:.4f}")
-            print(f"\nMatriz Confusao:\n{cm}")
+            print(f"\nMatriz Confusao:\n{conf_matrix}")
 
             # Salva metricas
             metricas = {
                 "accuracy": acc, "f1_macro": f1, "precision": prec,
                 "recall": rec, "balanced_accuracy": bacc, "mcc": mcc,
-                "confusion_matrix": cm.tolist(),
+                "confusion_matrix": conf_matrix.tolist(),
                 "model_name": model_dir.name,
                 "dataset_videos": str(video_input)
             }
@@ -242,8 +256,21 @@ def main():
             with open(metricas_path, "w", encoding="utf-8") as f:
                 json.dump(metricas, f, indent=2)
             
+            # Salva resultados brutos para graficos
+            resultados_path = out_metricas_dir / "resultados.json"
+            # Converter keys do all_predictions para lista ou dict serializavel se necessario
+            # all_predictions é dict {stem: predictions_dict}
+            # O grafico espera lista de resultados (video, pred, score...)
+            lista_resultados = []
+            for video_stem, preds in all_predictions.items():
+                if preds:
+                    lista_resultados.append(preds)
+            
+            with open(resultados_path, "w", encoding="utf-8") as f:
+                json.dump(lista_resultados, f, indent=2)
+
             # Gera graficos
-            gerar_todos_graficos(y_true, y_pred, out_metricas_dir)
+            gerar_todos_graficos(metricas_path, resultados_path, labels_gt_path, model_dir.name)
             
             print(Fore.GREEN + f"\n[OK] Relatorio salvo em: {out_report_dir}")
 

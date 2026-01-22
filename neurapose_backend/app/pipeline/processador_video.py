@@ -200,19 +200,14 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
     if not records:
         return None
 
-    # ---------------- FILTRAR GHOSTING (V5) ----------------
-    records = filtrar_ghosting(records, iou_thresh=0.8)
-
     # ============================================================
-    # 2. FILTRAGEM INTELIGENTE (LIMPEZA V6)
+    # 2. FILTRAGEM INTELIGENTE (LIMPEZA V6 - SYNC COM PRE-PROCESSAMENTO)
     # ============================================================
-    # Portado do Pre-Processamento para garantir paridade
     
     stats_id = {} 
     for reg in records:
         pid = reg["id_persistente"]
         bbox = reg["bbox"]
-        kps = reg.get("keypoints", [])
         
         # Calcula o centro da caixa (x, y)
         centro = [(bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2]
@@ -220,13 +215,12 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
         if pid not in stats_id:
             stats_id[pid] = {
                 "frames": 0,
-                "path": [centro],
-                "keypoints": []
+                "inicio": centro,
+                "fim": centro
             }
         
         stats_id[pid]["frames"] += 1
-        stats_id[pid]["path"].append(centro)
-        stats_id[pid]["keypoints"].append(kps)
+        stats_id[pid]["fim"] = centro # Atualiza última posição conhecida
 
     # Define quem fica e quem sai
     ids_validos = []
@@ -237,21 +231,12 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
             # print(Fore.YELLOW + f"  - ID {pid} removido (Curta duracao: {dados['frames']} frames)")
             continue
             
-        # REGRA B: Deslocamento ACUMULADO
-        caminho = np.array(dados["path"])
-        steps = np.diff(caminho, axis=0)
-        dist_steps = np.linalg.norm(steps, axis=1)
-        distancia_total = np.sum(dist_steps)
+        # REGRA B: Imobilidade (Ignora objetos estaticos)
+        # Se moveu menos de 50 pixels no video todo, remove.
+        distancia = calcular_deslocamento(dados["inicio"], dados["fim"])
         
-        if distancia_total < 80.0:
-            # print(Fore.YELLOW + f"  - ID {pid} removido (Estatico: Moveu {distancia_total:.1f}px total)")
-            continue
-
-        # REGRA C: Atividade de Pose
-        activity_score = calcular_pose_activity(dados["keypoints"])
-        
-        if activity_score < cm.MIN_POSE_ACTIVITY:
-            # print(Fore.YELLOW + f"  - ID {pid} removido (Inanimado: Activity {activity_score:.2f})")
+        if distancia < 50.0:
+            # print(Fore.YELLOW + f"  - ID {pid} removido (Estatico: Moveu {distancia:.1f}px)")
             continue
             
         ids_validos.append(pid)
@@ -350,16 +335,7 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
             "bbox": reg["bbox"],
             "confidence": reg["confidence"]
         })
-            f_id = reg["frame"]
-            if f_id not in tracking_analysis["tracking_by_frame"]:
-                tracking_analysis["tracking_by_frame"][f_id] = []
-            
-            tracking_analysis["tracking_by_frame"][f_id].append({
-                "botsort_id": reg["botsort_id"],
-                "id_persistente": reg["id_persistente"],
-                "bbox": reg["bbox"],
-                "confidence": reg["confidence"]
-            })
+
     
     # Salva o arquivo final limpo de tracking JSON (Igual ao pre-processamento)
     # Tenta obter FPS do vídeo original, fallback para 30
@@ -427,14 +403,14 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
             {
                 "id": int(gid),
                 "classe_id": int(id_preds.get(gid, 0)),
-                f"score_{CLASSE2}": float(id_scores.get(gid, 0.0)),
+                f"score_{cm.CLASSE2}": float(id_scores.get(gid, 0.0)),
             }
         )
 
     return {
         "video": str(video_path),
         "pred": int(video_pred),
-        f"score_{CLASSE2}": float(video_score),
+        f"score_{cm.CLASSE2}": float(video_score),
         "tempos": tempos,
         "ids_predicoes": ids_predicoes,
     }

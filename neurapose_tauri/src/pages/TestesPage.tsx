@@ -91,7 +91,7 @@ export default function TestesPage() {
                         setPageStatus('test', 'success');
                     }
                 } catch (e) { console.error(e); }
-            }, 1000);
+            }, 5000);
         }
         return () => { if (interval) clearInterval(interval); };
     }, [loading]);
