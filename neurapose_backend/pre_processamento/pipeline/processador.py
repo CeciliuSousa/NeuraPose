@@ -53,6 +53,76 @@ def calcular_deslocamento(p_inicial, p_final):
     p2 = np.array(p_final)
     return np.linalg.norm(p2 - p1)
 
+def calcular_iou(boxA, boxB):
+    """Calcula Intersection over Union (IoU) entre duas caixas [x1, y1, x2, y2]."""
+    xA = max(boxA[0], boxB[0])
+    yA = max(boxA[1], boxB[1])
+    xB = min(boxA[2], boxB[2])
+    yB = min(boxA[3], boxB[3])
+
+    interArea = max(0, xB - xA) * max(0, yB - yA)
+    boxAArea = (boxA[2] - boxA[0]) * (boxA[3] - boxA[1])
+    boxBArea = (boxB[2] - boxB[0]) * (boxB[3] - boxB[1])
+
+    iou = interArea / float(boxAArea + boxBArea - interArea + 1e-6)
+    return iou
+
+def filtrar_ghosting(records, iou_thresh=0.8):
+    """
+    Remove IDs duplicados (Ghosting) que ocupam o mesmo espaço físico no mesmo frame.
+    Mantém o ID com maior confiança ou, em caso de empate, o menor ID.
+    """
+    if not records:
+        return []
+
+    # Agrupa por frame
+    frames_dict = {}
+    for r in records:
+        fid = r["frame"]
+        if fid not in frames_dict:
+            frames_dict[fid] = []
+        frames_dict[fid].append(r)
+
+    records_filtrados = []
+    ids_removidos_count = 0
+
+    for fid, dets in frames_dict.items():
+        if len(dets) < 2:
+            records_filtrados.extend(dets)
+            continue
+        
+        # Marca para remoção
+        removidos_indices = set()
+        
+        # Compara par a par
+        for i in range(len(dets)):
+            if i in removidos_indices: continue
+            
+            for j in range(i + 1, len(dets)):
+                if j in removidos_indices: continue
+                
+                iou = calcular_iou(dets[i]["bbox"], dets[j]["bbox"])
+                if iou > iou_thresh:
+                    # Sobreposição detectada! Remove o de menor confiança
+                    conf_i = dets[i].get("confidence", 0)
+                    conf_j = dets[j].get("confidence", 0)
+                    
+                    if conf_i < conf_j:
+                        removidos_indices.add(i)
+                    else:
+                        removidos_indices.add(j)
+                        
+        for k, r in enumerate(dets):
+            if k not in removidos_indices:
+                records_filtrados.append(r)
+            else:
+                ids_removidos_count += 1
+                
+    if ids_removidos_count > 0:
+        print(Fore.YELLOW + f"[V5] Filtro Anti-Ghosting: {ids_removidos_count} detecções sobrepostas removidas.")
+        
+    return records_filtrados
+
 def calcular_pose_activity(kps_historico):
     """
     Calcula a variância média das juntas em relação ao centro da pose.
@@ -145,24 +215,9 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     cap = cv2.VideoCapture(str(norm_path))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
+    
+    # Video Writer (Pred) SETUP MOVED TO END OF PIPELINE (After Filtering)
     out_video = preds_dir / f"{video_path.stem}_{int(fps_out)}fps_pose.mp4"
-    writer_pred = cv2.VideoWriter(
-        str(out_video),
-        cv2.VideoWriter_fourcc(*"avc1"),
-        fps_out,
-        (W, H)
-    )
-    if not writer_pred.isOpened():
-        print(Fore.RED + f"[ERRO] Falha ao iniciar VideoWriter (Pred) com codec avc1. Tentando fallback para mp4v...")
-        writer_pred = cv2.VideoWriter(
-            str(out_video),
-            cv2.VideoWriter_fourcc(*"mp4v"),
-            fps_out,
-            (W, H)
-        )
-        if not writer_pred.isOpened():
-             print(Fore.RED + f"[FATAL] Não foi possível criar o arquivo de vídeo de predições: {out_video}")
-             sys.exit(1)
 
     json_path = json_dir / f"{video_path.stem}_{int(fps_out)}fps.json"
 
@@ -327,40 +382,7 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
                      current_batch_records[fid] = []
                  current_batch_records[fid].append(r)
 
-            # Escreve Vídeo
-            for item in video_write_buffer:
-                fid = item["frame_idx"]
-                frm_out = item["frame"]
-                frm_prev = item["preview"]
-                
-                recs_frame = current_batch_records.get(fid, [])
-                
-                # Desenha
-                for rec in recs_frame:
-                    kps = np.array(rec["keypoints"]) # ja vem como lista do registro
-                    x1,y1,x2,y2 = rec["bbox"]
-                    pid = rec["id_persistente"]
-                    conf = rec["confidence"]
-                    
-                    base_color = color_for_id(pid)
-                    frm_out = desenhar_esqueleto(frm_out, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
-                    cv2.rectangle(frm_out, (x1, y1), (x2, y2), (0,255,0), 2)
-                    
-                    label = f"ID_P: {pid} | Pessoa: {conf:.2f}"
-                    (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-                    cv2.rectangle(frm_out, (x1, y1 - th - 12), (x1 + tw + 10, y1), (255,255,255), -1)
-                    cv2.putText(frm_out, label, (x1 + 5, y1 - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 2)
 
-                    if show and frm_prev is not None:
-                         frm_prev = desenhar_esqueleto(frm_prev, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
-                         cv2.rectangle(frm_prev, (x1, y1), (x2, y2), (0,255,0), 2)
-                         cv2.rectangle(frm_prev, (x1, y1 - th - 12), (x1 + tw + 10, y1), (255,255,255), -1)
-                         cv2.putText(frm_prev, label, (x1 + 5, y1 - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 2)
-
-                # Write & Stream
-                writer_pred.write(frm_out)
-                if show and state_notifier is not None and frm_prev is not None:
-                    state_notifier.set_frame(frm_prev)
 
             # Limpa Buffers
             batch_crops = []
@@ -387,33 +409,8 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
                  current_batch_records[fid] = []
              current_batch_records[fid].append(r)
 
-        for item in video_write_buffer:
-            fid = item["frame_idx"]
-            frm_out = item["frame"]
-            frm_prev = item["preview"]
-            recs_frame = current_batch_records.get(fid, [])
-            
-            for rec in recs_frame:
-                kps = np.array(rec["keypoints"])
-                x1,y1,x2,y2 = rec["bbox"]
-                pid = rec["id_persistente"]
-                conf = rec["confidence"]
-                base_color = color_for_id(pid)
-                frm_out = desenhar_esqueleto(frm_out, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
-                cv2.rectangle(frm_out, (x1, y1), (x2, y2), (0,255,0), 2)
-                label = f"ID_P: {pid} | Pessoa: {conf:.2f}"
-                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-                cv2.rectangle(frm_out, (x1, y1 - th - 12), (x1 + tw + 10, y1), (255,255,255), -1)
-                cv2.putText(frm_out, label, (x1 + 5, y1 - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 2)
-                
-                if show and frm_prev is not None: # Apply to preview as well
-                         frm_prev = desenhar_esqueleto(frm_prev, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
-                         cv2.rectangle(frm_prev, (x1, y1), (x2, y2), (0,255,0), 2)
-                         # ... (other draw calls if needed for preview)
-
-            writer_pred.write(frm_out)
-            if show and state_notifier is not None and frm_prev is not None:
-                state_notifier.set_frame(frm_prev)
+        # VIDEO WRITING REMOVED FROM HERE
+        pass
 
     time_rtmpose = time.time() - time_rtmpose_start
     
@@ -421,15 +418,10 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     sys.stdout.flush()
     cap.release()
     
-    # Finaliza o vídeo
-    writer_pred.release()
-    print(Fore.GREEN + f"[OK] Video salvo: {out_video.name}")
-
     # ============================================================
-    # 1. SALVAR JSON BRUTO (Opcional, mas bom para debug)
+    # 0. FILTRO GHOSTING (V5) - Antes de tudo
     # ============================================================
-    with open(json_path, "w") as f:
-        json.dump(registros, f, indent=2)
+    registros = filtrar_ghosting(registros, iou_thresh=0.8)
 
     # ============================================================
     # 2. FILTRAGEM INTELIGENTE (LIMPEZA V6)
@@ -462,69 +454,136 @@ def processar_video(video_path: Path, sess, input_name, out_root: Path, show=Fal
     ids_validos = []
     
     for pid, dados in stats_id.items():
-        # REGRA A: Duracao (Ignora "fantasmas" rapidos)
+        # REGRA A: Duracao
         if dados["frames"] < 30:
-            print(Fore.YELLOW + f"  - ID {pid} removido (Curta duracao: {dados['frames']} frames)")
+            # print(Fore.YELLOW + f"  - ID {pid} removido (Curta duracao: {dados['frames']} frames)")
             continue
             
-        # REGRA B: Deslocamento ACUMULADO (Soma dos passos)
-        # Corrige erro onde pessoa vai e volta para mesmo lugar
+        # REGRA B: Deslocamento ACUMULADO
         caminho = np.array(dados["path"])
-        # Calcula distancias entre pontos consecutivos: (P2-P1, P3-P2, ...)
-        steps = np.diff(caminho, axis=0) # shape (N-1, 2)
-        dist_steps = np.linalg.norm(steps, axis=1) # shape (N-1,)
+        steps = np.diff(caminho, axis=0)
+        dist_steps = np.linalg.norm(steps, axis=1)
         distancia_total = np.sum(dist_steps)
         
-        # Deslocamento absoluto (Inicio -> Fim) - Apenas informativo ou regra secundaria
-        dist_abs = calcular_deslocamento(caminho[0], caminho[-1])
-        
-        # Se moveu muito pouco no total (somando ida e volta), é estático.
-        if distancia_total < 80.0:  # Aumentamos um pouco pois é soma total
-            print(Fore.YELLOW + f"  - ID {pid} removido (Estatico: Moveu {distancia_total:.1f}px total / {dist_abs:.1f}px abs)")
+        if distancia_total < 80.0:
+            # print(Fore.YELLOW + f"  - ID {pid} removido (Estatico: Moveu {distancia_total:.1f}px total)")
             continue
 
-        # REGRA C: Atividade de Pose (Respiração/Ajustes)
-        # Usa RTMPose para ver se o esqueleto "vibra" (vivo) ou é rígido (cadeira)
+        # REGRA C: Atividade de Pose
         activity_score = calcular_pose_activity(dados["keypoints"])
         
         if activity_score < cm.MIN_POSE_ACTIVITY:
-            print(Fore.YELLOW + f"  - ID {pid} removido (Objeto Inanimado: Activity {activity_score:.2f} < {cm.MIN_POSE_ACTIVITY})")
+            # print(Fore.YELLOW + f"  - ID {pid} removido (Inanimado: Activity {activity_score:.2f})")
             continue
             
         ids_validos.append(pid)
-        # Debug info dos que ficaram
         print(Fore.BLUE + f"  + ID {pid} MANTIDO (Frames: {dados['frames']} | Dist: {distancia_total:.0f}px | Activity: {activity_score:.2f})")
 
     print(Fore.GREEN + f"[OK] IDs Finais Mantidos: {ids_validos}")
     sys.stdout.flush()
 
+    # FILTRAR REGISTROS (Sobrescrevendo lista original com a filtrada)
+    registros = [r for r in registros if r["id_persistente"] in ids_validos]
+
+    if not registros:
+        print(Fore.RED + "[AVISO] Todos os IDs foram filtrados!")
+        # Cria video vazio ou sai? Vamos salvar JSON vazio.
+    
     # ============================================================
-    # 3. SALVAR TRACKING FINAL (Apenas IDs Validos)
+    # 3. SALVAR JSON (AGORA LIMPO)
+    # ============================================================
+    with open(json_path, "w") as f:
+        json.dump(registros, f, indent=2)
+    print(Fore.GREEN + f"[OK] JSON Limpo salvo em: {json_path.name}") 
+
+    # ============================================================
+    # 4. GERAR VÍDEO FINAL (2ª Passada - Apenas IDs Limpos)
+    # ============================================================
+    print(Fore.CYAN + f"[INFO] Gerando video de predicao LIMPO (2a passada)...")
+    
+    writer_pred = cv2.VideoWriter(
+        str(out_video),
+        cv2.VideoWriter_fourcc(*"avc1"),
+        fps_out,
+        (W, H)
+    )
+    if not writer_pred.isOpened():
+        writer_pred = cv2.VideoWriter(
+            str(out_video),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            fps_out,
+            (W, H)
+        )
+    
+    if writer_pred.isOpened():
+        # Reabre video normalizado
+        cap_draw = cv2.VideoCapture(str(norm_path))
+        
+        # Otimizacao: Agrupar registros por frame no dict
+        recs_by_frame = {}
+        for r in registros:
+            fid = r["frame"]
+            if fid not in recs_by_frame: recs_by_frame[fid] = []
+            recs_by_frame[fid].append(r)
+            
+        current_frame_idx = 1
+        while True:
+            ok, frame = cap_draw.read()
+            if not ok: break
+            
+            frame_recs = recs_by_frame.get(current_frame_idx, [])
+            
+            # Desenha
+            for rec in frame_recs:
+                kps = np.array(rec["keypoints"])
+                x1,y1,x2,y2 = rec["bbox"]
+                pid = rec["id_persistente"]
+                conf = rec["confidence"]
+                base_color = color_for_id(pid)
+                
+                frame = desenhar_esqueleto(frame, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0,255,0), 2)
+                
+                label = f"ID_P: {pid} | Pessoa: {conf:.2f}"
+                (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
+                cv2.rectangle(frame, (x1, y1 - th - 12), (x1 + tw + 10, y1), (255,255,255), -1)
+                cv2.putText(frame, label, (x1 + 5, y1 - 7), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0,0,0), 2)
+            
+            writer_pred.write(frame)
+            current_frame_idx += 1
+            
+        cap_draw.release()
+        writer_pred.release()
+        print(Fore.GREEN + f"[OK] Video Limpo salvo: {out_video.name}")
+    else:
+        print(Fore.RED + f"[ERRO] Falha ao criar video limpo.")
+
+    # ============================================================
+    # 5. SALVAR TRACKING FINAL
     # ============================================================
     # Filtra o mapa de IDs para remover os excluidos
     id_map_limpo = {str(k): int(v) for k, v in id_map.items() if v in ids_validos}
 
     tracking_analysis = {
         "video": video_path.name,
-        "total_frames": frame_idx - 1,
+        "total_frames": current_frame_idx - 1,
         "id_map": id_map_limpo,
         "tracking_by_frame": {}
     }
     
     # Filtra os registros frame a frame
     for reg in registros:
-        # So adiciona se o ID estiver na lista de validos
-        if reg["id_persistente"] in ids_validos:
-            f_id = reg["frame"]
-            if f_id not in tracking_analysis["tracking_by_frame"]:
-                tracking_analysis["tracking_by_frame"][f_id] = []
-            
-            tracking_analysis["tracking_by_frame"][f_id].append({
-                "botsort_id": reg["botsort_id"],
-                "id_persistente": reg["id_persistente"],
-                "bbox": reg["bbox"],
-                "confidence": reg["confidence"]
-            })
+        # Aqui, registros JA ESTA FILTRADO, entao nao precisa checar 'in ids_validos'
+        f_id = reg["frame"]
+        if f_id not in tracking_analysis["tracking_by_frame"]:
+            tracking_analysis["tracking_by_frame"][f_id] = []
+        
+        tracking_analysis["tracking_by_frame"][f_id].append({
+            "botsort_id": reg["botsort_id"],
+            "id_persistente": reg["id_persistente"],
+            "bbox": reg["bbox"],
+            "confidence": reg["confidence"]
+        })
     
     # Salva o arquivo final limpo
     tracking_path = json_dir / f"{video_path.stem}_{int(fps_out)}fps_tracking.json"
