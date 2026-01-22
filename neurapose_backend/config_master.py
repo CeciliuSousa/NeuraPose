@@ -57,7 +57,7 @@ EMA_MIN_CONF = 0.0                  # Conf mínima para EMA
 # Filtros de Pós-Processamento
 MIN_POSDETECTION_CONF = 0.6         # Confiança mínima para detecção YOLO
 YOLO_CLASS_PERSON = 0               # Classe 'pessoa' no COCO dataset
-YOLO_BATCH_SIZE = 64                # Tamanho do batch para inferência YOLO (Otimização de Performance)
+YOLO_BATCH_SIZE = 64               # Tamanho do batch para inferência YOLO (Otimização de Performance)
 RTMPOSE_BATCH_SIZE = 64             # Tamanho do batch para inferência Pose (Novo)
 MIN_POSE_ACTIVITY = 0.8             # StdDev médio mínimo (pixels) para considerar ID ativo
 

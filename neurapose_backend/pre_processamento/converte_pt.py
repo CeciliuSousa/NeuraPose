@@ -207,7 +207,7 @@ def main():
 
     log(f"[OK] Dataset salvo: {OUT_PT}")
     log(f"[OK] Total amostras: {len(data_tensor)}")
-    log(f"[FIM] Conversao concluida ({total_videos} videos)")
+    log(f"Conversao concluida ({total_videos} videos)")
 
 
 if __name__ == "__main__":

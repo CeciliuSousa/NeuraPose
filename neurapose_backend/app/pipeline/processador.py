@@ -17,13 +17,13 @@ from colorama import Fore
 
 # Importações do projeto
 import neurapose_backend.config_master as cm
-from neurapose_backend.detector.yolo_detector import yolo_detector_botsort as yolo_detector
 
 # --- Módulos Modulares Unificados ---
 from neurapose_backend.rtmpose.extracao_pose_rtmpose import ExtratorPoseRTMPose
-from neurapose_backend.nucleo.filtros import filtrar_ids_validos_v6
 from neurapose_backend.nucleo.sequencia import montar_sequencia_individual
 from neurapose_backend.nucleo.visualizacao import gerar_video_predicao
+from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
+from neurapose_backend.nucleo.pipeline_unificado import executar_pipeline_extracao
 
 # Módulo de Inferência LSTM (Específico do APP)
 from neurapose_backend.app.modulos.inferencia_lstm import rodar_lstm_uma_sequencia
@@ -39,11 +39,6 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
         video_path: Caminho do vídeo.
         model: Modelo LSTM carregado.
         mu, sigma: Estatísticas de normalização do LSTM.
-        sess, input_name: (Obsoletos, mantidos por compatibilidade, mas o Extrator usa o seu próprio).
-                          IDEALMENTE: ExtratorPoseRTMPose deveria ser injetado ou instanciado uma vez fora.
-                          Para refatoração segura, instanciaremos aqui ou usaremos um singleton no futuro.
-                          Como 'sess' vem de fora (main.py), vamos ignorá-lo e deixar o Extrator gerenciar sua sessão,
-                          ou passar 'sess' se o construtor permitir. O Extrator carrega sua própria sessão hoje.
     """
     
     # Inicializa Extrator RTMPose
@@ -63,7 +58,7 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
     if not output_dir: raise ValueError("output_dir obrigatório")
     predicoes_dir = output_dir / "predicoes"
     jsons_dir = output_dir / "jsons"
-    videos_norm_dir = output_dir / "videos_norm" # Separado para nao poluir
+    videos_norm_dir = output_dir / "videos" # Separado para nao poluir
     
     predicoes_dir.mkdir(parents=True, exist_ok=True)
     jsons_dir.mkdir(parents=True, exist_ok=True)
@@ -78,90 +73,26 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
     if not norm_path:
         return None
 
-    # 2. DETECTOR (YOLO + BoTSORT + OSNet)
+    # 2. PIPELINE UNIFICADO (Detecção + Pose + Filtros)
     # ============================================================
-    print(Fore.CYAN + f"[1/4] Executando Detecção e Tracking (YOLO+BoTSORT)...")
-    d0 = time.time()
+    # Substitui toda a lógica manual anterior pela chamada modular
+    records, id_map, ids_validos, total_frames, t_extracao = executar_pipeline_extracao(
+        video_path_norm=norm_path,
+        pose_extractor=pose_extractor,
+        batch_size=cm.YOLO_BATCH_SIZE,
+        verbose=True
+    )
     
-    # Executa YOLO no vídeo normalizado
-    resultados_list = yolo_detector(videos_dir=norm_path)
-    
-    d1 = time.time()
-    tempos["detector_total"] = d1 - d0
+    # Atualiza tempos
+    tempos["detector_total"] = t_extracao["yolo"]
+    tempos["rtmpose_total"] = t_extracao["rtmpose"]
 
-    if not resultados_list:
+    if not records:
         return None
-
-    res = resultados_list[0]
-    results_yolo = res["results"] # Lista de objetos Results do Ultralytics
-    id_map = res.get("id_map", {})
-
-    # As pastas já foram criadas no início
 
     pred_video_path = predicoes_dir / f"{video_path.stem}_pred.mp4"
     json_path = jsons_dir / f"{video_path.stem}.json"
-    
-    # Carrega vídeo NORMALIZADO para leitura de frames no passo de Pose
-    cap = cv2.VideoCapture(str(norm_path))
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    
-    # 2. EXTRAÇÃO DE POSE (RTMPose Modular)
-    # ============================================================
-    print(Fore.CYAN + f"[2/4] Executando Extração de Pose (RTMPose Modular)...")
-    p0 = time.time()
-    
-    records = []
-    frame_idx = 1
-    
-    # Loop frame a frame para extração de pose
-    while True:
-        ok, frame = cap.read()
-        if not ok: break
-        
-        # Pega as detecções correspondentes a este frame
-        if frame_idx <= len(results_yolo):
-            dets = results_yolo[frame_idx-1].boxes
-        else:
-            dets = None
-            
-        # Processa frame com o Extrator Unificado
-        # Ele já faz crop, inferência, transforma coords e suaviza (EMA)
-        frame_regs, _ = pose_extractor.processar_frame(
-            frame_img=frame,
-            detections_yolo=dets,
-            frame_idx=frame_idx,
-            id_map=id_map,
-            desenhar_no_frame=False
-        )
-        
-        records.extend(frame_regs)
-        frame_idx += 1
-        
-    cap.release()
-    p1 = time.time()
-    tempos["rtmpose_total"] = p1 - p0
 
-    if not records:
-        print(Fore.RED + "[AVISO] Nenhuma pose detectada.")
-        return None
-
-    # 3. FILTRAGEM E LIMPEZA (Núcleo Modular V6)
-    # ============================================================
-    print(Fore.CYAN + f"[3/4] Filtrando IDs (Lógica Unificada V6)...")
-    
-    ids_validos = filtrar_ids_validos_v6(
-        registros=records,
-        min_frames=cm.MIN_FRAMES_PER_ID, # 30
-        min_dist=50.0,                   # Padrão V6
-        verbose=False
-    )
-    
-    # Filtra a lista de registros mantendo apenas os válidos
-    records = [r for r in records if r["id_persistente"] in ids_validos]
-
-    if not records:
-        print(Fore.RED + "[AVISO] Todos os IDs foram removidos pelo filtro.")
-        return None
 
     # 4. CLASSIFICAÇÃO SEQUENCIAL (LSTM)
     # ============================================================
@@ -208,7 +139,26 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(records, f, indent=2, ensure_ascii=False)
 
-    # 5. GERAÇÃO DE VÍDEO E RELATÓRIOS
+    # 5. GERAÇÃO DE RELATÓRIOS (Tracking JSON)
+    # ============================================================
+    print(Fore.CYAN + f"[5/5] Gerando Relatórios de Tracking...")
+    
+    
+    trackings_dir = output_dir / "jsons"
+    trackings_dir.mkdir(parents=True, exist_ok=True)
+    
+    tracking_json_path = trackings_dir / f"{video_path.stem}_tracking.json"
+    
+    gerar_relatorio_tracking(
+        registros=records,
+        id_map=id_map,
+        ids_validos=ids_validos,
+        total_frames=total_frames,
+        video_name=video_path.name,
+        output_path=tracking_json_path
+    )
+    
+    # 6. GERAÇÃO DE VÍDEO FINAL
     # ============================================================
     
     # Vídeo Final (Usa módulo nucleo/visualizacao)

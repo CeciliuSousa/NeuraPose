@@ -269,8 +269,5 @@ def main():
             
             print(Fore.GREEN + f"\n[OK] Relatorio salvo em: {out_report_dir}")
 
-    print(Fore.GREEN + "\n[FIM] Teste concluido!")
-
-
 if __name__ == "__main__":
     main()

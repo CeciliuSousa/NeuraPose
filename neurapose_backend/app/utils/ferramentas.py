@@ -102,6 +102,7 @@ def carregar_sessao_onnx(model_path: str | Path):
             active_providers = sess.get_providers()
             if 'CUDAExecutionProvider' in active_providers:
                 # print(Fore.GREEN + "RTMPose usando GPU (CUDAExecutionProvider)")
+                pass
             else:
                 print(Fore.YELLOW + f"RTMPose usando CPU ({active_providers[0]})")
             

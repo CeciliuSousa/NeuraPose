@@ -69,7 +69,7 @@ def gerar_grafico_matriz_confusao(conf_matrix: np.ndarray, metricas_dir: Path, m
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
     
-    print(Fore.GREEN + f"[OK] Gráfico de matriz de confusão salvo: {output_path}")
+    # print(Fore.GREEN + f"[OK] Gráfico de matriz de confusão salvo: {output_path}")
 
 
 def gerar_grafico_distribuicao_classes(metricas: Dict[str, Any], metricas_dir: Path, modelo_nome: str = "ROBUST-LSTM"):
@@ -81,14 +81,14 @@ def gerar_grafico_distribuicao_classes(metricas: Dict[str, Any], metricas_dir: P
         metricas_dir: Diretório para salvar o gráfico
         modelo_nome: Nome do modelo
     """
-    cm = np.array(metricas['confusion_matrix'])
+    conf_matrix = np.array(metricas['confusion_matrix'])
     
     # Se a matriz não for 2x2, ajustar
-    if cm.shape != (2, 2):
+    if conf_matrix.shape != (2, 2):
         print(Fore.YELLOW + "[AVISO] Matriz de confusão não é 2x2, ajustando...")
         return
     
-    TN, FP, FN, TP = cm.ravel()
+    TN, FP, FN, TP = conf_matrix.ravel()
     
     # Calcular totais
     total_classe2_real = TN + FP
@@ -129,7 +129,7 @@ def gerar_grafico_distribuicao_classes(metricas: Dict[str, Any], metricas_dir: P
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
     
-    print(Fore.GREEN + f"[OK] Gráfico de distribuição de classes salvo: {output_path}")
+    # print(Fore.GREEN + f"[OK] Gráfico de distribuição de classes salvo: {output_path}")
 
 
 def gerar_grafico_metricas_comparativas(metricas: Dict[str, Any], metricas_dir: Path, modelo_nome: str = cm.TEMPORAL_MODEL):
@@ -179,7 +179,7 @@ def gerar_grafico_metricas_comparativas(metricas: Dict[str, Any], metricas_dir: 
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
     
-    print(Fore.GREEN + f"[OK] Gráfico de métricas comparativas salvo: {output_path}")
+    # print(Fore.GREEN + f"[OK] Gráfico de métricas comparativas salvo: {output_path}")
 
 
 def gerar_grafico_distribuicao_confianca(resultados: list, labels: Dict[str, Any], metricas_dir: Path, modelo_nome: str = "ROBUST-LSTM"):
@@ -244,7 +244,7 @@ def gerar_grafico_distribuicao_confianca(resultados: list, labels: Dict[str, Any
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
     
-    print(Fore.GREEN + f"[OK] Gráfico de distribuição de confiança salvo: {output_path}")
+    # print(Fore.GREEN + f"[OK] Gráfico de distribuição de confiança salvo: {output_path}")
 
 
 def gerar_todos_graficos(metricas_json_path: Path, resultados_json_path: Path, labels_json_path: Path, modelo_nome: str = "ROBUST-LSTM"):
@@ -270,8 +270,8 @@ def gerar_todos_graficos(metricas_json_path: Path, resultados_json_path: Path, l
     print(Fore.CYAN + f"\n[INFO] Gerando gráficos de análise para {modelo_nome}...\n")
     
     # 1. Matriz de Confusão
-    cm = np.array(metricas['confusion_matrix'])
-    gerar_grafico_matriz_confusao(cm, metricas_dir, modelo_nome)
+    conf_matrix = np.array(metricas['confusion_matrix'])
+    gerar_grafico_matriz_confusao(conf_matrix, metricas_dir, modelo_nome)
     
     # 2. Distribuição de Classes
     gerar_grafico_distribuicao_classes(metricas, metricas_dir, modelo_nome)
@@ -290,4 +290,4 @@ def gerar_todos_graficos(metricas_json_path: Path, resultados_json_path: Path, l
     else:
         print(Fore.YELLOW + "[AVISO] Arquivos de resultados ou labels não encontrados para gráfico de confiança")
     
-    print(Fore.GREEN + f"\n[OK] Todos os gráficos foram gerados em: {metricas_dir}\n")
+    # print(Fore.GREEN + f"\n[OK] Todos os gráficos foram gerados em: {metricas_dir}\n")
