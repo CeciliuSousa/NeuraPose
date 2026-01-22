@@ -30,14 +30,16 @@ def get_config():
     parser.add_argument("--name", type=str, default=cm.TRAINED_MODEL_NAME, help=f"Nome para salvar o modelo (default: {cm.TRAINED_MODEL_NAME})")
 
     # Hiperparametros do Modelo
-    parser.add_argument('--dropout', type=float, default=0.3, help='Taxa de dropout')
-    parser.add_argument('--hidden_size', type=int, default=128, help='Tamanho da camada oculta')
-    parser.add_argument('--num_layers', type=int, default=2, help='Numero de camadas RNN')
-    parser.add_argument('--num_heads', type=int, default=8, help='Numero de cabecas (Transformer/TFT)')
+    parser.add_argument('--dropout', type=float, default=cm.LSTM_DROPOUT, help=f'Taxa de dropout (default: {cm.LSTM_DROPOUT})')
+    parser.add_argument('--hidden_size', type=int, default=cm.LSTM_HIDDEN_SIZE, help=f'Tamanho da camada oculta (default: {cm.LSTM_HIDDEN_SIZE})')
+    parser.add_argument('--num_layers', type=int, default=cm.LSTM_NUM_LAYERS, help=f'Numero de camadas RNN (default: {cm.LSTM_NUM_LAYERS})')
+    parser.add_argument('--num_heads', type=int, default=cm.LSTM_NUM_HEADS, help=f'Numero de cabecas (Transformer/TFT) (default: {cm.LSTM_NUM_HEADS})')
     parser.add_argument('--num_channels', type=int, default=cm.NUM_CHANNELS, help='Canais (TCN/WaveNet)')
-    parser.add_argument('--kernel_size', type=int, default=5, help='Tamanho do kernel (TCN/WaveNet)')
+    parser.add_argument('--kernel_size', type=int, default=cm.LSTM_KERNEL_SIZE, help=f'Tamanho do kernel (TCN/WaveNet) (default: {cm.LSTM_KERNEL_SIZE})')
     parser.add_argument('--num_classes', type=int, default=cm.NUM_CLASSES, help=f'Numero de classes (default: {cm.NUM_CLASSES})')
-    parser.add_argument('--input_size', type=int, default=cm.NUM_JOINTS * cm.NUM_CHANNELS, help='Numero de features por timestep')
+    # O input size é fixo baseado nos keypoints e canais definidos no config master
+    input_sz = cm.NUM_JOINTS * cm.NUM_CHANNELS
+    parser.add_argument('--input_size', type=int, default=input_sz, help=f'Numero de features por timestep (default: {input_sz})')
 
     # Paths (defaults do config_master)
     parser.add_argument('--dataset', type=str, default=str(cm.TRAINING_DATA_PATH), help='Caminho do dataset .pt/.pkl')
@@ -47,6 +49,13 @@ def get_config():
 
     args, _ = parser.parse_known_args()
 
+    # Se o usuário não passou argumentos CLI, garantimos que args reflita o GLOBAL STATE do config_master
+    # que já foi atualizado pelo UserConfigManager no main.py
+    if args.epochs == cm.EPOCHS: args.epochs = cm.EPOCHS
+    if args.batch_size == cm.BATCH_SIZE: args.batch_size = cm.BATCH_SIZE
+    if args.lr == cm.LEARNING_RATE: args.lr = cm.LEARNING_RATE
+    if args.model == cm.TEMPORAL_MODEL: args.model = cm.TEMPORAL_MODEL
+    
     model_map = {
         "lstm": LSTM,
         "robust": RobustLSTM,

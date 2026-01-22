@@ -14,6 +14,13 @@ import os
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
+# Supressão de logs do ONNXRuntime (Warnings não críticos de execução)
+try:
+    import onnxruntime as ort
+    ort.set_default_logger_severity(3) # 3 = ERROR (0=VERBOSE, 1=INFO, 2=WARN, 3=ERROR)
+except ImportError:
+    pass
+
 # ==============================================================
 # SEÇÃO 1: MODELOS
 # ==============================================================
@@ -48,10 +55,10 @@ EMA_ALPHA = 0.35                    # Suavização temporal
 EMA_MIN_CONF = 0.0                  # Conf mínima para EMA
 
 # Filtros de Pós-Processamento
-MIN_POSDETECTION_CONF = 0.6  # Confiança mínima para detecção YOLO
-YOLO_CLASS_PERSON = 0 # Classe 'pessoa' no COCO dataset
-YOLO_BATCH_SIZE = 64  # Tamanho do batch para inferência YOLO (Otimização de Performance)
-RTMPOSE_BATCH_SIZE = 64 # Tamanho do batch para inferência Pose (Novo)
+MIN_POSDETECTION_CONF = 0.6         # Confiança mínima para detecção YOLO
+YOLO_CLASS_PERSON = 0               # Classe 'pessoa' no COCO dataset
+YOLO_BATCH_SIZE = 64                # Tamanho do batch para inferência YOLO (Otimização de Performance)
+RTMPOSE_BATCH_SIZE = 64             # Tamanho do batch para inferência Pose (Novo)
 MIN_POSE_ACTIVITY = 0.8             # StdDev médio mínimo (pixels) para considerar ID ativo
 
 # ================================================================
@@ -95,18 +102,22 @@ TEST_SPLIT = "teste"
 TIME_STEPS = 30                     # Janela temporal
 NUM_JOINTS = 17                     # Keypoints COCO
 NUM_CHANNELS = 2                    # x, y
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 LEARNING_RATE = 0.0003
 EPOCHS = 100
+
+# Hiperparâmetros Avançados (LSTM/Transformer)
+LSTM_DROPOUT = 0.3
+LSTM_HIDDEN_SIZE = 128
+LSTM_NUM_LAYERS = 2
+LSTM_NUM_HEADS = 8        # Apenas para Transformer/TFT
+LSTM_KERNEL_SIZE = 5      # Apenas para TCN/WaveNet
 
 # ==============================================================
 # SEÇÃO 6: PARÂMETROS DE TESTE
 # ==============================================================
 
 CLASSE2_THRESHOLD = 0.50            # Threshold para classificar como anômalo
-
-# Vídeo & Codecs
-OPENH264_DLL = "openh264-1.8.0-win64.dll"
 
 # ==============================================================
 # SEÇÃO 7: PATHS
@@ -118,10 +129,13 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in os.environ["PATH"]:
     os.environ["PATH"] = str(ROOT) + os.pathsep + os.environ["PATH"]
 
+# Vídeo & Codecs
+OPENH264_DLL = ROOT / "openh264-1.8.0-win64.dll"
+
 # Modelos
 MODELS_DIR = ROOT / "detector" / "modelos"
 YOLO_PATH = MODELS_DIR / YOLO_MODEL
-RTMPOSE_DIR = ROOT / "app" / "modelos"
+RTMPOSE_DIR = ROOT / "rtmpose" / "modelos"
 RTMPOSE_PATH = RTMPOSE_DIR / RTMPOSE_MODEL
 OSNET_DIR = ROOT / "tracker" / "weights"
 OSNET_PATH = OSNET_DIR / OSNET_MODEL

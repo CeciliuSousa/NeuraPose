@@ -66,13 +66,15 @@ class UserConfigManager:
             # Configurações YOLO
             "DETECTION_CONF": cm.DETECTION_CONF,
             "YOLO_IMGSZ": getattr(cm, "YOLO_IMGSZ", "640"),
+            "YOLO_BATCH_SIZE": getattr(cm, "YOLO_BATCH_SIZE", 64),
             
             # Configurações de Pose
             "POSE_CONF_MIN": cm.POSE_CONF_MIN,
             "EMA_ALPHA": cm.EMA_ALPHA,
             "EMA_MIN_CONF": getattr(cm, "EMA_MIN_CONF", 0.3),
+            "RTMPOSE_BATCH_SIZE": getattr(cm, "RTMPOSE_BATCH_SIZE", 64),
             
-            # BoTSORT - usando chaves minúsculas como o frontend espera
+            # BoTSORT - Configurações Completas
             "track_high_thresh": cm.BOT_SORT_CONFIG.get("track_high_thresh", 0.5),
             "track_low_thresh": cm.BOT_SORT_CONFIG.get("track_low_thresh", 0.1),
             "new_track_thresh": cm.BOT_SORT_CONFIG.get("new_track_thresh", 0.6),
@@ -80,12 +82,22 @@ class UserConfigManager:
             "track_buffer": cm.BOT_SORT_CONFIG.get("track_buffer", 30),
             "proximity_thresh": cm.BOT_SORT_CONFIG.get("proximity_thresh", 0.5),
             "appearance_thresh": cm.BOT_SORT_CONFIG.get("appearance_thresh", 0.25),
+            "gmc_method": cm.BOT_SORT_CONFIG.get("gmc_method", "orb"),
+            "fuse_score": cm.BOT_SORT_CONFIG.get("fuse_score", True),
+            "with_reid": cm.BOT_SORT_CONFIG.get("with_reid", True),
             
             # Parâmetros de Treinamento
             "TIME_STEPS": cm.TIME_STEPS,
             "BATCH_SIZE": cm.BATCH_SIZE,
             "LEARNING_RATE": cm.LEARNING_RATE,
             "EPOCHS": cm.EPOCHS,
+            
+            # Hiperparâmetros Avançados (LSTM)
+            "LSTM_DROPOUT": getattr(cm, "LSTM_DROPOUT", 0.3),
+            "LSTM_HIDDEN_SIZE": getattr(cm, "LSTM_HIDDEN_SIZE", 128),
+            "LSTM_NUM_LAYERS": getattr(cm, "LSTM_NUM_LAYERS", 2),
+            "LSTM_NUM_HEADS": getattr(cm, "LSTM_NUM_HEADS", 8),
+            "LSTM_KERNEL_SIZE": getattr(cm, "LSTM_KERNEL_SIZE", 5),
             
             # Parâmetros de Sequência
             "MAX_FRAMES_PER_SEQUENCE": getattr(cm, "MAX_FRAMES_PER_SEQUENCE", 1800),

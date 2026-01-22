@@ -151,6 +151,9 @@ export default function ConfiguracaoPage() {
                 { key: "track_buffer", label: "Track Buffer (Frames)", type: "number" },
                 { key: "proximity_thresh", label: "Proximity Thresh", type: "number", step: 0.05 },
                 { key: "appearance_thresh", label: "Appearance Thresh", type: "number", step: 0.05 },
+                { key: "gmc_method", label: "GMC Method", type: "select", options: ["orb", "sift", "sparseOptFlow"] },
+                { key: "fuse_score", label: "Fuse Score (Fusão)", type: "boolean" },
+                { key: "with_reid", label: "Ativar ReID (Visual)", type: "boolean" },
             ]
         },
         {
@@ -161,6 +164,11 @@ export default function ConfiguracaoPage() {
                 { key: "BATCH_SIZE", label: "Tamanho do Lote (Batch)", type: "number" },
                 { key: "LEARNING_RATE", label: "Taxa de Aprendizado (LR)", type: "number", step: 0.0001 },
                 { key: "EPOCHS", label: "Épocas Padrão", type: "number" },
+                { key: "LSTM_DROPOUT", label: "Dropout (Regularização)", type: "number", step: 0.05 },
+                { key: "LSTM_HIDDEN_SIZE", label: "Tam. Camada Oculta (Neurônios)", type: "number" },
+                { key: "LSTM_NUM_LAYERS", label: "Num. Camadas (Layers)", type: "number" },
+                { key: "LSTM_NUM_HEADS", label: "Num. Cabeças (Attention/TFT)", type: "number" },
+                { key: "LSTM_KERNEL_SIZE", label: "Kernel Size (TCN)", type: "number" },
             ]
         },
         {
@@ -263,6 +271,15 @@ export default function ConfiguracaoPage() {
                                             className="w-full bg-background border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/40 transition-all text-sm font-medium appearance-none"
                                         >
                                             {(item as any).options?.map((opt: string) => <option key={opt} value={opt}>{opt.toUpperCase()}</option>)}
+                                        </select>
+                                    ) : item.type === 'boolean' ? (
+                                        <select
+                                            value={String(config[item.key])}
+                                            onChange={(e) => setConfig({ ...config, [item.key]: e.target.value === 'true' })}
+                                            className="w-full bg-background border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/40 transition-all text-sm font-medium appearance-none"
+                                        >
+                                            <option value="true">ATIVADO</option>
+                                            <option value="false">DESATIVADO</option>
                                         </select>
                                     ) : (
                                         <input

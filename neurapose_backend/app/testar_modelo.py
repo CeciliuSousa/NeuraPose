@@ -29,7 +29,7 @@ import neurapose_backend.config_master as cm
 
 
 from neurapose_backend.app.utils.ferramentas import verificar_recursos, imprimir_banner, carregar_sessao_onnx
-from neurapose_backend.app.pipeline.processador_video import processar_video
+from neurapose_backend.app.pipeline.processador import processar_video
 
 from neurapose_backend.app.utils.gerar_graficos import gerar_todos_graficos
 from neurapose_backend.LSTM.modulos.fabrica_modelo import ClassifierFactory
