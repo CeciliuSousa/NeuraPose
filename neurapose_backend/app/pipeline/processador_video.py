@@ -43,6 +43,39 @@ def calcular_iou(boxA, boxB):
     return iou
 
 
+def calcular_pose_activity(kps_historico):
+    """
+    Calcula a variância média das juntas em relação ao centro da pose.
+    Isso ajuda a identificar se o 'esqueleto' está vivo (movendo-se internamente)
+    ou se é um objeto estático (cadeira/manequim).
+    
+    Args:
+        kps_historico: Lista de keypoints de N frames. Shape esperado aprox: (N, 17, 3) ou similar via lista.
+    Returns:
+        float: Média do desvio padrão das juntas (pixels).
+    """
+    if not kps_historico or len(kps_historico) < 5:
+        return 0.0
+
+    # Converter para numpy: (Frames, Juntas, 3) -> pegamos so x,y
+    # Remove confianca (idx 2) e foca em x,y
+    data = np.array(kps_historico)[:, :, :2] 
+    
+    # 1. Calcular centro de gravidade da pose em cada frame (média das juntas visíveis)
+    centers = np.mean(data, axis=1, keepdims=True) # (Frames, 1, 2)
+    
+    # 2. Centralizar pose (remove movimento global/câmera)
+    data_centered = data - centers
+    
+    # 3. Calcular StdDev de cada junta ao longo do tempo (Frames)
+    stds = np.std(data_centered, axis=0) 
+    
+    # 4. Média dos desvios (magnitude x+y)
+    avg_activity = np.mean(np.linalg.norm(stds, axis=1))
+    
+    return avg_activity
+
+
 def filtrar_ghosting(records, iou_thresh=0.8):
     """
     Remove IDs duplicados (Ghosting) que ocupam o mesmo espaço físico no mesmo frame.
@@ -170,8 +203,70 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
     # ---------------- FILTRAR GHOSTING (V5) ----------------
     records = filtrar_ghosting(records, iou_thresh=0.8)
 
+    # ============================================================
+    # 2. FILTRAGEM INTELIGENTE (LIMPEZA V6)
+    # ============================================================
+    # Portado do Pre-Processamento para garantir paridade
+    
+    stats_id = {} 
+    for reg in records:
+        pid = reg["id_persistente"]
+        bbox = reg["bbox"]
+        kps = reg.get("keypoints", [])
+        
+        # Calcula o centro da caixa (x, y)
+        centro = [(bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2]
+        
+        if pid not in stats_id:
+            stats_id[pid] = {
+                "frames": 0,
+                "path": [centro],
+                "keypoints": []
+            }
+        
+        stats_id[pid]["frames"] += 1
+        stats_id[pid]["path"].append(centro)
+        stats_id[pid]["keypoints"].append(kps)
+
+    # Define quem fica e quem sai
+    ids_validos = []
+    
+    for pid, dados in stats_id.items():
+        # REGRA A: Duracao (Ignora "fantasmas" rapidos)
+        if dados["frames"] < 30:
+            # print(Fore.YELLOW + f"  - ID {pid} removido (Curta duracao: {dados['frames']} frames)")
+            continue
+            
+        # REGRA B: Deslocamento ACUMULADO
+        caminho = np.array(dados["path"])
+        steps = np.diff(caminho, axis=0)
+        dist_steps = np.linalg.norm(steps, axis=1)
+        distancia_total = np.sum(dist_steps)
+        
+        if distancia_total < 80.0:
+            # print(Fore.YELLOW + f"  - ID {pid} removido (Estatico: Moveu {distancia_total:.1f}px total)")
+            continue
+
+        # REGRA C: Atividade de Pose
+        activity_score = calcular_pose_activity(dados["keypoints"])
+        
+        if activity_score < cm.MIN_POSE_ACTIVITY:
+            # print(Fore.YELLOW + f"  - ID {pid} removido (Inanimado: Activity {activity_score:.2f})")
+            continue
+            
+        ids_validos.append(pid)
+
+    # FILTRAR REGISTROS (MANTEM APENAS IDs VALIDOS)
+    records = [r for r in records if r["id_persistente"] in ids_validos]
+
+    if not records:
+        print(Fore.RED + "[AVISO] Todos os IDs foram filtrados pela limpeza V6 (App).")
+        # Podemos retornar None ou deixar gerar arquivos vazios?
+        # Para consistência, retornamos None
+        return None
+
     # ---------------- LSTM / BATCH ----------------
-    # Descobre todos os IDs presentes no vídeo
+    # Descobre todos os IDs presentes no vídeo (JA FILTRADOS)
     ids_presentes = sorted({int(r["id"]) for r in records})
 
     id_preds = {}   # id -> classe_id (0 CLASSE1, 1 CLASSE2)
@@ -214,63 +309,23 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
         r["classe_predita"] = cm.CLASSE2 if classe_id == 1 else cm.CLASSE1
         r[F"score_{cm.CLASSE2}_id"] = score_id
 
-    # Salvar JSON já com keypoints + classe por ID
+    # Salvar JSON já com keypoints + classe por ID (FILTRADO)
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(records, f, indent=2, ensure_ascii=False)
 
-    # print(Fore.GREEN + f"[OK] JSON de keypoints + classe salvo em: {json_path}")
-
     # ---------------- GERAR VÍDEO FINAL COM OVERLAY DE CLASSE ----------------
-    # (Adicionado filtro para só gerar vídeo se houver registros, mas gerar_video_predicao já lida com vazio se necessário)
+    # (Video gerado apenas com IDs validos)
     gerar_video_predicao(
         video_path=video_original,
         registros=records,
         video_out_path=pred_video_path,
-        show_preview=show_preview,  # Passa o argumento corretamente
+        show_preview=show_preview,
     )
 
+    # ---------------- TRACKING REPORT ----------------
+    # (Logica movida para usar ids_validos já implicitos em records)
     # ============================================================
-    # 2. FILTRAGEM INTELIGENTE (LIMPEZA V6) - Portado do Pré-processamento
-    # ============================================================
-    # print(Fore.CYAN + "\n[INFO] Iniciando limpeza de IDs (V6)...")
-    
-    # Coleta estatisticas de cada ID Persistente
-    stats_id = {} 
-    for reg in records:
-        pid = reg["id_persistente"]
-        bbox = reg["bbox"]
-        # Calcula o centro da caixa (x, y)
-        centro = [(bbox[0]+bbox[2])/2, (bbox[1]+bbox[3])/2]
-        
-        if pid not in stats_id:
-            stats_id[pid] = {"frames": 0, "inicio": centro, "fim": centro}
-        
-        stats_id[pid]["frames"] += 1
-        stats_id[pid]["fim"] = centro # Atualiza ultima posicao conhecida
-
-    # Define quem fica e quem sai
-    ids_validos = []
-    
-    for pid, dados in stats_id.items():
-        # REGRA A: Duracao (Ignora "fantasmas" rapidos como o ID 55)
-        # Se durou menos de 1 segundo (30 frames), e lixo.
-        if dados["frames"] < 30:
-            # print(Fore.YELLOW + f"  - ID {pid} removido (Curta duracao: {dados['frames']} frames)")
-            continue
-            
-        # REGRA B: Imobilidade (Ignora cadeiras fixas como o ID 12)
-        # Se moveu menos de 50 pixels no video todo, e lixo.
-        distancia = calcular_deslocamento(dados["inicio"], dados["fim"])
-        if distancia < 50.0:
-            # print(Fore.YELLOW + f"  - ID {pid} removido (Estatico: moveu apenas {distancia:.1f} px)")
-            continue
-            
-        ids_validos.append(pid)
-
-    # print(Fore.GREEN + f"[OK] IDs Mantidos: {ids_validos}")
-
-    # ============================================================
-    # 3. SALVAR TRACKING FINAL (Apenas IDs Validos) - Compatível com Pre-processamento
+    # 3. SALVAR TRACKING FINAL (Apenas IDs Validos)
     # ============================================================
     # Filtra o mapa de IDs para remover os excluidos
     id_map_limpo = {str(k): int(v) for k, v in id_map.items() if v in ids_validos}
@@ -284,8 +339,17 @@ def processar_video(video_path: Path, model, mu, sigma, sess, input_name, show_p
     
     # Filtra os registros frame a frame
     for reg in records:
-        # So adiciona se o ID estiver na lista de validos (Lógica V6)
-        if reg["id_persistente"] in ids_validos:
+        # records JÁ ESTÁ FILTRADO
+        f_id = reg["frame"]
+        if f_id not in tracking_analysis["tracking_by_frame"]:
+            tracking_analysis["tracking_by_frame"][f_id] = []
+        
+        tracking_analysis["tracking_by_frame"][f_id].append({
+            "botsort_id": reg["botsort_id"],
+            "id_persistente": reg["id_persistente"],
+            "bbox": reg["bbox"],
+            "confidence": reg["confidence"]
+        })
             f_id = reg["frame"]
             if f_id not in tracking_analysis["tracking_by_frame"]:
                 tracking_analysis["tracking_by_frame"][f_id] = []

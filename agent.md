@@ -1,0 +1,4 @@
+- Pode analisar as duas pastas /app/ e /pre_processamento/?
+- Verficar quais são as ferramentas que eles utilizam parecidas?
+- Como pre_processamento está mais certeiro, aplique as mesmas técnicas para o app ficar inteligente igual! 
+- app é uma pasta que um dia pode ir para produção, então por isso eu gosto que as tarefas fiquem separadas entre app e pre_processamento. por isso estamos fazendo edições em pre_processamento, mas não mexemos ainda no app, mas a ideia é que eles funcionem igualmente tanto em um como no outro. principalmente no quesioto configurações que vem de config_master! 
