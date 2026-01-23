@@ -77,6 +77,10 @@ class ProcessingState:
         self.current_frame = None
         
         print("[FORCE STOP] Parada forçada executada.")
+        
+    def request_stop(self):
+        print(f"[DEBUG] Stop requested! Called from somewhere.")
+        self.stop_requested = True
     
     def emergency_exit(self):
         """Último recurso: encerra o processo Python forçadamente."""

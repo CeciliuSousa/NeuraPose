@@ -189,7 +189,7 @@ def main():
             torch.save(model.state_dict(), best_model_path)
 
         # Print otimizado (apenas algumas épocas ou no final para não travar o log)
-        if epoch == 1 or epoch % 10 == 0 or epoch == args.epochs:
+        if epoch == 1 or epoch % 1 == 0 or epoch == args.epochs:
             print(f"[{epoch:03d}/{args.epochs}] Loss: {tr_loss:.4f}/{va_loss:.4f} | Acc: {va_acc*100:.1f}% | F1: {va_f1m:.4f}")
 
         if early.should_stop(va_f1m, va_loss):
@@ -262,7 +262,7 @@ def main():
     except: pass
 
     print(Fore.GREEN + "\n[SUCESSO] Treinamento concluido!")
-    print(f"Modelo: {final_model_dir / MODEL_BEST_FILENAME}")
+    print(f"Modelo: {final_model_dir / cm.MODEL_BEST_FILENAME}")
     print(f"Acc (val): {accuracy_percent:.1f}%")
     print(f"F1 (val): {va_f1m:.4f}")
 
