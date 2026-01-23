@@ -14,6 +14,18 @@ import os
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
+# ==============================================================
+# SEÇÃO 0: OTIMIZAÇÕES DE PERFORMANCE
+# ==============================================================
+
+# Normalização de Vídeo
+USE_NVENC = True                    # Usar encoder GPU NVIDIA (h264_nvenc) - muito mais rápido
+NVENC_PRESET = "p4"                 # Preset NVENC: p1 (rápido) a p7 (qualidade) - p4 é balanceado
+
+# Leitura de Vídeo
+USE_PREFETCH = True                 # Pre-fetch de frames em thread separada
+PREFETCH_BUFFER_SIZE = 32           # Tamanho do buffer de frames
+
 # Supressão de logs do ONNXRuntime (Warnings não críticos de execução)
 try:
     import onnxruntime as ort

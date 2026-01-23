@@ -31,36 +31,39 @@ export function ProcessingStatusProvider({ children }: { children: ReactNode }) 
         });
     }, []);
 
-    // Check backend health periodically to sync processing state
+    // Check backend health via WebSocket
     useEffect(() => {
-        const interval = setInterval(async () => {
-            try {
-                const res = await APIService.healthCheck();
-                const { processing, current_process, process_status } = res.data;
+        // Conecta ao WS de status
+        import('../services/websocket').then(mod => {
+            const ws = mod.default;
+            ws.connectStatus();
+
+            ws.events.on('status', (status: any) => {
+                const { is_running, current_process, process_status } = status;
 
                 // Atualiza qual processo está rodando
-                setCurrentProcess(processing ? current_process : null);
+                setCurrentProcess(is_running ? current_process : null);
 
                 setStatuses(prev => {
                     const next = { ...prev };
                     let changed = false;
 
                     // Se há um processo rodando e sabemos qual é
-                    if (processing && current_process && process_status) {
+                    if (is_running && current_process && process_status) {
                         if (next[current_process] !== process_status) {
                             next[current_process] = process_status as PageStatus;
                             changed = true;
                         }
-                    } else if (!processing) {
+                    } else if (!is_running) {
                         // Se não há processamento, limpa os status 'processing'
                         for (const key in next) {
                             if (next[key] === 'processing') {
-                                next[key] = 'idle'; // Ou mantém o último status se desejar
+                                next[key] = 'idle';
                                 changed = true;
                             }
                         }
 
-                        // Opcional: Se o processo terminou com sucesso/erro recentemente, atualiza
+                        // Atualiza estado final
                         if (current_process && process_status && process_status !== 'processing') {
                             if (next[current_process] !== process_status) {
                                 next[current_process] = process_status as PageStatus;
@@ -74,10 +77,21 @@ export function ProcessingStatusProvider({ children }: { children: ReactNode }) 
                     }
                     return changed ? next : prev;
                 });
-            } catch (e) { /* ignore */ }
-        }, 10000); // Polling a cada 10s para evitar overhead durante processamento
+            });
+        });
 
-        return () => clearInterval(interval);
+        // Fallback polling (menos frequente - 30s) para garantir sincronia se WS falhar
+        const interval = setInterval(async () => {
+            try {
+                await APIService.healthCheck();
+                // Lógica de fallback simplificada se necessário
+            } catch (e) { /* ignore */ }
+        }, 30000);
+
+        return () => {
+            clearInterval(interval);
+            // Não desconectamos o status WS pois é global
+        };
     }, []);
 
     const clearPageStatus = useCallback((page: string) => {

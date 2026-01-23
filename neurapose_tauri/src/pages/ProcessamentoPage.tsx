@@ -45,8 +45,9 @@ export default function ProcessamentoPage() {
         }).catch(err => console.error("Erro ao carregar caminhos do backend:", err));
     }, []);
 
-    // Logs & Health Polling - apenas quando loading muda
+    // Logs via WebSocket & Auto-Stop
     useEffect(() => {
+        // Restaurar estado
         const savedConfig = localStorage.getItem('np_process_config');
         if (savedConfig && !config.inputPath) {
             const parsed = JSON.parse(savedConfig);
@@ -56,41 +57,63 @@ export default function ProcessamentoPage() {
         const savedLoading = localStorage.getItem('np_process_loading');
         if (savedLoading === 'true' && !loading) setLoading(true);
 
-        let interval: any;
-
         if (loading) {
             localStorage.setItem('np_process_loading', 'true');
-            interval = setInterval(async () => {
-                try {
-                    const res = await APIService.getLogs('process');
-                    const newLogs = res.data.logs;
-                    setLogs(newLogs);
-                    localStorage.setItem('np_process_logs', JSON.stringify(newLogs));
 
-                    const progressLine = [...newLogs].reverse().find(l => l.includes('[PROGRESSO]'));
-                    if (progressLine) {
-                        const match = progressLine.match(/(\d+)%/);
+            // Conecta ao WebSocket
+            import('../services/websocket').then(mod => {
+                const ws = mod.default;
+                ws.connectLogs('process');
+                ws.connectStatus(); // Garante que status está conectado
+
+                // Listener de Logs
+                const handleLogs = (newLogs: string[]) => {
+                    setLogs((prev) => {
+                        // Combina logs antigos com novos (sem duplicatas se possível, ou apenas append)
+                        // A implementação atual do backend envia TODOS os logs novos a cada mensagem ou delta?
+                        // O backend envia "new_logs" (apenas os novos).
+                        // Mas o frontend espera uma lista completa no setLogs se for substituir?
+                        // O Terminal.tsx espera um array de strings.
+                        // Vamos fazer append dos novos logs.
+                        return [...prev, ...newLogs];
+                    });
+
+                    // Salva no localStorage (opcional, pode ficar pesado)
+                    // localStorage.setItem('np_process_logs', JSON.stringify([...prev, ...newLogs])); // Cuidado com stale closure
+
+                    // Parse progresso
+                    const lastLog = newLogs[newLogs.length - 1];
+                    if (lastLog && lastLog.includes('[PROGRESSO]')) {
+                        const match = lastLog.match(/(\d+)%/);
                         if (match) setProgress(parseInt(match[1]));
                     }
+                };
 
-                    const health = await APIService.healthCheck();
-                    setIsPaused(health.data.paused);
+                // Listener de Status (para parar quando acabar)
+                const handleStatus = (status: any) => {
+                    setIsPaused(status.is_paused);
 
-                    if (!health.data.processing && loading) {
+                    // Se parou de rodar e estava carregando -> Fim
+                    if (!status.is_running && loading) {
                         setLoading(false);
                         localStorage.setItem('np_process_loading', 'false');
+                        ws.disconnectLogs(); // Desconecta logs
                     }
-                } catch (e) {
-                    console.error("Erro ao buscar status:", e);
-                }
-            }, 5000);
+                };
+
+                ws.events.on('logs', handleLogs);
+                ws.events.on('status', handleStatus);
+
+                // Cleanup function
+                return () => {
+                    ws.events.off('logs', handleLogs);
+                    ws.events.off('status', handleStatus);
+                };
+            });
+
         } else {
             localStorage.setItem('np_process_loading', 'false');
         }
-
-        return () => {
-            if (interval) clearInterval(interval);
-        };
     }, [loading]);
 
     useEffect(() => {

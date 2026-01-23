@@ -94,56 +94,92 @@ def executar_pipeline_extracao(
     t0 = time.time()
     records = []
     
-    cap = cv2.VideoCapture(str(video_path_norm))
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    frame_idx = 1
-    
-    # Controle de progresso para logs limpos
-    last_progress = 0
-
-    while True:
-        # Verifica parada solicitada (App)
-        if state and state.stop_requested:
-            if verbose: print(Fore.YELLOW + "[STOP] Interrompido pelo usuário.")
-            break
+    # Usa VideoReaderAsync para pre-fetch de frames (quando habilitado)
+    if cm.USE_PREFETCH:
+        from neurapose_backend.nucleo.video_reader import VideoReaderAsync
+        
+        with VideoReaderAsync(video_path_norm) as reader:
+            total_frames = reader.total_frames
+            last_progress = 0
             
-        ok, frame = cap.read()
-        if not ok: break
-        
-        # Recupera boxes do frame atual
-        dets = None
-        if frame_idx <= len(results_yolo):
-            # O yolo_detector retorna lista de dicts com chave "boxes"
-            dets = results_yolo[frame_idx-1].get("boxes") 
-        
-        # Processa frame com o Extrator Unificado
-        frame_regs, _ = pose_extractor.processar_frame(
-            frame_img=frame,
-            detections_yolo=dets,
-            frame_idx=frame_idx,
-            id_map=id_map_full,
-            desenhar_no_frame=False
-        )
-        
-        records.extend(frame_regs)
-        
-        # Log de progresso (a cada 10%)
-        if verbose:
-            progress = int((frame_idx / (total_frames or 1)) * 100)
-            if progress >= last_progress + 10:
-                print(Fore.CYAN + f"[RTMPose] Progresso: {progress}% ({frame_idx}/{total_frames})")
-                sys.stdout.flush()
-                last_progress = progress
+            for frame_idx, frame in reader:
+                # Verifica parada solicitada (App)
+                if state and state.stop_requested:
+                    if verbose: print(Fore.YELLOW + "[STOP] Interrompido pelo usuário.")
+                    break
+                
+                # Recupera boxes do frame atual
+                dets = None
+                if frame_idx <= len(results_yolo):
+                    dets = results_yolo[frame_idx-1].get("boxes")
+                
+                # Processa frame com o Extrator Unificado
+                frame_regs, _ = pose_extractor.processar_frame(
+                    frame_img=frame,
+                    detections_yolo=dets,
+                    frame_idx=frame_idx,
+                    id_map=id_map_full,
+                    desenhar_no_frame=False
+                )
+                
+                records.extend(frame_regs)
+                
+                # Log de progresso (a cada 10%)
+                if verbose:
+                    progress = int((frame_idx / (total_frames or 1)) * 100)
+                    if progress >= last_progress + 10:
+                        print(Fore.CYAN + f"[RTMPose] Progresso: {progress}% ({frame_idx}/{total_frames})")
+                        sys.stdout.flush()
+                        last_progress = progress
+                        
+            final_frame_idx = frame_idx if 'frame_idx' in dir() else 0
+    else:
+        # Fallback: leitura síncrona com OpenCV
+        cap = cv2.VideoCapture(str(video_path_norm))
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        frame_idx = 1
+        last_progress = 0
 
-        frame_idx += 1
+        while True:
+            if state and state.stop_requested:
+                if verbose: print(Fore.YELLOW + "[STOP] Interrompido pelo usuário.")
+                break
+                
+            ok, frame = cap.read()
+            if not ok: break
+            
+            dets = None
+            if frame_idx <= len(results_yolo):
+                dets = results_yolo[frame_idx-1].get("boxes") 
+            
+            frame_regs, _ = pose_extractor.processar_frame(
+                frame_img=frame,
+                detections_yolo=dets,
+                frame_idx=frame_idx,
+                id_map=id_map_full,
+                desenhar_no_frame=False
+            )
+            
+            records.extend(frame_regs)
+            
+            if verbose:
+                progress = int((frame_idx / (total_frames or 1)) * 100)
+                if progress >= last_progress + 10:
+                    print(Fore.CYAN + f"[RTMPose] Progresso: {progress}% ({frame_idx}/{total_frames})")
+                    sys.stdout.flush()
+                    last_progress = progress
+
+            frame_idx += 1
+            
+        cap.release()
+        final_frame_idx = frame_idx - 1
         
-    cap.release()
     t1 = time.time()
     tempos["rtmpose"] = t1 - t0
 
     if not records:
         if verbose: print(Fore.RED + "[AVISO] Nenhuma pose detectada.")
-        return [], id_map_full, [], frame_idx-1, tempos
+        return [], id_map_full, [], final_frame_idx, tempos
 
     # 3. FILTRAGEM (Ghosting + V6)
     # --------------------------------------------------------
@@ -167,4 +203,5 @@ def executar_pipeline_extracao(
     if not registros_finais:
         if verbose: print(Fore.RED + "[AVISO] Todos os IDs foram removidos pelo filtro.")
     
-    return registros_finais, id_map_full, ids_validos, frame_idx-1, tempos
+    return registros_finais, id_map_full, ids_validos, final_frame_idx, tempos
+

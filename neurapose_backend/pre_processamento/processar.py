@@ -14,7 +14,7 @@ from colorama import Fore, init as colorama_init
 # Importa configuracoes centralizadas
 import neurapose_backend.config_master as cm
 try:
-    from neurapose_backend.app.user_config_manager import UserConfigManager
+    from neurapose_backend.nucleo.user_config_manager import UserConfigManager
     # Carrega configs do usuário e atualiza CM
     user_conf = UserConfigManager.load_config()
     for k, v in user_conf.items():

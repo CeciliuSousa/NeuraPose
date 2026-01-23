@@ -24,7 +24,7 @@ args, _ = parser.parse_known_args()
 # Importa TUDO do config_master.py e SOBRESCREVE com UserConfigManager
 # ------------------------------------------------------------------
 import neurapose_backend.config_master as cm
-from neurapose_backend.app.user_config_manager import UserConfigManager
+from neurapose_backend.nucleo.user_config_manager import UserConfigManager
 
 # Carrega configurações do usuário (user_settings.json)
 user_config = UserConfigManager.load_config()

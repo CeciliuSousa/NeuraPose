@@ -31,7 +31,7 @@ except:
 
 # Carregar config do usuário se disponível
 try:
-    from neurapose_backend.app.user_config_manager import UserConfigManager
+    from neurapose_backend.nucleo.user_config_manager import UserConfigManager
     user_config = UserConfigManager.load_config()
     for k, v in user_config.items():
         if hasattr(cm, k):

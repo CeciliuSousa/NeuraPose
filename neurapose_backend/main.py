@@ -30,8 +30,8 @@ for p in [str(CURRENT_DIR), str(ROOT_DIR)]:
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from neurapose_backend.app.log_service import LogBuffer, CaptureOutput
-from neurapose_backend.app.user_config_manager import UserConfigManager
+from neurapose_backend.nucleo.log_service import LogBuffer, CaptureOutput
+from neurapose_backend.nucleo.user_config_manager import UserConfigManager
 
 
 # ==============================================================
@@ -369,115 +369,65 @@ def api_reset_config():
 # ==============================================================
 def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, device: str = "cuda"):
     """
-    Executa o processamento via subprocess chamando:
-    uv run python -m neurapose_backend.pre_processamento.processar --input-folder "..." [--show]
+    Executa o processamento de vídeos usando import direto (otimizado).
     
-    Captura stdout/stderr em tempo real para o LogBuffer usando thread separada.
+    OTIMIZAÇÃO: Não usa mais subprocess, importa diretamente o módulo.
+    Isso elimina o overhead de ~10-20s de criar processo e carregar modelos.
     """
-    import subprocess
-    import threading
-    import queue
+    from neurapose_backend.pre_processamento.pipeline.processador import processar_video
+    from neurapose_backend.pre_processamento.utils.ferramentas import imprimir_banner
     
     state.reset()
     state.is_running = True
     state.current_process = 'process'
     state.process_status = 'processing'
-    log_buffer = LogBuffer()
-    category = "process"
+    state.show_preview = show
     
-    # Monta o comando
-    cmd = [
-        "uv", "run", "python", "-m", 
-        "neurapose_backend.pre_processamento.processar",
-        "--input-folder", input_path,
-        "--output-root", str(cm.PROCESSING_OUTPUT_DIR / f"{dataset_name}-processado")
-    ]
+    # Atualiza dispositivo no config_master
+    cm.DEVICE = device if (device == "cpu" or torch.cuda.is_available()) else "cpu"
     
-    if show:
-        cmd.append("--show")
+    output_path = Path(cm.PROCESSING_OUTPUT_DIR / f"{dataset_name}-processado")
+    input_p = Path(input_path)
     
-    logger.info(f"Executando comando: {' '.join(cmd)}")
-    log_buffer.write(f"[CMD] {' '.join(cmd)}")
-    
-    try:
-        # Executa o comando - SEM bufsize=1 para evitar overhead de I/O
-        process = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            cwd=str(ROOT_DIR),
-            encoding='utf-8',
-            errors='replace',
-            env={**os.environ, "PYTHONUNBUFFERED": "1", "PYTHONIOENCODING": "utf-8"}
-        )
-        
-        state.add_process(process)
-        
-        # Thread para ler output sem bloquear o processo
-        output_queue = queue.Queue()
-        
-        def read_output():
-            try:
-                for line in iter(process.stdout.readline, ''):
-                    if line:
-                        output_queue.put(line.rstrip())
-                    if process.poll() is not None:
-                        break
-            except:
-                pass
-            finally:
-                output_queue.put(None)  # Sinaliza fim
-        
-        reader_thread = threading.Thread(target=read_output, daemon=True)
-        reader_thread.start()
-        
-        # Processa output da queue sem bloquear o subprocess
-        while True:
-            try:
-                line = output_queue.get(timeout=0.1)
-                if line is None:  # Fim do output
-                    break
-                log_buffer.write(line, category)
-            except queue.Empty:
-                # Verifica se deve parar
-                if state.stop_requested:
-                    process.terminate()
-                    log_buffer.write("[INFO] Processamento interrompido pelo usuário.")
-                    break
-                # Verifica se processo terminou
-                if process.poll() is not None:
-                    # Drena output restante
-                    while not output_queue.empty():
-                        try:
-                            line = output_queue.get_nowait()
-                            if line:
-                                log_buffer.write(line, category)
-                        except:
-                            break
-                    break
-        
-        process.wait()
-        
-        if process.returncode == 0:
-            log_buffer.write("[OK] Processamento concluído com sucesso!", category)
-            logger.info("Processamento concluído com sucesso.")
-            state.process_status = 'success'
-        elif not state.stop_requested:
-            log_buffer.write(f"[ERRO] Processo finalizou com código: {process.returncode}", category)
-            logger.error(f"Processo finalizou com código: {process.returncode}")
-            state.process_status = 'error'
+    # Captura stdout/stderr para LogBuffer
+    with CaptureOutput(category="process"):
+        try:
+            # Imprime banner
+            imprimir_banner(cm.RTMPOSE_PATH)
             
-    except Exception as e:
-        logger.error(f"Erro ao executar subprocess: {e}")
-        log_buffer.write(f"[ERRO] {str(e)}", category)
-        state.process_status = 'error'
-    finally:
-        state.is_running = False
-        # Limpa memória GPU após processamento
-        cleanup_result = cleanup_gpu_memory(force=True)
-        if cleanup_result.get("success"):
-            logger.info(f"Memória GPU liberada: {cleanup_result.get('freed_gb', 0):.2f} GB")
+            if input_p.is_file():
+                print(f"[INFO] Processando 1 vídeo: {input_p.name}")
+                processar_video(input_p, output_path, show=show)
+                
+            elif input_p.is_dir():
+                videos = sorted(input_p.glob("*.mp4"))
+                output_path.mkdir(parents=True, exist_ok=True)
+                print(f"[INFO] Encontrados {len(videos)} vídeos")
+                
+                for i, v in enumerate(videos, 1):
+                    if state.stop_requested:
+                        print("[INFO] Processamento interrompido pelo usuário.")
+                        break
+                    print(f"\n[{i}/{len(videos)}] Processando: {v.name}")
+                    processar_video(v, output_path, show=show)
+                    state.current_frame = None  # Limpa frame entre vídeos
+            
+            if state.stop_requested:
+                state.process_status = 'idle'
+            else:
+                print("[OK] Processamento concluído com sucesso!")
+                state.process_status = 'success'
+                
+        except Exception as e:
+            logger.error(f"Erro no processamento: {e}")
+            print(f"[ERRO] {str(e)}")
+            state.process_status = 'error'
+        finally:
+            state.is_running = False
+            state.current_frame = None
+            # Limpa memória GPU
+            cleanup_gpu_memory(force=True)
+
 
 
 # Mantém a função antiga para compatibilidade (pode ser removida futuramente)
@@ -634,6 +584,46 @@ def clear_logs(category: Optional[str] = None):
     """Limpa o buffer de logs do servidor (ou de uma categoria)."""
     LogBuffer().clear(category)
     return {"status": "logs cleared", "category": category or "all"}
+
+# ==============================================================
+# WEBSOCKET ENDPOINTS (Push de logs em tempo real)
+# ==============================================================
+from fastapi import WebSocket, WebSocketDisconnect
+from neurapose_backend.nucleo.websocket_service import ws_manager
+import asyncio
+
+@app.websocket("/ws/logs")
+async def websocket_logs(websocket: WebSocket, category: str = "process"):
+    """WebSocket para receber logs em tempo real (substitui polling de /logs)."""
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            await ws_manager.send_logs(websocket, category)
+            await asyncio.sleep(0.5)  # Envia a cada 500ms
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+    except Exception:
+        ws_manager.disconnect(websocket)
+
+@app.websocket("/ws/status")
+async def websocket_status(websocket: WebSocket):
+    """WebSocket para receber status de processamento em tempo real."""
+    await ws_manager.connect(websocket)
+    try:
+        while True:
+            status = {
+                "is_running": state.is_running,
+                "is_paused": state.is_paused,
+                "current_process": state.current_process,
+                "process_status": state.process_status
+            }
+            await ws_manager.send_status(websocket, status)
+            await asyncio.sleep(1.0)  # Envia a cada 1s
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket)
+    except Exception:
+        ws_manager.disconnect(websocket)
+
 
 @app.get("/health")
 def health_check():

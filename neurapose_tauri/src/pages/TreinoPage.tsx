@@ -114,25 +114,35 @@ export default function TreinoPage() {
         localStorage.setItem('np_train_state', JSON.stringify(stateToSave));
     }, [datasetPath, pretrainedPath, mode, params, modelType, device]);
 
-    // Polling de logs
+    // Logs via WebSocket
     useEffect(() => {
-        let interval: ReturnType<typeof setInterval>;
         if (loading) {
-            interval = setInterval(async () => {
-                try {
-                    const res = await APIService.getLogs('train');
-                    setLogs(res.data.logs);
-                    localStorage.setItem('np_train_logs', JSON.stringify(res.data.logs));
+            import('../services/websocket').then(mod => {
+                const ws = mod.default;
+                ws.connectLogs('train');
+                ws.connectStatus();
 
-                    const health = await APIService.healthCheck();
-                    if (!health.data.processing) {
+                const handleLogs = (newLogs: string[]) => {
+                    setLogs((prev) => [...prev, ...newLogs]);
+                };
+
+                const handleStatus = (status: any) => {
+                    if (!status.is_running && loading) {
                         setLoading(false);
                         setMessage({ text: '✅ Treinamento concluído!', type: 'success' });
+                        ws.disconnectLogs();
                     }
-                } catch (e) { console.error(e); }
-            }, 5000);
+                };
+
+                ws.events.on('logs', handleLogs);
+                ws.events.on('status', handleStatus);
+
+                return () => {
+                    ws.events.off('logs', handleLogs);
+                    ws.events.off('status', handleStatus);
+                };
+            });
         }
-        return () => { if (interval) clearInterval(interval); };
     }, [loading]);
 
     const handleTrain = async () => {
