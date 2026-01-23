@@ -23,7 +23,7 @@ from neurapose_backend.rtmpose.extracao_pose_rtmpose import ExtratorPoseRTMPose
 from neurapose_backend.nucleo.sequencia import montar_sequencia_individual
 from neurapose_backend.nucleo.visualizacao import gerar_video_predicao
 from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
-from neurapose_backend.nucleo.pipeline_unificado import executar_pipeline_extracao
+from neurapose_backend.nucleo.pipeline import executar_pipeline_extracao
 
 # Módulo de Inferência LSTM (Específico do APP)
 from neurapose_backend.app.modulos.inferencia_lstm import rodar_lstm_uma_sequencia

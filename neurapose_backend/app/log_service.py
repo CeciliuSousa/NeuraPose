@@ -3,8 +3,11 @@
 # ==============================================================
 
 import sys
+import re
 from collections import deque
 from typing import List, Optional
+
+ANSI_ESCAPE = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
 
 class LogBuffer:
     _instance = None
@@ -24,6 +27,9 @@ class LogBuffer:
     def write(self, message: str, category: str = "default"):
         if not message:
             return
+        
+        # Remove códigos ANSI de cor
+        message = ANSI_ESCAPE.sub('', message)
             
         buffer = self._get_buffer(category)
         

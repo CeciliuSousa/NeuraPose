@@ -1,5 +1,5 @@
 # ==============================================================
-# neurapose_backend/nucleo/pipeline_unificado.py
+# neurapose_backend/nucleo/pipeline.py
 # ==============================================================
 # Módulo que unifica a lógica de Detecção (YOLO+BoTSORT) + 
 # Extração de Pose (RTMPose) + Filtragem (Ghosting/V6).
@@ -22,6 +22,8 @@ try:
     from neurapose_backend.globals.state import state
 except ImportError:
     state = None
+import random
+import numpy as np
 
 def executar_pipeline_extracao(
     video_path_norm: Path,
@@ -50,6 +52,13 @@ def executar_pipeline_extracao(
         - total_frames (int): Total de frames processados.
         - tempos (dict): Dicionário com tempos de execução ('yolo', 'rtmpose').
     """
+    
+    # Fixa seeds para determinismo (Garante paridade App x Processamento)
+    torch.manual_seed(42)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(42)
+    np.random.seed(42)
+    random.seed(42)
     
     if batch_size is None:
         batch_size = cm.YOLO_BATCH_SIZE

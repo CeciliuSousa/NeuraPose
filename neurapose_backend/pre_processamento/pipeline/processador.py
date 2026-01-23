@@ -22,7 +22,7 @@ from neurapose_backend.rtmpose.extracao_pose_rtmpose import ExtratorPoseRTMPose
 from neurapose_backend.nucleo.visualizacao import gerar_video_predicao
 from neurapose_backend.nucleo.video_utils import normalizar_video
 from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
-from neurapose_backend.nucleo.pipeline_unificado import executar_pipeline_extracao
+from neurapose_backend.nucleo.pipeline import executar_pipeline_extracao
 
 try:
     from neurapose_backend.globals.state import state as state_notifier
