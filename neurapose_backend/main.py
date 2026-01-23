@@ -41,7 +41,7 @@ from neurapose_backend.nucleo.user_config_manager import UserConfigManager
 try:
     import neurapose_backend.config_master as cm
     from neurapose_backend.pre_processamento.pipeline.processador import processar_video
-    from neurapose_backend.pre_processamento.utils.ferramentas import carregar_sessao_onnx, imprimir_banner
+    from neurapose_backend.pre_processamento.utils.ferramentas import imprimir_banner
 
     # Import logic for Manual ReID
     from neurapose_backend.pre_processamento.reid_manual import (
@@ -768,7 +768,7 @@ def api_get_config():
             "videos": str(cm.PROCESSING_INPUT_DIR),
             "processamentos": str(cm.PROCESSING_OUTPUT_DIR),
             "reidentificacoes": str(cm.REID_OUTPUT_DIR),
-            "datasets": str(cm.ROOT / "datasets"),
+            "datasets": str(Path(cm.ROOT) / "datasets"),
             "modelos": str(cm.TRAINED_MODELS_DIR),
             "modelos_treinados": str(cm.TRAINED_MODELS_DIR),
             "modelos_reid": str(cm.OSNET_DIR),

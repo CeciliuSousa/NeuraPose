@@ -92,7 +92,8 @@ if not BEST_MODEL_PATH.exists() and (MODEL_DIR / "model_final.pt").exists():
      BEST_MODEL_PATH = MODEL_DIR / "model_final.pt"
 
 # Labels de teste (Ground Truth)
-LABELS_TEST_PATH = ROOT / "datasets" / DATASET_NAME / "teste" / "anotacoes" / "labels.json"
+# Labels de teste (Ground Truth)
+LABELS_TEST_PATH = Path(ROOT) / "datasets" / DATASET_NAME / "teste" / "anotacoes" / "labels.json"
 # Fallback caso não encontre na estrutura padrão /teste/anotacoes/
 if not LABELS_TEST_PATH.exists():
-    LABELS_TEST_PATH = ROOT / "datasets" / DATASET_NAME / "anotacoes" / "labels.json"
+    LABELS_TEST_PATH = Path(ROOT) / "datasets" / DATASET_NAME / "anotacoes" / "labels.json"

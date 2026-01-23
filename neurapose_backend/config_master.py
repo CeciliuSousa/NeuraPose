@@ -116,7 +116,7 @@ NUM_JOINTS = 17                     # Keypoints COCO
 NUM_CHANNELS = 2                    # x, y
 BATCH_SIZE = 64
 LEARNING_RATE = 0.0003
-EPOCHS = 100
+EPOCHS = 5000
 
 # Hiperparâmetros Avançados (LSTM/Transformer)
 LSTM_DROPOUT = 0.3

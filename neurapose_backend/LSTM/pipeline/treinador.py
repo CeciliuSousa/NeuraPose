@@ -54,7 +54,7 @@ def main():
     DEVICE = cm.DEVICE
 
     # micro-otimizacao: ativa benchmark para cuDNN quando em GPU (melhora throughput)
-    if DEVICE.type == 'cuda':
+    if DEVICE == 'cuda':
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
     
@@ -122,7 +122,7 @@ def main():
 
     # Configuracao de DataLoader otimizada
     num_workers = min(4, os.cpu_count() or 1)
-    pin_memory = True if DEVICE.type == 'cuda' else False
+    pin_memory = True if DEVICE == 'cuda' else False
 
     if balanced_mode:
         train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=train_sampler, num_workers=num_workers, pin_memory=pin_memory)
