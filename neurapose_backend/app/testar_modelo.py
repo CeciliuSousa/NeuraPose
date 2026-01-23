@@ -18,9 +18,7 @@ from sklearn.metrics import (
 import warnings
 warnings.filterwarnings("ignore")
 
-# Configuracoes
 from neurapose_backend.app.configuracao.config import (
-    # CLASSE1, CLASSE2, # Removed (using cm)
     DATASET_DIR, MODEL_DIR,
     LABELS_TEST_PATH,
     args as config_args
@@ -28,7 +26,7 @@ from neurapose_backend.app.configuracao.config import (
 import neurapose_backend.config_master as cm
 
 
-from neurapose_backend.app.utils.ferramentas import verificar_recursos, imprimir_banner, carregar_sessao_onnx
+from neurapose_backend.app.utils.ferramentas import verificar_recursos, imprimir_banner
 from neurapose_backend.app.pipeline.processador import processar_video
 
 from neurapose_backend.app.utils.gerar_graficos import gerar_todos_graficos
@@ -267,7 +265,7 @@ def main():
             # Gera graficos
             gerar_todos_graficos(metricas_path, resultados_path, labels_gt_path, model_dir.name)
             
-            print(Fore.GREEN + f"\n[OK] Relatorio salvo em: {out_report_dir}")
+            # print(Fore.GREEN + f"\n[OK] Relatorio salvo em: {out_report_dir}")
 
 if __name__ == "__main__":
     main()

@@ -32,7 +32,7 @@ except Exception as e:
     print(Fore.RED + f"[ERRO] Falha ao aplicar configurações do usuário: {e}")
 
 
-from neurapose_backend.pre_processamento.utils.ferramentas import imprimir_banner, carregar_sessao_onnx
+from neurapose_backend.pre_processamento.utils.ferramentas import imprimir_banner
 from neurapose_backend.pre_processamento.pipeline.processador import processar_video
 
 

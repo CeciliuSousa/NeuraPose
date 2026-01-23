@@ -130,7 +130,7 @@ def normalizar_video(input_path: Path, output_dir: Path, target_fps: float = Non
     if abs(fps_atual - target_fps) <= tolerancia:
         # Evita sobrescrever o mesmo arquivo
         if input_path.resolve() != output_path.resolve():
-            print(Fore.GREEN + f"[SKIP] Vídeo já está em {fps_atual:.1f} FPS (alvo: {target_fps}). Copiando...")
+            print(Fore.GREEN + f"[SKIP] Vídeo já está em {fps_atual:.1f} FPS. Copiando...")
             shutil.copy(str(input_path), str(output_path))
         else:
             print(Fore.GREEN + f"[SKIP] Vídeo já está em {fps_atual:.1f} FPS. Usando arquivo existente.")

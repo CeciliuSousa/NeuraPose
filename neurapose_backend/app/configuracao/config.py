@@ -5,9 +5,7 @@
 import argparse
 from pathlib import Path
 
-# ------------------------------------------------------------------
-# Argumentos de linha de comando
-# ------------------------------------------------------------------
+
 parser = argparse.ArgumentParser(add_help=False)
 parser.add_argument("--model", type=str, default=None, help="Sobrescreve TEMPORAL_MODEL")
 parser.add_argument("--relatorio", type=str, default="teste_v1", help="Nome do relatorio")
@@ -17,16 +15,11 @@ parser.add_argument("--input-video", type=str, default="", help="Video unico")
 parser.add_argument("--model-dir", type=str, default="", help="Diretorio do modelo treinado")
 args, _ = parser.parse_known_args()
 
-# ------------------------------------------------------------------
-# Importa TUDO do config_master.py
-# ------------------------------------------------------------------
-# ------------------------------------------------------------------
-# Importa TUDO do config_master.py e SOBRESCREVE com UserConfigManager
-# ------------------------------------------------------------------
+
 import neurapose_backend.config_master as cm
 from neurapose_backend.nucleo.user_config_manager import UserConfigManager
 
-# Carrega configurações do usuário (user_settings.json)
+
 user_config = UserConfigManager.load_config()
 
 # Atualiza atributos do cm com as configs do usuário

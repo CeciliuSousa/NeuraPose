@@ -84,9 +84,9 @@ def gerar_grafico_distribuicao_classes(metricas: Dict[str, Any], metricas_dir: P
     conf_matrix = np.array(metricas['confusion_matrix'])
     
     # Se a matriz não for 2x2, ajustar
-    if conf_matrix.shape != (2, 2):
-        print(Fore.YELLOW + "[AVISO] Matriz de confusão não é 2x2, ajustando...")
-        return
+    # if conf_matrix.shape != (2, 2):
+    #     print(Fore.YELLOW + "[AVISO] Matriz de confusão não é 2x2, ajustando...")
+    #     return
     
     TN, FP, FN, TP = conf_matrix.ravel()
     

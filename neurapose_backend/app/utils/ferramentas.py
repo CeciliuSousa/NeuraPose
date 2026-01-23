@@ -1,5 +1,5 @@
 # ==============================================================
-# neurapose-backend/app/utils/ferramentas.py (COMPLETO E CORRIGIDO)
+# neurapose-backend/app/utils/ferramentas.py
 # ==============================================================
 
 import torch
@@ -67,7 +67,6 @@ def imprimir_banner(checks):
     )
     print("------------------------------------------------------------")
     
-    # Exibe caminhos completos de forma mais legível
     print(f"Modelo             : modelos-lstm-treinados/{checks['modelo_temporal_nome']}")
     print(f"Dataset de teste   : datasets/{checks.get('dataset_name', DATASET_NAME)}/teste/videos")
     if cm.DEVICE.startswith("cuda"):
@@ -78,40 +77,6 @@ def imprimir_banner(checks):
     else:
         print(Fore.YELLOW + "Executando em CPU.")
     print("============================================================\n")
-
-
-def carregar_sessao_onnx(model_path: str | Path):
-    """
-    Carrega uma sessão de inferência ONNX (RTMPose), tentando CUDA e depois CPU.
-    Retorna (sessão, nome_input).
-    """
-    tentativas = []
-    providers_list = [
-        ["CUDAExecutionProvider", "CPUExecutionProvider"],
-        ["CPUExecutionProvider"]
-    ]
-
-    for providers in providers_list:
-        try:
-            opts = ort.SessionOptions()
-            opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-            sess = ort.InferenceSession(str(model_path), providers=providers, sess_options=opts)
-            input_name = sess.get_inputs()[0].name
-            
-            # VERIFICAÇÃO DE PROVIDER ATIVO
-            active_providers = sess.get_providers()
-            if 'CUDAExecutionProvider' in active_providers:
-                # print(Fore.GREEN + "RTMPose usando GPU (CUDAExecutionProvider)")
-                pass
-            else:
-                print(Fore.YELLOW + f"RTMPose usando CPU ({active_providers[0]})")
-            
-            return sess, input_name
-        except Exception as e:
-            tentativas.append((providers, str(e)))
-            print(Fore.RED + f"Falha com providers {providers}: {e}")
-
-    raise RuntimeError(f"Não foi possível iniciar sessão ONNX. Tentativas: {tentativas}")
 
 
 def baixar_video_ytdlp(url: str, pasta_saida: Path) -> Path:
