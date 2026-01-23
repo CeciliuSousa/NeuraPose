@@ -8,7 +8,6 @@ wheels/
 *.egg-info
 *node_modules/
 
-# Modelos pesados (apenas na pasta neurapose)
 neurapose_backend_antigo
 neurapose_backend/**/*.pt
 neurapose_backend/**/*.pth
@@ -27,9 +26,10 @@ neurapose_backend/videos/*
 neurapose_backend/modelos-lstm-treinados/
 neurapose_backend/relatorios-testes/
 
-# Backend - arquivos de dados (não código)
 neurapose_backend/data/
 neurapose_backend/logs/
 neurapose_backend/.env
 
-# Frontend (ainda não desenvolvido)
+agent.md
+exit
+Makefile
