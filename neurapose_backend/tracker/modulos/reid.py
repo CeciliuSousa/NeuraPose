@@ -33,6 +33,16 @@ class CustomReID:
         self.model = OSNetAIN(state_dict)
         self.device = cm.DEVICE
         self.model.to(self.device)
+        
+        # Configuração de Precisão (FP16 vs FP32)
+        # Só ativa FP16 se o usuário quiser E se estivermos rodando em CUDA
+        self.use_fp16 = getattr(cm, 'USE_FP16', False) and (self.device == 'cuda')
+        
+        if self.use_fp16:
+            print(Fore.CYAN + f"[ReID] Otimização FP16 Ativada (Half-Precision)")
+            self.model.half() # Converte pesos e buffers para FP16
+        else:
+            print(Fore.YELLOW + f"[ReID] Rodando em FP32 (Padrão)")
 
         self.norm = T.Compose([
             T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -62,7 +72,7 @@ class CustomReID:
             if crop.size > 0:
                 # Resize direto
                 crop_resized = cv2.resize(crop, (128, 256), interpolation=cv2.INTER_LINEAR)
-                # Normalização e Permutação
+                # Normalização e Permutação (sempre em float32/64 primeiro para precisão no pré-proc)
                 crop_t = torch.from_numpy(crop_resized).permute(2, 0, 1).float() / 255.0
                 crop_t = self.norm(crop_t)
                 batch_crops.append(crop_t)
@@ -73,9 +83,18 @@ class CustomReID:
 
         # Stack into a single tensor [B, C, H, W]
         batch_t = torch.stack(batch_crops).to(self.device)
+        
+        # Conversão para FP16 se ativado
+        if self.use_fp16:
+            batch_t = batch_t.half()
 
         with torch.no_grad():
             batch_feats = self.model(batch_t)
+        
+        # Se estiver em FP16, converte de volta para Float32 antes de sair
+        # Isso garante compatibilidade com o resto do sistema (BoTSORT/NumPy)
+        if self.use_fp16:
+            batch_feats = batch_feats.float()
         
         # Move back to CPU and convert to numpy
         batch_feats = batch_feats.cpu().numpy()

@@ -22,6 +22,9 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 USE_NVENC = True                    # Usar encoder GPU NVIDIA (h264_nvenc) - muito mais rápido
 NVENC_PRESET = "p4"                 # Preset NVENC: p1 (rápido) a p7 (qualidade) - p4 é balanceado
 
+# Inferência
+USE_FP16 = True                     # Usa FP16 (Half Precision) se disponível em GPU (2x mais rápido em RTX)
+
 # Leitura de Vídeo
 USE_PREFETCH = True                 # Pre-fetch de frames em thread separada
 PREFETCH_BUFFER_SIZE = 32           # Tamanho do buffer de frames

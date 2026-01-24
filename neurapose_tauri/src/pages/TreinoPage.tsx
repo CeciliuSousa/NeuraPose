@@ -464,6 +464,7 @@ export default function TreinoPage() {
                         isLoading={loading}
                         onClear={async () => {
                             setLogs([]);
+                            localStorage.removeItem('np_train_logs');
                             try { await APIService.clearLogs('train'); } catch (e) { console.error(e); }
                         }}
                     />

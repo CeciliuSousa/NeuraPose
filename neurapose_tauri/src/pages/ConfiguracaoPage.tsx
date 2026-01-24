@@ -178,6 +178,16 @@ export default function ConfiguracaoPage() {
                 { key: "MAX_FRAMES_PER_SEQUENCE", label: "Máx. Frames por Sequência", type: "number" },
                 { key: "MIN_FRAMES_PER_ID", label: "Mín. Frames por ID", type: "number" },
             ]
+        },
+        {
+            title: "Hardware & Performance",
+            description: "Otimizações de GPU e CPU para acelerar o processamento.",
+            items: [
+                { key: "USE_FP16", label: "Precisão FP16 (RTX 20/30/40)", type: "boolean" },
+                { key: "USE_NVENC", label: "NVENC (Decodificação GPU)", type: "boolean" },
+                { key: "NVENC_PRESET", label: "Preset NVENC (Velocidade/Qualidade)", type: "select", options: ["p1", "p2", "p3", "p4", "p5", "p6", "p7"] },
+                { key: "USE_PREFETCH", label: "Leitura Assíncrona (Prefetch)", type: "boolean" },
+            ]
         }
     ];
 

@@ -270,6 +270,7 @@ export default function TestesPage() {
                         isLoading={loading}
                         onClear={async () => {
                             setLogs([]);
+                            localStorage.removeItem('np_test_logs');
                             try { await APIService.clearLogs('test'); } catch (e) { console.error(e); }
                         }}
                     />

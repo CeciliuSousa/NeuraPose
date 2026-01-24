@@ -57,7 +57,11 @@ class UserConfigManager:
             "RTMPOSE_MODEL": cm.RTMPOSE_MODEL,
             "RTMPOSE_INPUT_SIZE": getattr(cm, "RTMPOSE_INPUT_SIZE", "256x192"), # Default 256x192
             "TEMPORAL_MODEL": getattr(cm, "TEMPORAL_MODEL", "tft"),
-            
+            "USE_FP16": getattr(cm, "USE_FP16", True),
+            "USE_NVENC": getattr(cm, "USE_NVENC", True),
+            "NVENC_PRESET": getattr(cm, "NVENC_PRESET", "p4"),
+            "USE_PREFETCH": getattr(cm, "USE_PREFETCH", True),
+
             # Classes de Detecção
             "CLASSE1": cm.CLASSE1,
             "CLASSE2": cm.CLASSE2,
