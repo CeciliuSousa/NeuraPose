@@ -8,6 +8,8 @@ interface TerminalProps {
     title?: string;
     /** Altura máxima/fixa do terminal */
     height?: string;
+    /** Largura do terminal (default: "100%") */
+    width?: string;
     /** Mostrar barra de progresso (0-100) */
     progress?: number;
     /** Estado de loading/processando */
@@ -37,7 +39,8 @@ interface TerminalProps {
 export function Terminal({
     logs,
     title = 'Terminal',
-    height = '450px',
+    height = '500px',
+    width = '100%',
     progress,
     isLoading = false,
     isPaused = false,
@@ -72,17 +75,30 @@ export function Terminal({
 
     // Determina classes de cor para cada log
     const getLogClasses = (log: string): string => {
-        const isError = log.includes('[ERRO]') || log.includes('[ERROR]');
+        // Normalização das strings para garantir matching
+        const isError = log.includes('[ERRO]') || log.includes('[ERROR]') || log.includes('Critico');
         const isOk = log.includes('[OK]') || log.includes('[SUCESSO]');
-        const isInfo = log.includes('[INFO]') || log.includes('[YOLO]');
-        const isCmd = log.includes('[CMD]');
-        const isWarning = log.includes('[AVISO]') || log.includes('[WARNING]');
+        const isSkip = log.includes('[SKIP]');
 
-        if (isError) return 'text-red-400 border-red-500 bg-red-500/5';
-        if (isOk) return 'text-green-400 border-green-500 bg-green-500/5';
-        if (isWarning) return 'text-yellow-400 border-yellow-500 bg-yellow-500/5';
-        if (isCmd) return 'text-purple-400 border-purple-500 bg-purple-500/5';
-        if (isInfo) return 'text-blue-400 border-blue-500 bg-blue-500/5';
+        // Tags de Processo (Amarelo)
+        const isProcess =
+            log.includes('[NORMALIZAÇÃO]') ||
+            log.includes('[YOLO]') ||
+            log.includes('[RTMPOSE]') ||
+            log.includes('[RTMPose]') ||
+            log.includes('[NUCLEO]') ||
+            log.includes('[PREDIÇÃO]');
+
+        // Info e Headers (Azul)
+        // Verifica [INFO] ou padrão [1/10] ou ENCONTRADOS
+        const isInfo = log.includes('[INFO]') || /\[\d+\/\d+\]/.test(log) || log.includes('ENCONTRADOS');
+
+        if (isError) return 'text-red-400 border-red-500 bg-red-500/5 font-bold';
+        if (isOk) return 'text-green-400 border-green-500 bg-green-500/5 font-bold';
+        if (isSkip) return 'text-purple-400 border-purple-500 bg-purple-500/5 font-semibold';
+        if (isProcess) return 'text-yellow-400 border-yellow-500 bg-yellow-500/5 font-semibold';
+        if (isInfo) return 'text-blue-400 border-blue-500 bg-blue-500/5 font-semibold';
+
         return 'text-slate-300 border-transparent';
     };
 
@@ -98,7 +114,7 @@ export function Terminal({
     return (
         <div
             className={`flex flex-col bg-slate-950 rounded-xl border border-border shadow-2xl overflow-hidden ${className}`}
-            style={{ height }}
+            style={{ height, width }}
         >
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-white/5 shrink-0">

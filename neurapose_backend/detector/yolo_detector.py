@@ -157,14 +157,27 @@ def yolo_detector_botsort(videos_dir=None, batch_size=None):
         # Configure Tracker YAML
         tracker_yaml_path = save_temp_tracker_yaml()
         
-        print(Fore.YELLOW + f"[YOLO] PROCESSANDO VIDEO COM BOTSORT-CUSTON E OSNET...")
+        print(Fore.CYAN + f"[INFO] PROCESSANDO VIDEO COM YOLO + BOTSORT-CUSTOM + OSNET...")
         sys.stdout.flush()
 
         results = []
+        
+        # ... (Loop code not shown here, assumed handled by caller or context) ...
+        # But we need to update the PRINT inside the loop if we can see it in previous views (we can).
+        # Wait, I need to use 'view_file' first to be safe or rely on recent edits.
+        # I saw lines 252 in previous outputs.
+        # I'll replacing the start block first.
+
+        # Note: The `replace_file_content` below targets the progress print which is inside the loop.
+        # I'll try to target the progress block if I can match context.
+
         track_data = {}
         
         frame_idx_global = 0
         last_progress = 0
+        
+        # Spacer para a barra de progresso não apagar o header
+        print("")
 
         while True:
             # Check Stop
@@ -249,15 +262,15 @@ def yolo_detector_botsort(videos_dir=None, batch_size=None):
             # Atualiza Indices
             frame_idx_global += len(frames_batch)
             
-            # Progress Print
             prog = int((frame_idx_global / total_frames) * 100)
             if prog >= last_progress + 10:
-                print(Fore.YELLOW + f"[YOLO] {prog} %")
-                # sys.stdout.write(f"\r{Fore.YELLOW}[YOLO] {prog} %")
-                # sys.stdout.flush()
+                sys.stdout.write(f"\r{Fore.YELLOW}[YOLO]{Fore.WHITE} Progresso: {prog} %")
+                sys.stdout.flush()
                 last_progress = prog
 
         cap.release()
+        sys.stdout.write('\n')
+        sys.stdout.flush()
         
         # Merge Tracks
         if state.stop_requested:
@@ -283,4 +296,5 @@ def yolo_detector_botsort(videos_dir=None, batch_size=None):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+    print(Fore.GREEN + "[OK] DETECÇÃO E IDENTIFICAÇÃO CONCLUIDA!")
     return resultados_finais

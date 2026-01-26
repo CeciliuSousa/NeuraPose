@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ScanFace, Save, Trash2, Scissors, ArrowRightLeft, RotateCcw, FileVideo, Pencil } from 'lucide-react';
+import { PageHeader } from '../components/ui/PageHeader';
 import { APIService, ReIDVideo, ReIDData } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { FilterDropdown, FilterOption } from '../components/ui/FilterDropdown';
@@ -383,18 +384,12 @@ export default function ReidPage() {
 
     return (
         <div className="h-[calc(100vh-8rem)] flex flex-col space-y-4">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-border pb-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                        <ScanFace className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Re-identificação Manual</h1>
-                        <p className="text-sm text-muted-foreground">Corrija identidades e limpe o dataset.</p>
-                    </div>
-                </div>
 
+            <PageHeader
+                title="Re-identificação Manual"
+                description="Corrija identidades e limpe o dataset."
+                icon={ScanFace}
+            >
                 <div className="flex items-center gap-3">
                     <PathSelector
                         value={inputPath}
@@ -410,7 +405,7 @@ export default function ReidPage() {
                         <RotateCcw className={`w-4 h-4 text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
-            </div>
+            </PageHeader>
 
             <StatusMessage message={message} onClose={() => setMessage('')} autoCloseDelay={5000} />
 

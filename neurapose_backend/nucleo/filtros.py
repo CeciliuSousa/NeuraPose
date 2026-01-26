@@ -31,7 +31,7 @@ def filtrar_ids_validos_v6(registros, min_frames=cm.MIN_FRAMES_PER_ID, min_dist=
     if not registros:
         return []
 
-    print(Fore.CYAN + "\n[NUCLEO] Iniciando filtragem unificada de IDs (V6)...")
+    # print(Fore.YELLOW + "\n[NUCLEO] Iniciando filtragem unificada de IDs (V6)...")
 
     # 1. Coletar estatísticas de cada ID
     stats_id = {} 
@@ -87,14 +87,15 @@ def filtrar_ids_validos_v6(registros, min_frames=cm.MIN_FRAMES_PER_ID, min_dist=
 
         if rejeitado:
             if verbose:
-                print(Fore.YELLOW + f"  - ID {pid} removido: {motivo}")
+                print(Fore.YELLOW + "[NUCLEO]" + Fore.WHITE + f" ID: {pid} removido: {motivo}")
             continue
             
         # Aprovado
         ids_validos.append(pid)
 
     if verbose:
-        print(Fore.GREEN + f"[OK] IDs Aprovados: {ids_validos}")
+        # print(Fore.GREEN + f"[OK] IDs Aprovados: {ids_validos}")
+        pass
 
     return ids_validos
 

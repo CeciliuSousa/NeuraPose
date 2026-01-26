@@ -9,6 +9,7 @@ import json
 import shutil
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
+from colorama import Fore
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -66,8 +67,15 @@ importlib.reload(cm)
 # ==============================================================
 # LOGGING
 # ==============================================================
+# Garante que codes ANSI passem (strip=False)
+from colorama import init
+init(strip=False)
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("NeuraPoseAPI")
+
+# Silencia logs de acesso do Uvicorn (HTTP requests)
+logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 
 # ==============================================================
 # SEGURANÇA: Pastas e arquivos restritos no explorador
@@ -404,26 +412,26 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
             imprimir_banner(cm.RTMPOSE_PATH)
             
             if input_p.is_file():
-                print(f"[INFO] Processando 1 vídeo: {input_p.name}")
+                print(Fore.CYAN + f"[INFO] PROCESSANDO 1 VIDEO: {input_p.name}")
                 processar_video(input_p, output_path, show=show)
                 
             elif input_p.is_dir():
                 videos = sorted(input_p.glob("*.mp4"))
                 output_path.mkdir(parents=True, exist_ok=True)
-                print(f"[INFO] Encontrados {len(videos)} vídeos")
+                print(Fore.CYAN + f"[INFO] ENCONTRADOS {len(videos)} VIDEOS")
                 
                 for i, v in enumerate(videos, 1):
                     if state.stop_requested:
-                        print("[INFO] Processamento interrompido pelo usuário.")
+                        print(Fore.YELLOW + "[INFO] PROCESSAMENTO INTERROMPIDO PELO USUARIO.")
                         break
-                    print(f"\n[{i}/{len(videos)}] Processando: {v.name}")
+                    print(Fore.CYAN + f"[{i}/{len(videos)}] PROCESSANDO {v.name}")
                     processar_video(v, output_path, show=show)
                     state.current_frame = None  # Limpa frame entre vídeos
             
             if state.stop_requested:
                 state.process_status = 'idle'
             else:
-                print("[OK] Processamento concluído com sucesso!")
+                print(Fore.GREEN + "[OK]" + Fore.WHITE + " ENCERRANDO PROGRAMA DE PROCESSAMENTO...")
                 state.process_status = 'success'
                 
         except Exception as e:
@@ -468,16 +476,16 @@ def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, 
                 final_out = output_path
                 if final_out == Path(cm.PROCESSING_OUTPUT_DIR):
                      final_out = output_path / v_name
-                print(f"[INFO] Processando 1 vídeo: {input_path.name}")
+                # print(f"[INFO] Processando 1 vídeo: {input_path.name}")
                 processar_video(input_path, final_out, show=show)
             elif input_path.is_dir():
                 videos = sorted(input_path.glob("*.mp4"))
                 output_path.mkdir(parents=True, exist_ok=True)
                 # print(f"[INFO] Encontrados {len(videos)} vídeos em {input_path}")
-                print(f"[INFO] Encontrados {len(videos)} vídeos")
+                print(f"[INFO] ENCONTRADOS {len(videos)} VIDEOS")
                 for i, v in enumerate(videos, 1):
                     if state.stop_requested: break
-                    print(f"\n[{i}/{len(videos)}] Processando: {v.name}")
+                    print(f"\n[{i}/{len(videos)}] PROCESSANDO {v.name}")
                     processar_video(v, output_path, show=show)
                     # Limpa frame entre vídeos para mostrar placeholder
                     state.current_frame = None
@@ -491,7 +499,7 @@ def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, 
                 state.process_status = 'success'
         except Exception as e:
             logger.error(f"Erro no processamento: {e}")
-            print(f"Erro critico: {e}")
+            print(Fore.RED + f"Erro critico: {e}")
             state.process_status = 'error'
         finally:
             state.is_running = False

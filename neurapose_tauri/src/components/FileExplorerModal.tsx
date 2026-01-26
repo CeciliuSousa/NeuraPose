@@ -51,6 +51,8 @@ export function FileExplorerModal({
     }, [isOpen, initialPath]);
 
     const loadPath = async (path: string) => {
+        if (!path || path === 'undefined' || path === 'null') return;
+
         if (rootPath) {
             const normRoot = normalize(rootPath);
             const normPath = normalize(path);

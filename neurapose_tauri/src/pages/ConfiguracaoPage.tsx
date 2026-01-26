@@ -193,7 +193,7 @@ export default function ConfiguracaoPage() {
 
 
     return (
-        <div className="space-y-6 max-w-6xl mx-auto pb-20 px-4">
+        <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-border pb-6 gap-4">
                 <div className="flex items-center gap-4">
                     <div className="p-4 bg-primary/10 rounded-2xl shadow-inner">

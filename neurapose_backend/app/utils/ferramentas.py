@@ -55,6 +55,7 @@ def verificar_recursos():
         "dataset_path": str(DATASET_DIR),
     }
 
+
 def imprimir_banner(checks):
     sys_info = get_system_info()
     
@@ -64,13 +65,12 @@ def imprimir_banner(checks):
     
     # Ferramentas
     print(Fore.WHITE + f"YOLO              : {status_str(checks['yolo'])} {Fore.WHITE}{cm.YOLO_PATH.name}")
-    print(Fore.WHITE + f"TRACKER           : {status_str(True)} {Fore.WHITE}{cm.TRACKER_NAME}")
-    print(Fore.WHITE + f"OSNet ReID        : {status_str(checks['osnet'])} {Fore.WHITE}{cm.OSNET_PATH.name}")
-    print(Fore.WHITE + f"RTMPose-l         : {status_str(checks['rtmpose'])} {Fore.WHITE}{cm.RTMPOSE_PATH.name}")
+    print(Fore.WHITE + f"TRACKER           : {status_str(True)} {Fore.WHITE}{cm.TRACKER_NAME}-Custom")
+    print(Fore.WHITE + f"OSNet ReID        : {status_str(checks['osnet'])} {Fore.WHITE}{cm.OSNET_PATH.name[:25]}...")
+    print(Fore.WHITE + f"RTMPose-l         : {status_str(checks['rtmpose'])} {Fore.WHITE}rtmpose.../{cm.RTMPOSE_PATH.name}")
     
-    # Modelo Temporal
-    mod_temp_name = "Carregado" if checks['modelo_temporal'] else "Não Encontrado"
-    print(Fore.WHITE + f"Modelo Temporal   : {status_str(checks['modelo_temporal'])} {Fore.WHITE}{mod_temp_name}")
+    mod_temp = "Temporal Fusion Transformer" if cm.TEMPORAL_MODEL == "tft" else "LSTM / BiLSTM"
+    print(Fore.WHITE + f"Modelo Temporal   : {status_str(checks['modelo_temporal'])} {Fore.WHITE}{mod_temp}")
     
     print(Fore.WHITE + "-"*62)
     

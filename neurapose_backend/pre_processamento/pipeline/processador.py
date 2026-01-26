@@ -59,7 +59,7 @@ def processar_video(video_path: Path, out_root: Path, show=False):
 
     # 1. NORMALIZAÇÃO DE VÍDEO (FPS) - MODULARIZADO
     # --------------------------------------------------------
-    print(Fore.CYAN + f"[INFO] Normalizando video para {cm.FPS_TARGET} FPS...")
+    print(Fore.CYAN + f"[INFO] NORMALIZANDO VIDEOS PARA {cm.FPS_TARGET} FPS...")
     
     # Chama o módulo central
     norm_path, time_norm = normalizar_video(video_path, videos_dir, cm.FPS_TARGET)
@@ -95,7 +95,7 @@ def processar_video(video_path: Path, out_root: Path, show=False):
     # Salva JSON Limpo
     with open(json_path, "w") as f:
         json.dump(registros, f, indent=2)
-    print(Fore.GREEN + f"[OK] JSON Final salvo: {json_path.name}")
+    print(Fore.GREEN + "[OK]" + Fore.WHITE + f" JSON Final salvo: {json_path.name}")
 
     # Gera Vídeo de Predição (Visualização Universal)
     out_video_path = preds_dir / f"{video_path.stem}_{int(cm.FPS_TARGET)}fps_pose.mp4"
@@ -126,14 +126,14 @@ def processar_video(video_path: Path, out_root: Path, show=False):
     # --------------------------------------------------------
     time_total = time_yolo + time_rtmpose + time_norm
     
-    print(Fore.CYAN + "\n" + "="*60)
-    print(Fore.CYAN + f"  TEMPOS DE PROCESSAMENTO - {video_path.name}")
-    print(Fore.CYAN + "="*60)
-    print(Fore.YELLOW + f"  {f'Normalização video {int(cm.FPS_TARGET)} FPS':<40} {time_norm:>10.2f} seg")
-    print(Fore.YELLOW + f"  {'YOLO + BoTSORT + OSNet':<40} {time_yolo:>10.2f} seg")
-    print(Fore.YELLOW + f"  {'RTMPose':<40} {time_rtmpose:>10.2f} seg")
+    print(Fore.WHITE + "="*60)
+    print(Fore.WHITE + f"TEMPOS DE PROCESSAMENTO - {video_path.name}")
+    print(Fore.WHITE + "="*60)
+    print(Fore.WHITE + f"{f'Normalização video {int(cm.FPS_TARGET)} FPS':<45} {time_norm:>10.2f} seg")
+    print(Fore.WHITE + f"{'YOLO + BoTSORT-Custom + OSNet':<45} {time_yolo:>10.2f} seg")
+    print(Fore.WHITE + f"{'RTMPose':<45} {time_rtmpose:>10.2f} seg")
     print(Fore.WHITE + "-"*60)
-    print(Fore.GREEN + f"  {'TOTAL':<40} {time_total:>10.2f} seg")
-    print(Fore.CYAN + "="*60 + "\n")
+    print(Fore.WHITE + f"{'TOTAL':<45} {time_total:>10.2f} seg")
+    print(Fore.WHITE + "="*60 + "\n")
     
     return {"yolo": time_yolo, "rtmpose": time_rtmpose, "total": time_total}

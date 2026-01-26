@@ -48,9 +48,9 @@ def imprimir_banner(onnx_path: Path):
     # Ferramentas
     yolopath = cm.ROOT / "detector" / "modelos" / cm.YOLO_MODEL
     print(Fore.WHITE + f"YOLO              : {status_str(yolopath.exists())} {Fore.WHITE}{cm.YOLO_MODEL}")
-    print(Fore.WHITE + f"TRACKER           : {status_str(True)} {Fore.WHITE}{cm.TRACKER_NAME}")
-    print(Fore.WHITE + f"OSNet ReID        : {status_str(cm.OSNET_PATH.exists())} {Fore.WHITE}{cm.OSNET_PATH.name}")
-    print(Fore.WHITE + f"RTMPose-l         : {status_str(onnx_path.exists())} {Fore.WHITE}{onnx_path.name}")
+    print(Fore.WHITE + f"TRACKER           : {status_str(True)} {Fore.WHITE}{cm.TRACKER_NAME}-Custom")
+    print(Fore.WHITE + f"OSNet ReID        : {status_str(cm.OSNET_PATH.exists())} {Fore.WHITE}{cm.OSNET_PATH.name[:25]}...")
+    print(Fore.WHITE + f"RTMPose-l         : {status_str(onnx_path.exists())} {Fore.WHITE}rtmpose.../{onnx_path.name}")
     
     print(Fore.WHITE + "-"*62)
     

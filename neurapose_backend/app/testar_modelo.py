@@ -73,7 +73,7 @@ def main():
     
     if not video_list: return
     
-    print(Fore.BLUE + f"[OK] DIRETORIO DE VIDEOS ENCONTRADO, TOTAL DE VIDEOS: {len(video_list)}")
+    print(Fore.BLUE + f"[INFO] ENCONTRADOS {len(video_list)} VIDEOS")
     print("")
 
     labels_gt = {}
@@ -89,16 +89,17 @@ def main():
     
     for i, video_path in enumerate(video_list):
         if state.stop_requested: break
-        print(Fore.MAGENTA + f"[VIDEO] PROCESSANDO: {video_path.name} - [{i+1} / {total_videos}]")
+        print(Fore.BLUE + f"[{i+1}/{total_videos}] PROCESSANDO {video_path.name}")
         
         predictions = processar_video(video_path, lstm_model, norm_stats.get("mu"), norm_stats.get("sigma"), show_preview=args.show, output_dir=out_report_dir)
         all_predictions[video_path.stem] = predictions
         
-        print(Fore.GREEN + f"[OK] SALVAMENTO CONCLUIDO!\n")
+        print(Fore.BLUE + f"[INFO] SALVANDO O PROCESSAMENTO: {video_path.name}...") 
+        print(Fore.GREEN + f"[OK]" + Fore.WHITE + f" SALVAMENTO CONCLUIDO!!\n")
 
     if state.stop_requested: return
     
-    print(Fore.CYAN + "[PROCESSO] SALVANDO RELATÓRIO COMPLETO DE TESTE DO MODELO...")
+    print(Fore.BLUE + "[INFO] SALVANDO RELATÓRIO COMPLETO DE TESTE DO MODELO...")
 
     # Metricas
     if labels_gt:
@@ -127,7 +128,7 @@ def main():
             
             gerar_todos_graficos(out_metricas_dir / "metricas.json", out_metricas_dir / "resultados.json", labels_gt_path, model_dir.name)
 
-    print(Fore.GREEN + "[OK] FINALIZANDO O PROGRAMA DE TESTE DE MODELO...")
+    print(Fore.GREEN + "[OK]" + Fore.WHITE + " FINALIZANDO O PROGRAMA DE TESTE DO MODELO...")
 
 if __name__ == "__main__":
     main()

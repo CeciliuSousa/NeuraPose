@@ -6,6 +6,7 @@ import os
 import numpy as np
 import hashlib
 from pathlib import Path
+from colorama import Fore
 
 
 import neurapose_backend.config_master as cm
@@ -189,7 +190,7 @@ def gerar_video_predicao(
             registros_por_frame[f_id] = []
         registros_por_frame[f_id].append(r)
 
-    print(f"[INFO] Renderizando vídeo final: {video_path.name}...")
+    print(Fore.CYAN + f"[INFO] RENDERIZANDO VÍDEO: {video_path.name}...")
 
     frame_idx = 1 # frames humanos (1-based)
 

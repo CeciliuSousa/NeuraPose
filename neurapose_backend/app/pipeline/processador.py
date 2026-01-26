@@ -66,7 +66,7 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
 
     # 1. NORMALIZAÇÃO DE VÍDEO
     # ============================================================
-    print(Fore.CYAN + f"[0/4] Normalizando Vídeo...")
+    # print(Fore.CYAN + f"[0/4] Normalizando Vídeo...")
     norm_path, t_norm = normalizar_video(video_path, videos_norm_dir)
     tempos["normalizacao"] = t_norm
 
@@ -96,7 +96,7 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
 
     # 4. CLASSIFICAÇÃO SEQUENCIAL (LSTM)
     # ============================================================
-    print(Fore.CYAN + f"[4/4] Classificando Comportamentos (LSTM)...")
+    print(Fore.CYAN + f"[INFO] CLASSIFICANDO VÍDEO {video_path.name}...")
     t0_temp = time.time()
     
     id_preds = {}   # id -> classe (0 ou 1)
@@ -121,9 +121,14 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
         
         id_preds[gid] = classe_id
         id_scores[gid] = score
+        
+        # Log Predição individual
+        print(Fore.YELLOW + "[PREDIÇÃO]" + Fore.WHITE + f" ID: {gid}: {cm.CLASSE2 if classe_id == 1 else cm.CLASSE1}")
 
     t1_temp = time.time()
     tempos["temporal_total"] = t1_temp - t0_temp
+    
+    print(Fore.GREEN + "[OK]" + Fore.WHITE + " CLASSIFICAÇÃO CONCLUIDA!\n")
 
     # Enriquece registros com classificação
     for r in records:
@@ -141,7 +146,7 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
 
     # 5. GERAÇÃO DE RELATÓRIOS (Tracking JSON)
     # ============================================================
-    print(Fore.CYAN + f"[5/5] Gerando Relatórios de Tracking...")
+    # print(Fore.BLUE + f"[INFO] Gerando Relatórios de Tracking...")
     
     
     trackings_dir = output_dir / "jsons"
@@ -180,17 +185,20 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
     tempos["rtmpose"] = tempos["rtmpose_total"]
     tempos["total"] = tempos["video_total"]
 
+    # Tempo Temporal Model Name
+    model_disp_name = "Temporal Fusion Transformer" if cm.TEMPORAL_MODEL == "tft" else "LSTM / BiLSTM"
+
     # Imprime Tabela
-    print(Fore.CYAN + "\n" + "="*60)
-    print(Fore.CYAN + f"  TEMPOS DE PROCESSAMENTO (APP MODULAR) - {video_path.name}")
-    print(Fore.CYAN + "="*60)
-    print(Fore.YELLOW + f"  {'Normalização':<30} {tempos['normalizacao']:>12.2f} seg")
-    print(Fore.YELLOW + f"  {'YOLO + BoTSORT + OSNet':<30} {tempos['detector_total']:>12.2f} seg")
-    print(Fore.YELLOW + f"  {'RTMPose':<30} {tempos['rtmpose_total']:>12.2f} seg")
-    print(Fore.YELLOW + f"  {str(cm.TEMPORAL_MODEL).upper():<30} {tempos['temporal_total']:>12.2f} seg")
+    print(Fore.WHITE + "="*60)
+    print(Fore.WHITE + f"TEMPOS DE PROCESSAMENTO - {video_path.name}")
+    print(Fore.WHITE + "="*60)
+    print(Fore.WHITE + f"{f'Normalização video {int(cm.FPS_TARGET)} FPS':<45} {tempos['normalizacao']:>10.2f} seg")
+    print(Fore.WHITE + f"{'YOLO + BoTSORT-Custom + OSNet':<45} {tempos['detector_total']:>10.2f} seg")
+    print(Fore.WHITE + f"{'RTMPose':<45} {tempos['rtmpose_total']:>10.2f} seg")
+    print(Fore.WHITE + f"{model_disp_name:<45} {tempos['temporal_total']:>10.2f} seg")
     print(Fore.WHITE + "-"*60)
-    print(Fore.GREEN + f"  {'TOTAL VIDEO':<30} {tempos['video_total']:>12.2f} seg")
-    print(Fore.CYAN + "="*60 + "\n")
+    print(Fore.WHITE + f"{'TOTAL':<45} {tempos['video_total']:>10.2f} seg")
+    print(Fore.WHITE + "="*60 + "\n")
 
     # Retorno final para main.py
     video_pred = 1 if any(v == 1 for v in id_preds.values()) else 0

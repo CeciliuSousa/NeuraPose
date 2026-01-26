@@ -88,31 +88,31 @@ def normalizar_video(input_path: Path, output_dir: Path, target_fps: float = Non
     fps_atual = cap.get(cv2.CAP_PROP_FPS)
     cap.release()
     
-    # 1. SKIP
+    # ============================================================
+    # SKIP INTELIGENTE
+    # ============================================================
     if abs(fps_atual - target_fps) <= tolerancia:
         if input_path.resolve() != output_path.resolve():
             shutil.copy(str(input_path), str(output_path))
         else:
             output_path = input_path
             
-        print(Fore.GREEN + f"[OK] VIDEO NORMALIZADO EM {int(fps_atual)} FPS.")
+        print(Fore.YELLOW + f"[NORMALIZAÇÃO] VIDEO NORMALIZADO EM {int(fps_atual)} FPS.")
         return output_path, (time.time() - start_time)
     
     # Inicia Processo
-    print(Fore.YELLOW + f"[NORMALIZAÇÃO] NORMALIZANDO VIDEO EM {int(target_fps)} FPS...")
+    print(Fore.CYAN + f"[INFO] NORMALIZANDO VIDEOS PARA {int(target_fps)} FPS...")
     
     # 2. NVENC
     if cm.USE_NVENC:
         if _normalizar_com_nvenc(input_path, output_path, target_fps):
-            print(Fore.GREEN + "[OK] NORMALIZAÇÃO CONCLUÍDA")
+            print(Fore.GREEN + "[OK] NORMALIZAÇÃO CONCLUÍDA!")
             return output_path, (time.time() - start_time)
     
     # 3. OpenCV
     if _normalizar_com_opencv(input_path, output_path, target_fps):
-        print(Fore.GREEN + "[OK] NORMALIZAÇÃO CONCLUÍDA")
+        print(Fore.GREEN + "[OK] NORMALIZAÇÃO CONCLUÍDA!")
         return output_path, (time.time() - start_time)
     
     print(Fore.RED + "[ERRO] Falha geral na normalização.")
     return None, 0.0
-
-

@@ -90,7 +90,7 @@ def executar_pipeline_extracao(
     # 2. EXTRAÇÃO DE POSE (RTMPose Modular)
     # --------------------------------------------------------
     if verbose:
-        print(Fore.YELLOW + f"[RTMPOSE] PROCESSANDO VIDEO...")
+        print(Fore.CYAN + f"[INFO] PROCESSANDO EXTRAÇÃO DE POSE...")
     
     t0 = time.time()
     records = []
@@ -101,8 +101,10 @@ def executar_pipeline_extracao(
         
         with VideoReaderAsync(video_path_norm) as reader:
             total_frames = reader.total_frames
-            last_progress = 0
             
+            if verbose: print("")
+            last_progress = 0
+        
             for frame_idx, frame in reader:
                 # Verifica parada solicitada (App)
                 if state and state.stop_requested:
@@ -129,9 +131,13 @@ def executar_pipeline_extracao(
                 if verbose:
                     progress = int((frame_idx / (total_frames or 1)) * 100)
                     if progress >= last_progress + 10:
-                        print(Fore.CYAN + f"[RTMPose] Progresso: {progress}% ({frame_idx}/{total_frames})")
+                        sys.stdout.write(f"\r{Fore.YELLOW}[RTMPose]{Fore.WHITE} Progresso: {progress}%")
                         sys.stdout.flush()
                         last_progress = progress
+            
+            if verbose:
+                sys.stdout.write('\n')
+                sys.stdout.flush()
                         
             final_frame_idx = frame_idx if 'frame_idx' in dir() else 0
     else:
@@ -140,6 +146,7 @@ def executar_pipeline_extracao(
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         frame_idx = 1
         last_progress = 0
+        if verbose: print("")
 
         while True:
             if state and state.stop_requested:
@@ -166,13 +173,16 @@ def executar_pipeline_extracao(
             if verbose:
                 progress = int((frame_idx / (total_frames or 1)) * 100)
                 if progress >= last_progress + 10:
-                    print(Fore.YELLOW + f"[RTMPOSE] {progress} %")
+                    sys.stdout.write(f"\r{Fore.YELLOW}[RTMPose]{Fore.WHITE} Progresso: {progress}%")
                     sys.stdout.flush()
                     last_progress = progress
 
             frame_idx += 1
             
         cap.release()
+        if verbose:
+            sys.stdout.write('\n')
+            sys.stdout.flush()
         final_frame_idx = frame_idx - 1
         
     t1 = time.time()
@@ -182,10 +192,9 @@ def executar_pipeline_extracao(
         if verbose: print(Fore.RED + "[AVISO] Nenhuma pose detectada.")
         return [], id_map_full, [], final_frame_idx, tempos
 
-    # 3. FILTRAGEM (Ghosting + V6)
-    # --------------------------------------------------------
     if verbose:
-        print(Fore.CYAN + f"[INFO] Filtrando Ghosting e IDs (V6)...")
+        print(Fore.GREEN + "[OK]" + Fore.WHITE + " EXTRAÇÃO DE POSE CONCLUÍDA!")
+        print(Fore.CYAN + f"[INFO] FILTRANDO OS IDs...")
 
     # A) Anti-Ghosting (CRÍTICO: Garante que IDs duplicados/fantasmas sejam removidos antes da validação)
     records = filtrar_ghosting_v5(records, iou_thresh=0.8)
@@ -197,6 +206,10 @@ def executar_pipeline_extracao(
         min_dist=50.0,                   # Padrão V6
         verbose=verbose
     )
+    
+    if verbose:
+        print(Fore.YELLOW + "[NUCLEO]" + Fore.WHITE + f" IDs APROVADOS: {sorted(ids_validos)}")
+        print(Fore.GREEN + "[OK]" + Fore.WHITE + f" FILTRAGEM CONCLUÍDA!")
     
     # C) Filtra registros finais
     registros_finais = [r for r in records if r["id_persistente"] in ids_validos]

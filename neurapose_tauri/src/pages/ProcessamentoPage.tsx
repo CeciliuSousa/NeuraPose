@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
 import {
-    Video,
-    Play,
-    Pause,
-    Square,
+    Video
 } from 'lucide-react';
 import { APIService } from '../services/api';
+import ws from '../services/websocket';
+
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { Terminal } from '../components/ui/Terminal';
 import { VideoPreviewPanel } from '../components/ui/VideoPreviewPanel';
 import { PreviewToggle } from '../components/ui/PreviewToggle';
 import { PathSelector } from '../components/ui/PathSelector';
+import { ConfigCard } from '../components/ui/ConfigCard';
+import { DeviceSelector } from '../components/ui/DeviceSelector';
+import { ProcessControls } from '../components/ui/ProcessControls';
+import { PageHeader } from '../components/ui/PageHeader';
 
 export default function ProcessamentoPage() {
     // Form State
@@ -27,12 +30,19 @@ export default function ProcessamentoPage() {
     const [logs, setLogs] = useState<string[]>([]);
     const [explorerTarget, setExplorerTarget] = useState<'input' | null>(null);
     const [roots, setRoots] = useState<Record<string, string>>({});
-    const [progress, setProgress] = useState(0);
+
 
     // Carregamento inicial de caminhos e logs - apenas UMA VEZ na montagem
     useEffect(() => {
         const savedLogs = localStorage.getItem('np_process_logs');
-        if (savedLogs) setLogs(JSON.parse(savedLogs));
+        if (savedLogs) {
+            try {
+                setLogs(JSON.parse(savedLogs));
+            } catch (e) {
+                console.error("Erro ao carregar logs salvos:", e);
+                localStorage.removeItem('np_process_logs');
+            }
+        }
 
         APIService.getConfig().then(res => {
             if (res.data.status === 'success') {
@@ -50,8 +60,10 @@ export default function ProcessamentoPage() {
         // Restaurar estado
         const savedConfig = localStorage.getItem('np_process_config');
         if (savedConfig && !config.inputPath) {
-            const parsed = JSON.parse(savedConfig);
-            setConfig((prev: any) => ({ ...prev, ...parsed, inputPath: prev.inputPath }));
+            try {
+                const parsed = JSON.parse(savedConfig);
+                setConfig((prev: any) => ({ ...prev, ...parsed, inputPath: prev.inputPath }));
+            } catch (e) { console.error(e); }
         }
 
         const savedLoading = localStorage.getItem('np_process_loading');
@@ -60,56 +72,50 @@ export default function ProcessamentoPage() {
         if (loading) {
             localStorage.setItem('np_process_loading', 'true');
 
-            // Conecta ao WebSocket
-            import('../services/websocket').then(mod => {
-                const ws = mod.default;
-                ws.connectLogs('process');
-                ws.connectStatus(); // Garante que status está conectado
+            // Conecta ao WebSocket (Usa importação do topo)
+            ws.connectLogs('process');
+            ws.connectStatus();
 
-                // Listener de Logs
-                const handleLogs = (newLogs: string[]) => {
-                    setLogs((prev) => {
-                        // Combina logs antigos com novos (sem duplicatas se possível, ou apenas append)
-                        // A implementação atual do backend envia TODOS os logs novos a cada mensagem ou delta?
-                        // O backend envia "new_logs" (apenas os novos).
-                        // Mas o frontend espera uma lista completa no setLogs se for substituir?
-                        // O Terminal.tsx espera um array de strings.
-                        // Vamos fazer append dos novos logs.
-                        return [...prev, ...newLogs];
+            // Listener de Logs
+            const handleLogs = (data: any) => {
+                // Suporte a payload antigo (array) ou novo (objeto com metadata)
+                const newLogs = Array.isArray(data) ? data : (data.logs || []);
+                const total = data.total || 0;
+
+                setLogs((prev) => {
+                    // Detecção de Full Sync (evita duplicidade) - Reset se receber histórico completo
+                    let currentLogs = (newLogs.length >= total && total > 0) ? [] : [...prev];
+
+                    newLogs.forEach((log: string) => {
+                        // Modo Lista: Remove \r e sempre adiciona nova linha (Comportamento solicitado)
+                        const content = log.replace(/\r/g, '');
+                        if (content.trim()) {
+                            currentLogs.push(content);
+                        }
                     });
+                    return currentLogs;
+                });
+            };
 
-                    // Salva no localStorage (opcional, pode ficar pesado)
-                    // localStorage.setItem('np_process_logs', JSON.stringify([...prev, ...newLogs])); // Cuidado com stale closure
+            // Listener de Status
+            const handleStatus = (status: any) => {
+                setIsPaused(status.is_paused);
 
-                    // Parse progresso
-                    const lastLog = newLogs[newLogs.length - 1];
-                    if (lastLog && lastLog.includes('[PROGRESSO]')) {
-                        const match = lastLog.match(/(\d+)%/);
-                        if (match) setProgress(parseInt(match[1]));
-                    }
-                };
+                if (!status.is_running && loading) {
+                    setLoading(false);
+                    localStorage.setItem('np_process_loading', 'false');
+                    ws.disconnectLogs();
+                }
+            };
 
-                // Listener de Status (para parar quando acabar)
-                const handleStatus = (status: any) => {
-                    setIsPaused(status.is_paused);
+            ws.events.on('logs', handleLogs);
+            ws.events.on('status', handleStatus);
 
-                    // Se parou de rodar e estava carregando -> Fim
-                    if (!status.is_running && loading) {
-                        setLoading(false);
-                        localStorage.setItem('np_process_loading', 'false');
-                        ws.disconnectLogs(); // Desconecta logs
-                    }
-                };
-
-                ws.events.on('logs', handleLogs);
-                ws.events.on('status', handleStatus);
-
-                // Cleanup function
-                return () => {
-                    ws.events.off('logs', handleLogs);
-                    ws.events.off('status', handleStatus);
-                };
-            });
+            // Cleanup function
+            return () => {
+                ws.events.off('logs', handleLogs);
+                ws.events.off('status', handleStatus);
+            };
 
         } else {
             localStorage.setItem('np_process_loading', 'false');
@@ -127,7 +133,8 @@ export default function ProcessamentoPage() {
         }
 
         setLoading(true);
-        setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Iniciando comunicação com o servidor...`]);
+        // Limpa logs anteriores ao iniciar
+        setLogs([`[${new Date().toLocaleTimeString()}] Iniciando comunicação com o servidor...`]);
 
         try {
             await APIService.startProcessing({
@@ -170,19 +177,16 @@ export default function ProcessamentoPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center gap-3 border-b border-border pb-4">
-                <div className="p-2 bg-primary/10 rounded-md">
-                    <Video className="w-6 h-6 text-primary" />
-                </div>
-                <h1 className="text-2xl font-bold">Processamento de Vídeo</h1>
-            </div>
+            <PageHeader
+                title="Processamento de Vídeo"
+                description="Analise vídeos para detectar furtos e anomalias de comportamento em tempo real."
+                icon={Video}
+            />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Left: Configuration */}
                 <div className="space-y-6">
-                    <div className="bg-card border border-border rounded-xl p-6 shadow-sm">
-                        <h2 className="text-lg font-semibold mb-6">Configuração de Diretórios</h2>
-
+                    <ConfigCard title="Configuração de Diretórios">
                         <div className="space-y-4">
                             <div className="space-y-4">
                                 <PathSelector
@@ -207,61 +211,30 @@ export default function ProcessamentoPage() {
                                 </p>
                             </div> */}
 
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-muted-foreground italic">Hardware para Inferência</label>
-                                <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-xl">
-                                    <button
-                                        onClick={() => setConfig({ ...config, device: 'cuda' })}
-                                        className={`py-2 text-xs font-bold rounded-lg transition-all ${config.device === 'cuda' ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-background/50 text-muted-foreground'}`}
-                                    >
-                                        GPU (CUDA)
-                                    </button>
-                                    <button
-                                        onClick={() => setConfig({ ...config, device: 'cpu' })}
-                                        className={`py-2 text-xs font-bold rounded-lg transition-all ${config.device === 'cpu' ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-background/50 text-muted-foreground'}`}
-                                    >
-                                        CPU
-                                    </button>
-                                </div>
-                            </div>
-
-
-                            <PreviewToggle
-                                checked={config.showPreview}
-                                onChange={(value) => setConfig({ ...config, showPreview: value })}
-                                isProcessing={loading}
+                            <DeviceSelector
+                                value={config.device}
+                                onChange={(val) => setConfig({ ...config, device: val })}
                             />
 
-                            <div className="pt-4 space-y-3">
-                                {!loading ? (
-                                    <button
-                                        onClick={handleProcess}
-                                        className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-semibold hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary/20"
-                                    >
-                                        <Play className="w-5 h-5 fill-current" />
-                                        Iniciar Processamento
-                                    </button>
-                                ) : (
-                                    <div className="flex gap-2">
-                                        <button
-                                            onClick={togglePause}
-                                            className="flex-1 py-3 bg-orange-500 text-white rounded-lg font-semibold hover:bg-orange-600 transition-all flex items-center justify-center gap-2"
-                                        >
-                                            {isPaused ? <Play className="w-5 h-5 fill-current" /> : <Pause className="w-5 h-5 fill-current" />}
-                                            {isPaused ? 'Continuar' : 'Pausar'}
-                                        </button>
-                                        <button
-                                            onClick={handleStop}
-                                            className="flex-1 py-3 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition-all flex items-center justify-center gap-2"
-                                        >
-                                            <Square className="w-5 h-5 fill-current" />
-                                            Parar
-                                        </button>
-                                    </div>
-                                )}
+                            <div className="space-y-2">
+                                <PreviewToggle
+                                    checked={config.showPreview}
+                                    onChange={(value) => setConfig({ ...config, showPreview: value })}
+                                    isProcessing={loading}
+                                />
                             </div>
+
+                            <ProcessControls
+                                isProcessing={loading}
+                                isPaused={isPaused}
+                                onStart={handleProcess}
+                                onStop={handleStop}
+                                onPause={togglePause}
+                                canStart={!!config.inputPath}
+                                labels={{ start: 'Iniciar Processamento' }}
+                            />
                         </div>
-                    </div>
+                    </ConfigCard>
 
                     {/* Preview Video */}
                     <VideoPreviewPanel
@@ -272,10 +245,10 @@ export default function ProcessamentoPage() {
 
                 {/* Right: Terminal Output */}
                 <Terminal
-                    logs={logs.filter(log => !log.includes('[PROGRESSO]'))}
+                    logs={logs}
                     title="Console de processamentos"
                     height="550px"
-                    progress={loading ? progress : undefined}
+                    width="100%"
                     isLoading={loading}
                     isPaused={isPaused}
                     onClear={async () => {

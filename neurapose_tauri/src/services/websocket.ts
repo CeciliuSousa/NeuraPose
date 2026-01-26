@@ -46,7 +46,8 @@ class WebSocketService {
             try {
                 const data = JSON.parse(event.data) as LogMessage;
                 if (data.type === 'logs') {
-                    this.events.emit('logs', data.logs);
+                    // Emite o objeto completo para permitir detecção de Full Sync (via total)
+                    this.events.emit('logs', data);
                 }
             } catch (e) {
                 console.error('[WS] Error parsing log message', e);

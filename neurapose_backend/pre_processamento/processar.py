@@ -63,14 +63,14 @@ def main():
     else:
         folder = Path(args.input_folder)
         v_list = sorted(folder.glob("*.mp4"))
-        print(Fore.BLUE + f"[OK] DIRETORIO DE VIDEOS ENCONTRADO, TOTAL DE VIDEOS: {len(v_list)}")
+        print(Fore.CYAN + f"[INFO] ENCONTRADOS {len(v_list)} VIDEOS")
         print("")
 
     out_root.mkdir(parents=True, exist_ok=True)
     
     total_videos = len(v_list)
     for i, v in enumerate(v_list):
-        print(Fore.MAGENTA + f"[VIDEO] PROCESSANDO: {v.name} - [{i+1} / {total_videos}]")
+        print(Fore.CYAN + f"[{i+1}/{total_videos}] PROCESSANDO {v.name}")
         
         # Output especifico por video (se for pasta)
         if args.input_video:
@@ -84,14 +84,15 @@ def main():
         
         processed = any(preds_dir.glob(f"{v.stem}*pose.mp4")) or any(json_dir.glob(f"{v.stem}*tracking.json"))
         if processed:
-            print(Fore.YELLOW + f"[SKIP] Video já processado.")
+            print(Fore.MAGENTA + f"[SKIP]" + Fore.WHITE + f" Video já processado.")
             continue
 
         processar_video(v, curr_out, show=args.show)
-        print(Fore.GREEN + f"[OK] SALVAMENTO CONCLUIDO!!\n")
+        print(Fore.CYAN + f"[INFO] SALVANDO O PROCESSAMENTO: {v.name}...")
+        print(Fore.GREEN + f"[OK]" + Fore.WHITE + f" SALVAMENTO CONCLUIDO!!\n")
         sys.stdout.flush()
 
-    print(Fore.GREEN + "[OK] FINALIZANDO O PROGRAMA DE PROCESSAMENTO...")
+    print(Fore.GREEN + "[OK]" + Fore.WHITE + " ENCERRANDO PROGRAMA DE PROCESSAMENTO...")
 
 if __name__ == "__main__":
     main()

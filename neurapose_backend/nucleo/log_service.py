@@ -21,7 +21,7 @@ class LogBuffer:
     
     def _get_buffer(self, category: str):
         if category not in self.buffers:
-            self.buffers[category] = deque(maxlen=2000) # Buffer maior configurável
+            self.buffers[category] = deque(maxlen=10000) # Buffer aumentado para suportar stream de progresso
         return self.buffers[category]
     
     def write(self, message: str, category: str = "default"):
@@ -33,17 +33,17 @@ class LogBuffer:
             
         buffer = self._get_buffer(category)
         
-        # Lógica para tratamento de progresso (\r)
+        # Lógica para tratamento de progresso (\r) - MODIFICADO: Append only (sem pop)
         if "\r" in message:
-            parts = [p for p in message.split("\r") if p.strip()]
-            if not parts: return
-            
-            # Se começa com \r, assume que é uma atualização de linha (como TQDM)
-            if message.startswith("\r") and buffer:
-                buffer.pop()
-            
-            for part in parts:
-                buffer.append(part)
+            parts = message.split('\r')
+            for i, part in enumerate(parts):
+                if part.strip():
+                    # Adiciona \r se não for o primeiro elemento ou se a msg original começava com \r
+                    # Isso garante que o frontend receba o sinal de "substituição"
+                    is_update = (i > 0) or message.startswith('\r')
+                    final_msg = f"\r{part.strip()}" if is_update else part.strip()
+                    buffer.append(final_msg)
+                    
         elif message.strip():
             buffer.append(message.strip())
             
@@ -74,6 +74,17 @@ class CaptureOutput:
         self.terminal_stdout.flush()
         
     def __enter__(self):
+        # Evita aninhamento de CaptureOutput (prevencao de log duplo)
+        if hasattr(sys.stdout, "terminal_stdout"):
+            self.terminal_stdout = sys.stdout.terminal_stdout
+        else:
+            self.terminal_stdout = sys.stdout
+            
+        if hasattr(sys.stderr, "terminal_stderr"):
+            self.terminal_stderr = sys.stderr.terminal_stderr
+        else:
+            self.terminal_stderr = sys.stderr
+
         sys.stdout = self
         sys.stderr = self
         return self
