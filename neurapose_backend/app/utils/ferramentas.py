@@ -59,12 +59,14 @@ def verificar_recursos():
 def imprimir_banner(checks):
     sys_info = get_system_info()
     
+    # Compact fix: formatting precisely to match pre_processamento style
     print(Fore.WHITE + "\n" + "="*62)
     print(Fore.WHITE + "TESTE DE MODELO — NEURAPOSE")
     print(Fore.WHITE + "="*62)
     
     # Ferramentas
-    print(Fore.WHITE + f"YOLO              : {status_str(checks['yolo'])} {Fore.WHITE}{cm.YOLO_PATH.name}")
+    yolo_name = f"{cm.YOLO_PATH.name}"
+    print(Fore.WHITE + f"YOLO              : {status_str(checks['yolo'])} {Fore.WHITE}{yolo_name}")
     print(Fore.WHITE + f"TRACKER           : {status_str(True)} {Fore.WHITE}{cm.TRACKER_NAME}-Custom")
     print(Fore.WHITE + f"OSNet ReID        : {status_str(checks['osnet'])} {Fore.WHITE}{cm.OSNET_PATH.name[:25]}...")
     print(Fore.WHITE + f"RTMPose-l         : {status_str(checks['rtmpose'])} {Fore.WHITE}rtmpose.../{cm.RTMPOSE_PATH.name}")

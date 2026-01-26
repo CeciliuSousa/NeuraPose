@@ -128,7 +128,7 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
     t1_temp = time.time()
     tempos["temporal_total"] = t1_temp - t0_temp
     
-    print(Fore.GREEN + "[OK]" + Fore.WHITE + " CLASSIFICAÇÃO CONCLUIDA!\n")
+    print(Fore.GREEN + "[OK]" + Fore.WHITE + " CLASSIFICAÇÃO CONCLUIDA!")
 
     # Enriquece registros com classificação
     for r in records:
@@ -198,7 +198,7 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
     print(Fore.WHITE + f"{model_disp_name:<45} {tempos['temporal_total']:>10.2f} seg")
     print(Fore.WHITE + "-"*60)
     print(Fore.WHITE + f"{'TOTAL':<45} {tempos['video_total']:>10.2f} seg")
-    print(Fore.WHITE + "="*60 + "\n")
+    print(Fore.WHITE + "="*60)
 
     # Retorno final para main.py
     video_pred = 1 if any(v == 1 for v in id_preds.values()) else 0

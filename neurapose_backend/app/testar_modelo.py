@@ -19,7 +19,7 @@ from neurapose_backend.app.utils.gerar_graficos import gerar_todos_graficos
 from neurapose_backend.LSTM.modulos.fabrica_modelo import ClassifierFactory
 from neurapose_backend.globals.state import state
 
-colorama_init(autoreset=True)
+# colorama_init(autoreset=True) - Removido para evitar conflito com main.py
 args = config_args
 def carregar_labels_videos(labels_path: Path):
     with open(labels_path, 'r', encoding='utf-8') as f: data = json.load(f)
@@ -74,7 +74,7 @@ def main():
     if not video_list: return
     
     print(Fore.BLUE + f"[INFO] ENCONTRADOS {len(video_list)} VIDEOS")
-    print("")
+
 
     labels_gt = {}
     if labels_gt_path.exists(): labels_gt = carregar_labels_videos(labels_gt_path)
@@ -95,7 +95,7 @@ def main():
         all_predictions[video_path.stem] = predictions
         
         print(Fore.BLUE + f"[INFO] SALVANDO O PROCESSAMENTO: {video_path.name}...") 
-        print(Fore.GREEN + f"[OK]" + Fore.WHITE + f" SALVAMENTO CONCLUIDO!!\n")
+        print(Fore.GREEN + f"[OK]" + Fore.WHITE + f" SALVAMENTO CONCLUIDO!!")
 
     if state.stop_requested: return
     

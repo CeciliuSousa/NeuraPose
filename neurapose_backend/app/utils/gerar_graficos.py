@@ -267,7 +267,7 @@ def gerar_todos_graficos(metricas_json_path: Path, resultados_json_path: Path, l
     with open(metricas_json_path, 'r', encoding='utf-8') as f:
         metricas = json.load(f)
     
-    print(Fore.CYAN + f"\n[INFO] Gerando gráficos de análise para {modelo_nome}...\n")
+    print(Fore.CYAN + f"\n[INFO] GERANDO GRÁFICOS DE ANALISE DO MODELO: {modelo_nome}...\n")
     
     # 1. Matriz de Confusão
     conf_matrix = np.array(metricas['confusion_matrix'])

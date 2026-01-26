@@ -65,13 +65,47 @@ class CaptureOutput:
         self.category = category
         self.terminal_stdout = sys.stdout
         self.terminal_stderr = sys.stderr
-        
+        self._buffer = ""
+
     def write(self, message):
         self.terminal_stdout.write(message)
-        self.log_buffer.write(message, self.category)
+        self._buffer += message
         
+        # Processa linhas completas ou updates de progresso
+        while True:
+            nl = self._buffer.find('\n')
+            cr = self._buffer.find('\r')
+            
+            if nl == -1 and cr == -1:
+                break
+                
+            # Determina o separador mais próximo
+            if nl != -1 and (cr == -1 or nl < cr):
+                limit = nl
+                is_cr = False
+            else:
+                limit = cr
+                is_cr = True
+            
+            # Extrai o "chunk" de texto até o separador
+            chunk = self._buffer[:limit]
+            
+            # Se for CR, repassamos o \r para o LogBuffer tratar a animação
+            full_msg = chunk + ('\r' if is_cr else '')
+            
+            # Envia se tiver conteúdo relevante ou for comando de controle
+            if full_msg.strip() or is_cr:
+                self.log_buffer.write(full_msg, self.category)
+            
+            # Remove o processado do buffer (pula o separador)
+            self._buffer = self._buffer[limit+1:]
+
     def flush(self):
         self.terminal_stdout.flush()
+        # Se sobrou algo no buffer ao final, envia
+        if self._buffer and self._buffer.strip():
+            self.log_buffer.write(self._buffer, self.category)
+            self._buffer = ""
         
     def __enter__(self):
         # Evita aninhamento de CaptureOutput (prevencao de log duplo)
