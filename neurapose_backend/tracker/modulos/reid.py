@@ -11,6 +11,7 @@ from ultralytics.utils.plotting import save_one_box
 
 import torchvision.transforms as T
 import neurapose_backend.config_master as cm
+from colorama import Fore
 
 
 class OSNetAIN(nn.Module):
@@ -36,13 +37,14 @@ class CustomReID:
         
         # Configuração de Precisão (FP16 vs FP32)
         # Só ativa FP16 se o usuário quiser E se estivermos rodando em CUDA
-        self.use_fp16 = getattr(cm, 'USE_FP16', False) and (self.device == 'cuda')
+        self.use_fp16 = getattr(cm, 'USE_FP16', False) and (self.device == 'cuda')  
         
         if self.use_fp16:
-            print(Fore.CYAN + f"[ReID] Otimização FP16 Ativada (Half-Precision)")
+            # print(Fore.CYAN + f"[ReID] Otimização FP16 Ativada (Half-Precision)")
             self.model.half() # Converte pesos e buffers para FP16
         else:
-            print(Fore.YELLOW + f"[ReID] Rodando em FP32 (Padrão)")
+            # print(Fore.YELLOW + f"[ReID] Rodando em FP32 (Padrão)")
+            pass
 
         self.norm = T.Compose([
             T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
