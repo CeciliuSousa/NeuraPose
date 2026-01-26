@@ -439,6 +439,11 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
             print(f"[ERRO] {str(e)}")
             state.process_status = 'error'
         finally:
+            # Aguarda um momento para garantir que os últimos logs (tabela de tempos)
+            # sejam capturados pelo buffer e enviados via WebSocket antes de marcar como finalizado.
+            import time
+            time.sleep(2.0)
+            
             state.is_running = False
             state.current_frame = None
             # Limpa memória GPU
@@ -495,6 +500,7 @@ def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, 
                 logger.info("Processamento interrompido pelo usuario.")
                 state.process_status = 'idle' # Ou manter error/warning?
             else:
+                print(Fore.GREEN + "[OK] FINALIZANDO O PROGRAMA DE PROCESSAMENTO..." + Fore.RESET)
                 logger.info("Processamento concluido.")
                 state.process_status = 'success'
         except Exception as e:

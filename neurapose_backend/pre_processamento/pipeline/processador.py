@@ -95,7 +95,7 @@ def processar_video(video_path: Path, out_root: Path, show=False):
     # Salva JSON Limpo
     with open(json_path, "w") as f:
         json.dump(registros, f, indent=2)
-    print(Fore.GREEN + "[OK]" + Fore.WHITE + f" JSON Final salvo: {json_path.name}")
+    print(Fore.GREEN + "[OK]" + Fore.WHITE + f" JSON FINAL SALVO: {json_path.name}")
 
     # Gera Vídeo de Predição (Visualização Universal)
     out_video_path = preds_dir / f"{video_path.stem}_{int(cm.FPS_TARGET)}fps_pose.mp4"
