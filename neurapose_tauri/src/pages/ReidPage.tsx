@@ -383,7 +383,7 @@ export default function ReidPage() {
     };
 
     return (
-        <div className="h-[calc(100vh-8rem)] flex flex-col space-y-4">
+        <div className="h-[calc(100vh-8rem)] flex flex-col space-y-6">
 
             <PageHeader
                 title="Re-identificação Manual"

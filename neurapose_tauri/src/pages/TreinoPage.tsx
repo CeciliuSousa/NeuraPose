@@ -201,7 +201,7 @@ export default function TreinoPage() {
         <div className="space-y-6">
             <PageHeader
                 title="Treinamento de Modelo"
-                description="Treine ou retreine modelos LSTM/Transformer para detecção de anomalias comportamentais."
+                description="Página para treinamento de modelos temporais baseados em LSTM"
                 icon={Dumbbell}
             />
 

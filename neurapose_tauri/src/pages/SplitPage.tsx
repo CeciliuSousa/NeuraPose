@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
     Scissors,
-    PieChart,
     Play,
     RefreshCcw
 } from 'lucide-react';
@@ -113,6 +112,7 @@ export default function SplitPage() {
             <PageHeader
                 title="Split Dataset"
                 description="Divida seus dados em conjuntos de Treino e Teste para treinamento do modelo."
+                icon={Scissors}
             />
 
             <div className="grid gap-6 lg:grid-cols-2">
@@ -226,7 +226,6 @@ export default function SplitPage() {
                     <Terminal
                         logs={logs}
                         title="Console do Split"
-                        height="400px"
                         isLoading={loading}
                         onClear={async () => {
                             setLogs([]);
@@ -234,13 +233,13 @@ export default function SplitPage() {
                         }}
                     />
 
-                    <div className="flex items-center justify-center p-8 border border-dashed border-border rounded-xl bg-muted/10">
+                    {/* <div className="flex items-center justify-center p-8 border border-dashed border-border rounded-xl bg-muted/10">
                         <div className="text-center space-y-2">
                             <PieChart className="w-12 h-12 text-muted-foreground mx-auto" />
                             <p className="font-medium">Visualização de Distribuição</p>
                             <p className="text-xs text-muted-foreground">Execute o split para ver estatísticas nos logs.</p>
                         </div>
-                    </div>
+                    </div> */}
                 </div>
             </div>
 

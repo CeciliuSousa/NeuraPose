@@ -11,6 +11,7 @@ import {
     FolderOpen,
     Trash2
 } from 'lucide-react';
+import { PageHeader } from '../components/ui/PageHeader';
 import { APIService } from '../services/api';
 import { StatusMessage } from '../components/ui/StatusMessage';
 
@@ -128,17 +129,11 @@ export default function HistoricoPage() {
 
     return (
         <div className="space-y-6 h-full flex flex-col pb-8">
-            <header className="flex items-center justify-between border-b border-border pb-6">
-                <div className="flex items-center gap-4">
-                    <div className="p-3 bg-primary/10 rounded-2xl">
-                        <History className="w-8 h-8 text-primary" />
-                    </div>
-                    <div>
-                        <h1 className="text-3xl font-black tracking-tight">Histórico Global</h1>
-                        <p className="text-muted-foreground text-sm">Gerencie todos os artefatos gerados pelo NeuraPose</p>
-                    </div>
-                </div>
-
+            <PageHeader
+                title="Histórico Global"
+                description="Gerencie todos os artefatos gerados pelo NeuraPose"
+                icon={History}
+            >
                 <button
                     onClick={fetchHistory}
                     disabled={loading}
@@ -147,7 +142,7 @@ export default function HistoricoPage() {
                 >
                     <RefreshCcw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                 </button>
-            </header>
+            </PageHeader>
 
             {/* Filtros e Tabs */}
             <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-card/30 p-4 rounded-2xl border border-border mt-2">
@@ -246,4 +241,3 @@ export default function HistoricoPage() {
         </div>
     );
 }
-

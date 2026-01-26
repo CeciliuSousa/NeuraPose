@@ -102,6 +102,7 @@ export default function RelatoriosPage() {
             <PageHeader
                 title="Relatórios"
                 description="Visualize e compare relatórios de treinamento e teste lado a lado."
+                icon={BarChart3}
             />
 
             {/* Status Message */}

@@ -5,9 +5,12 @@ import {
     Save,
     RefreshCcw,
     Clock,
-    CheckCircle2
+    CheckCircle2,
+    Pencil
 } from 'lucide-react';
+import { PageHeader } from '../components/ui/PageHeader';
 import { APIService } from '../services/api';
+
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { VideoPlayer } from '../components/ui/VideoPlayer';
 import { FilterDropdown, FilterOption } from '../components/ui/FilterDropdown';
@@ -217,19 +220,12 @@ export default function AnotacaoPage() {
         : '';
 
     return (
-        <div className="h-[calc(100vh-8rem)] flex flex-col space-y-4">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-border pb-4">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-primary/10 rounded-lg">
-                        <Tag className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">Anotação de Classes</h1>
-                        <p className="text-sm text-muted-foreground">Classifique indivíduos: {classe1} ou {classe2}</p>
-                    </div>
-                </div>
-
+        <div className="h-[calc(100vh-8rem)] flex flex-col space-y-6">
+            <PageHeader
+                title="Anotação de Classes"
+                description={`Pagina para classificação via ID: ${classe1} ou ${classe2}`}
+                icon={Pencil}
+            >
                 <div className="flex items-center gap-3">
                     <PathSelector
                         value={inputPath}
@@ -245,7 +241,7 @@ export default function AnotacaoPage() {
                         <RefreshCcw className={`w-4 h-4 text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
-            </div>
+            </PageHeader>
 
             <div className="grid grid-cols-12 gap-6 flex-1 overflow-hidden">
                 {/* Lista de Vídeos */}

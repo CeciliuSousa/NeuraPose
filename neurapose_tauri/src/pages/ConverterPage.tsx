@@ -100,7 +100,8 @@ export default function ConverterPage() {
         <div className="space-y-6">
             <PageHeader
                 title="Converter para .pt"
-                description="Converta JSONs de anotações para formato PyTorch (.pt) para treinamento do modelo LSTM."
+                description="Converta JSONs para formato PyTorch (.pt) para treinamento do modelo LSTM."
+                icon={FileOutput}
             />
 
             <div className="grid gap-6 lg:grid-cols-2">
@@ -197,7 +198,6 @@ export default function ConverterPage() {
                     <Terminal
                         logs={logs}
                         title="Console de Conversão"
-                        height="450px"
                         isLoading={loading}
                         onClear={async () => {
                             setLogs([]);

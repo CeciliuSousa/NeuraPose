@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 
 import { Settings, Save, RotateCcw, ShieldAlert, FolderOpen } from 'lucide-react';
+import { PageHeader } from '../components/ui/PageHeader';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { shortenPath } from '../lib/utils';
@@ -194,16 +195,11 @@ export default function ConfiguracaoPage() {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-border pb-6 gap-4">
-                <div className="flex items-center gap-4">
-                    <div className="p-4 bg-primary/10 rounded-2xl shadow-inner">
-                        <Settings className="w-10 h-10 text-primary" />
-                    </div>
-                    <div>
-                        <h1 className="text-4xl font-extrabold tracking-tight">Configurações</h1>
-                        <p className="text-muted-foreground italic text-lg">Gestão de perfis e hiperparâmetros do NeuraPose.</p>
-                    </div>
-                </div>
+            <PageHeader
+                title="Configurações"
+                description="Gestão de perfis e hiperparâmetros do NeuraPose."
+                icon={Settings}
+            >
                 <div className="flex flex-wrap gap-3">
                     <button
                         onClick={handleShutdown}
@@ -231,7 +227,7 @@ export default function ConfiguracaoPage() {
                         {saving ? 'Persistindo...' : 'Salvar Perfil'}
                     </button>
                 </div>
-            </div>
+            </PageHeader>
 
             {message && (
                 <div className={`p-4 rounded-xl text-sm flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 ${message.includes('Erro') ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-green-500/10 text-green-500 border border-green-500/20'}`}>
