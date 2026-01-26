@@ -374,6 +374,14 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
     OTIMIZAÇÃO: Não usa mais subprocess, importa diretamente o módulo.
     Isso elimina o overhead de ~10-20s de criar processo e carregar modelos.
     """
+    import importlib
+    import neurapose_backend.pre_processamento.pipeline.processador as processor_module
+    import neurapose_backend.pre_processamento.utils.ferramentas as tools_module
+    
+    # Recarrega modulos para garantir atualizacoes (hot-reload)
+    importlib.reload(tools_module)
+    importlib.reload(processor_module)
+    
     from neurapose_backend.pre_processamento.pipeline.processador import processar_video
     from neurapose_backend.pre_processamento.utils.ferramentas import imprimir_banner
     

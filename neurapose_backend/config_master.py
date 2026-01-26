@@ -1,11 +1,5 @@
-# ==============================================================
-# config_master.py - CONFIGURAÇÃO CENTRAL DO PROJETO
-# ==============================================================
-# 
-# Centralize TODAS as configurações aqui.
-# NUNCA edite config.py dos módulos individuais!
-#
-# ==============================================================
+# neurapose_backend/config_master.py
+# Configuração Central do Projeto - NUNCA edite configs de módulos individuais.
 
 import numpy as np
 from pathlib import Path
@@ -14,133 +8,94 @@ import os
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# ==============================================================
-# SEÇÃO 0: OTIMIZAÇÕES DE PERFORMANCE
-# ==============================================================
+# -- OTIMIZAÇÕES --
+USE_NVENC = True                    # Usar encoder GPU NVIDIA (h264_nvenc)
+NVENC_PRESET = "p4"                 # Preset NVENC (p1=fast, p7=quality)
 
-# Normalização de Vídeo
-USE_NVENC = True                    # Usar encoder GPU NVIDIA (h264_nvenc) - muito mais rápido
-NVENC_PRESET = "p4"                 # Preset NVENC: p1 (rápido) a p7 (qualidade) - p4 é balanceado
+USE_FP16 = True                     # Half Precision (2x speed em RTX)
+USE_PREFETCH = True                 # Pre-fetch frames
+PREFETCH_BUFFER_SIZE = 32
 
-# Inferência
-USE_FP16 = True                     # Usa FP16 (Half Precision) se disponível em GPU (2x mais rápido em RTX)
-
-# Leitura de Vídeo
-USE_PREFETCH = True                 # Pre-fetch de frames em thread separada
-PREFETCH_BUFFER_SIZE = 32           # Tamanho do buffer de frames
-
-# Supressão de logs do ONNXRuntime (Warnings não críticos de execução)
 try:
     import onnxruntime as ort
-    ort.set_default_logger_severity(3) # 3 = ERROR (0=VERBOSE, 1=INFO, 2=WARN, 3=ERROR)
-except ImportError:
-    pass
+    ort.set_default_logger_severity(3) # 3=ERROR
+except ImportError: pass
 
-# ==============================================================
-# SEÇÃO 1: MODELOS
-# ==============================================================
-
+# -- MODELOS --
 # YOLO (Detecção)
-YOLO_MODEL = "yolov8l.pt"           # yolov8n/s/m/l/x
-YOLO_IMGSZ = 640                    # 640, 1280, 1920
+YOLO_MODEL = "yolov8l.pt"
+YOLO_IMGSZ = 640
 YOLO_CONF_THRESHOLD = 0.35
 YOLO_CLASS_PERSON = 0
 
-# RTMPose (Keypoints) - NÃO ALTERE
+# RTMPose (Keypoints)
 RTMPOSE_MODEL = "rtmpose-l_simcc-body7_pt-body7_420e-256x192/end2end.onnx"
-RTMPOSE_INPUT_SIZE = (192, 256)     # (Width, Height)
+RTMPOSE_INPUT_SIZE = (192, 256)
 
-# OSNet (Re-Identificação) - NÃO ALTERE
+# OSNet (ReID)
 OSNET_MODEL = "osnet_ain_x1_0_msmt17_256x128_amsgrad_ep50_lr0.0015_coslr_b64_fb10_softmax_labsmth_flip_jitter.pth"
 
-# Tracker
 TRACKER_NAME = "BoTSORT"
-
-# Modelo Temporal: "tft" ou "lstm"
 TEMPORAL_MODEL = "tft"
-
-# ==============================================================
-# SEÇÃO 2: PARÂMETROS DE PRÉ-PROCESSAMENTO
-# ==============================================================
-
-DETECTION_CONF = 0.55               # Confiança YOLO
-POSE_CONF_MIN = 0.30                # Confiança keypoint
+# -- PARÂMETROS PRE-PROC --
+DETECTION_CONF = 0.55
+POSE_CONF_MIN = 0.30
 CLAMP_MARGIN = 0.0                  # NÃO ALTERE
 EMA_ALPHA = 0.35                    # Suavização temporal
-EMA_MIN_CONF = 0.0                  # Conf mínima para EMA
+EMA_MIN_CONF = 0.0
 
-# Filtros de Pós-Processamento
-MIN_POSDETECTION_CONF = 0.6         # Confiança mínima para detecção YOLO
-YOLO_CLASS_PERSON = 0               # Classe 'pessoa' no COCO dataset
-YOLO_BATCH_SIZE = 64               # Tamanho do batch para inferência YOLO (Otimização de Performance)
-RTMPOSE_BATCH_SIZE = 64             # Tamanho do batch para inferência Pose (Novo)
-MIN_POSE_ACTIVITY = 0.8             # StdDev médio mínimo (pixels) para considerar ID ativo
+# Filtros Pós-Processamento
+MIN_POSDETECTION_CONF = 0.6
+YOLO_CLASS_PERSON = 0
+YOLO_BATCH_SIZE = 64
+RTMPOSE_BATCH_SIZE = 64
+MIN_POSE_ACTIVITY = 0.8
 
-# ================================================================
-# 3. CONFIGURAÇÕES DE TRACKING (BoTSORT / ReID / OSNet)
-# ==============================================================
-
-CLASSE1 = "NORMAL"                  # Classe padrão
-CLASSE2 = "FURTO"                   # Classe anômala
+# -- CONFIG TRACKING (BoTSORT / ReID) --
+CLASSE1 = "NORMAL"
+CLASSE2 = "FURTO"
 CLASS_NAMES = [CLASSE1, CLASSE2]
 NUM_CLASSES = len(CLASS_NAMES)
 
-# Mapeamento classe <-> ID
 CLASS_TO_ID = {name: idx for idx, name in enumerate(CLASS_NAMES)}
 ID_TO_CLASS = {idx: name for idx, name in enumerate(CLASS_NAMES)}
 
-# Classe positiva (a que queremos detectar)
 POSITIVE_CLASS_ID = 1
 POSITIVE_CLASS_NAME = CLASS_NAMES[POSITIVE_CLASS_ID]
-
-# Mínimo de frames para ID aparecer na anotação
 MIN_FRAMES_PER_ID = 30
 
-# ==============================================================
-# SEÇÃO 4: DATASETS
-# ==============================================================
-
-PROCESSING_DATASET = "data-labex-completo"  # Dataset para processar
-TEST_DATASET = "data-labex"                 # Dataset de teste
-TRAINED_MODEL_NAME = "data-labex-teste"     # Nome do modelo treinado
+# -- DATASETS --
+PROCESSING_DATASET = "data-labex-completo"
+TEST_DATASET = "data-labex"
+TRAINED_MODEL_NAME = "data-labex-teste"
 DATASET_NAME = PROCESSING_DATASET
 
-# Divisão do dataset
 TRAIN_SPLIT = "treino"
 VAL_SPLIT = "validacao"
 TEST_SPLIT = "teste"
 
-# ==============================================================
-# SEÇÃO 5: HIPERPARÂMETROS DE TREINO
-# ==============================================================
-
-TIME_STEPS = 30                     # Janela temporal
-NUM_JOINTS = 17                     # Keypoints COCO
-NUM_CHANNELS = 2                    # x, y
+# -- HIPERPARÂMETROS TREINO --
+TIME_STEPS = 30
+NUM_JOINTS = 17
+NUM_CHANNELS = 2
 BATCH_SIZE = 64
 LEARNING_RATE = 0.0003
 EPOCHS = 5000
 
-# Hiperparâmetros Avançados (LSTM/Transformer)
+# LSTM/Transformer
 LSTM_DROPOUT = 0.3
 LSTM_HIDDEN_SIZE = 128
 LSTM_NUM_LAYERS = 2
-LSTM_NUM_HEADS = 8        # Apenas para Transformer/TFT
-LSTM_KERNEL_SIZE = 5      # Apenas para TCN/WaveNet
+LSTM_NUM_HEADS = 8
+LSTM_KERNEL_SIZE = 5
 
-# ==============================================================
-# SEÇÃO 6: PARÂMETROS DE TESTE
-# ==============================================================
+# -- TESTE --
+CLASSE2_THRESHOLD = 0.50
 
-CLASSE2_THRESHOLD = 0.50            # Threshold para classificar como anômalo
-
-# ==============================================================
-# SEÇÃO 7: PATHS
-# ==============================================================
+# -- PATHS --
 
 ROOT = Path(__file__).resolve().parent
 
-# Adiciona ROOT ao PATH do sistema para encontrar DLLs (como OpenH264)
 if str(ROOT) not in os.environ["PATH"]:
     os.environ["PATH"] = str(ROOT) + os.pathsep + os.environ["PATH"]
 
@@ -168,11 +123,9 @@ ANNOTATIONS_OUTPUT_DIR = ROOT / "resultados-anotacoes"
 REID_OUTPUT_DIR = ROOT / "resultados-reidentificacoes"
 REID_MANUAL_SUFFIX = "-reid"
 REID_MANUAL_LABELS_FILENAME = "labels_reid.json"
-
-# RTMPose para pré-processamento
 RTMPOSE_PREPROCESSING_PATH = RTMPOSE_PATH
 
-# Parâmetros de sequência
+# Parâmetros sequência
 MAX_FRAMES_PER_SEQUENCE = 30
 FPS_TARGET = 30.0
 FRAME_DISPLAY_W = 1280
@@ -199,7 +152,7 @@ TRAINING_DATA_PATH = ROOT / "datasets" / PROCESSING_DATASET / "treino" / "data" 
 TRAINING_LABELS_PATH = ROOT / "datasets" / PROCESSING_DATASET / "treino" / "labels.json"
 RETRAIN_MODELS_DIR = ROOT / "retreinamentos"
 
-# Nomes de arquivos de saída
+# Saída
 MODEL_BEST_FILENAME = "model_best.pt"
 MODEL_FINAL_FILENAME = "model_final.pt"
 NORM_STATS_FILENAME = "norm_stats.pt"
@@ -213,23 +166,21 @@ BOT_SORT_CONFIG = {
     "track_low_thresh": 0.1,
     "new_track_thresh": 0.5,
     "track_buffer": 300,
-    "match_thresh": 0.60,       # Aumentado para 0.60 (V5 - mais tolerante para fusão em oclusão)
-    "appearance_thresh": 0.25,  # Aumentado de 0.20 (reduz exigência visual estrita)
-    "proximity_thresh": 0.5,    # Reduzido para 0.5 (V5 - exige mais proximidade espacial)
+    "match_thresh": 0.60,       # V5: mais tolerante
+    "appearance_thresh": 0.25,  # V5: menos estrito visualmente
+    "proximity_thresh": 0.5,    # V5: mais proximidade espacial
     "gmc_method": "orb",
     "fuse_score": True,
     "with_reid": True,
     "model": str(OSNET_PATH),
 }
-# Paths legados (compatibilidade)
+# Legacy
 DATASETS_ROOT = TEST_DATASETS_ROOT
 TRAIN_DIR = TEST_DATASETS_ROOT / TRAIN_SPLIT / "videos"
 VAL_DIR = TEST_DATASETS_ROOT / VAL_SPLIT / "videos"
 PREPROCESSING_OUTPUT = ROOT / "resultado_processamento"
 
-# ==============================================================
-# SEÇÃO 8: CONSTANTES FIXAS (NÃO ALTERE)
-# ==============================================================
+# -- CONSTANTES FIXAS --
 
 SIMCC_W = RTMPOSE_INPUT_SIZE[0]     # 192
 SIMCC_H = RTMPOSE_INPUT_SIZE[1]     # 256

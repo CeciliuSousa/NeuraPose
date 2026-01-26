@@ -1,6 +1,4 @@
-# ================================================================
 # neurapose_backend/detector/yolo_detector.py
-# ================================================================
 
 import os
 import sys
@@ -11,14 +9,12 @@ import numpy as np
 from pathlib import Path
 from ultralytics import YOLO
 
-# Importacoes do tracker (usando interface modular via rastreador.py)
+# Importacoes do tracker
 from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomReID, save_temp_tracker_yaml
 
-# Importa state para controle de parada
 from neurapose_backend.globals.state import state
 from colorama import Fore
 
-# Importa nome do modelo YOLO e ROOT do config centralizado
 import neurapose_backend.config_master as cm
 
 logging.getLogger("ultralytics").setLevel(logging.ERROR)
@@ -26,15 +22,11 @@ os.environ["YOLO_VERBOSE"] = "False"
 
 from ultralytics.trackers import bot_sort
 
-# SUBSTITUI O BOT-SORT INTERNO
 bot_sort.BOTSORT = CustomBoTSORT
-
-# SUBSTITUI O ReID INTERNO
 bot_sort.ReID = CustomReID
 
 
-# ================================================================
-# 1. Funcao de fusao de IDs - Gera IDs persistentes
+# 1. Fusao de IDs
 # ================================================================
 def merge_tracks(track_data, gap_thresh=1.5):
     """
@@ -165,7 +157,7 @@ def yolo_detector_botsort(videos_dir=None, batch_size=None):
         # Configure Tracker YAML
         tracker_yaml_path = save_temp_tracker_yaml()
         
-        # print(Fore.CYAN + f"[YOLO] Iniciando tracking (Batch {batch_size}) em: {video.name}")
+        print(Fore.YELLOW + f"[YOLO] PROCESSANDO VIDEO COM BOTSORT-CUSTON E OSNET...")
         sys.stdout.flush()
 
         results = []
@@ -260,8 +252,9 @@ def yolo_detector_botsort(videos_dir=None, batch_size=None):
             # Progress Print
             prog = int((frame_idx_global / total_frames) * 100)
             if prog >= last_progress + 10:
-                print(f"[YOLO] Progresso: {prog}% ({frame_idx_global}/{total_frames})")
-                sys.stdout.flush()
+                print(Fore.YELLOW + f"[YOLO] {prog} %")
+                # sys.stdout.write(f"\r{Fore.YELLOW}[YOLO] {prog} %")
+                # sys.stdout.flush()
                 last_progress = prog
 
         cap.release()

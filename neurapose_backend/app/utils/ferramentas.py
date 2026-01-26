@@ -1,35 +1,49 @@
-# ==============================================================
 # neurapose-backend/app/utils/ferramentas.py
-# ==============================================================
+# Utilitarios para o App: checagem de recursos e banners.
 
 import torch
-import onnxruntime as ort
+import platform
+import psutil
 from pathlib import Path
 from yt_dlp import YoutubeDL
 from colorama import Fore
 import neurapose_backend.config_master as cm
 
 from neurapose_backend.app.configuracao.config import (
-    BEST_MODEL_PATH,
-    LABELS_TEST_PATH,
-    DATASET_DIR,
-    MODEL_NAME, 
-    DATASET_NAME 
+    BEST_MODEL_PATH, LABELS_TEST_PATH, DATASET_DIR, MODEL_NAME, DATASET_NAME
 )
 
-
 def status_str(ok: bool):
-    """Retorna uma string colorida indicando sucesso ou falha."""
     return Fore.GREEN + "[OK]" if ok else Fore.RED + "[ERRO]"
 
+def get_system_info():
+    # RAM
+    mem = psutil.virtual_memory()
+    ram_total = f"{mem.total / (1024**3):.1f}GB"
+    ram_avail = f"{mem.available / (1024**3):.1f}GB"
+    
+    # GPU / VRAM
+    gpu_name = "Não detectada"
+    vram_status = "N/A"
+    gpu_ok = False
+    
+    if torch.cuda.is_available():
+        gpu_ok = True
+        gpu_name = torch.cuda.get_device_name(0)
+        free, total = torch.cuda.mem_get_info(0)
+        vram_total = f"{total / (1024**3):.1f}GB"
+        vram_free = f"{free / (1024**3):.1f}GB"
+        vram_status = f"{vram_free} / {vram_total}"
+
+    return {
+        "ram": f"{ram_avail} / {ram_total}",
+        "gpu": gpu_name,
+        "vram": vram_status,
+        "gpu_ok": gpu_ok
+    }
 
 def verificar_recursos():
-    """
-    Verifica se todos os arquivos e diretórios necessários existem.
-    Retorna um dicionário com o status de cada recurso.
-    """
     modelo_default = f"{MODEL_NAME}-{DATASET_NAME}"
-    
     return {
         "yolo": cm.YOLO_PATH.exists(),
         "osnet": cm.OSNET_PATH.exists(),
@@ -37,46 +51,36 @@ def verificar_recursos():
         "modelo_temporal": BEST_MODEL_PATH.exists(),
         "labels": LABELS_TEST_PATH.exists(),
         "dataset": DATASET_DIR.exists(),
-        
         "modelo_temporal_nome": modelo_default, 
         "dataset_path": str(DATASET_DIR),
     }
 
-
 def imprimir_banner(checks):
-    """
-    Imprime o banner inicial do sistema com o status dos recursos,
-    garantindo o alinhamento.
-    """
-    print("\n============================================================")
-    print("SISTEMA DE DETECÇÃO — NEURAPOSE AI")
-    print("============================================================")
+    sys_info = get_system_info()
     
-    print(f"YOLO                : {status_str(checks['yolo'])} {cm.YOLO_PATH.name}")
-    print(f"TRACKER             : {status_str(True)} {cm.TRACKER_NAME}")
-    print(f"OSNet ReID          : {status_str(checks['osnet'])} {cm.OSNET_PATH.name}")
-    print(
-        f"RTMPose-l           : {status_str(checks['rtmpose'])} "
-        f"{cm.RTMPOSE_PATH.parent.name}/{cm.RTMPOSE_PATH.name}"
-    )
-    print(
-        f"Modelo Temporal     : {status_str(checks['modelo_temporal'])} {checks['modelo_temporal_nome']}"
-    )
-    print(
-        f"Labels de Teste     : {status_str(checks['labels'])} {LABELS_TEST_PATH.name}"
-    )
-    print("------------------------------------------------------------")
+    print(Fore.WHITE + "\n" + "="*62)
+    print(Fore.WHITE + "TESTE DE MODELO — NEURAPOSE")
+    print(Fore.WHITE + "="*62)
     
-    print(f"Modelo             : modelos-lstm-treinados/{checks['modelo_temporal_nome']}")
-    print(f"Dataset de teste   : datasets/{checks.get('dataset_name', DATASET_NAME)}/teste/videos")
-    if cm.DEVICE.startswith("cuda"):
-        try:
-            print(Fore.GREEN + f"GPU detectada      : {torch.cuda.get_device_name(0)}")
-        except Exception:
-            print(Fore.GREEN + "GPU detectada (não foi possível obter o nome).")
-    else:
-        print(Fore.YELLOW + "Executando em CPU.")
-    print("============================================================\n")
+    # Ferramentas
+    print(Fore.WHITE + f"YOLO              : {status_str(checks['yolo'])} {Fore.WHITE}{cm.YOLO_PATH.name}")
+    print(Fore.WHITE + f"TRACKER           : {status_str(True)} {Fore.WHITE}{cm.TRACKER_NAME}")
+    print(Fore.WHITE + f"OSNet ReID        : {status_str(checks['osnet'])} {Fore.WHITE}{cm.OSNET_PATH.name}")
+    print(Fore.WHITE + f"RTMPose-l         : {status_str(checks['rtmpose'])} {Fore.WHITE}{cm.RTMPOSE_PATH.name}")
+    
+    # Modelo Temporal
+    mod_temp_name = "Carregado" if checks['modelo_temporal'] else "Não Encontrado"
+    print(Fore.WHITE + f"Modelo Temporal   : {status_str(checks['modelo_temporal'])} {Fore.WHITE}{mod_temp_name}")
+    
+    print(Fore.WHITE + "-"*62)
+    
+    # Hardware
+    gpu_color = status_str(sys_info['gpu_ok'])
+    print(Fore.WHITE + f"GPU detectada     : {gpu_color} {Fore.WHITE}{sys_info['gpu']}")
+    print(Fore.WHITE + f"VRAM              : {gpu_color} {Fore.WHITE}{sys_info['vram']}")
+    print(Fore.WHITE + f"RAM               : {status_str(True)} {Fore.WHITE}{sys_info['ram']}")
+
+    print(Fore.WHITE + "="*62 + "\n")
 
 
 def baixar_video_ytdlp(url: str, pasta_saida: Path) -> Path:

@@ -101,7 +101,7 @@ def processar_video(video_path: Path, out_root: Path, show=False):
     out_video_path = preds_dir / f"{video_path.stem}_{int(cm.FPS_TARGET)}fps_pose.mp4"
     
     if registros:
-        print(Fore.CYAN + f"[INFO] Gerando vídeo visualização...")
+        # print(Fore.CYAN + f"[INFO] Gerando vídeo visualização...")
         gerar_video_predicao(
             video_path=norm_path,
             registros=registros,

@@ -1,9 +1,5 @@
-# ==============================================================
 # neurapose_backend/nucleo/tracking_utils.py
-# ==============================================================
-# Módulo utilitário para geração de relatórios de tracking.
-# Centraliza a lógica de criação do _tracking.json.
-# ==============================================================
+# Gera e salva o relatório de tracking (tracking.json).
 
 import json
 from pathlib import Path

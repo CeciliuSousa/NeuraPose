@@ -1,8 +1,5 @@
-# ==============================================================
-# neurapose_backend/nucleo/visualizacao.py (MIGRADO DO ANTIGO)
-# ==============================================================
-# Este módulo é responsável pela geração de vídeos e visualização
-# dos resultados, desenhando esqueletos, bounding boxes e overlays.
+# neurapose_backend/nucleo/visualizacao.py
+# Geração de vídeos e visualização (esqueletos, boxes, overlays).
 
 import cv2
 import os

@@ -31,5 +31,6 @@ neurapose_backend/logs/
 neurapose_backend/.env
 
 agent.md
+agente.md
 exit
 Makefile

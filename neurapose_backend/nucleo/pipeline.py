@@ -68,8 +68,9 @@ def executar_pipeline_extracao(
     # 1. DETECTOR (YOLO + BoTSORT)
     # --------------------------------------------------------
     if verbose:
-        print(Fore.CYAN + f"[INFO] Iniciando deteccao YOLO + BoTSORT + OSNet")
+        # print(Fore.CYAN + f"[INFO] Iniciando deteccao YOLO + BoTSORT + OSNet")
         # print(Fore.CYAN + f"[INFO] Iniciando deteccao YOLO + BoTSORT (Batch {batch_size})...")
+        pass
 
     
     t0 = time.time()
@@ -89,7 +90,7 @@ def executar_pipeline_extracao(
     # 2. EXTRAÇÃO DE POSE (RTMPose Modular)
     # --------------------------------------------------------
     if verbose:
-        print(Fore.CYAN + f"[INFO] Iniciando inferencia RTMPose...")
+        print(Fore.YELLOW + f"[RTMPOSE] PROCESSANDO VIDEO...")
     
     t0 = time.time()
     records = []
@@ -165,7 +166,7 @@ def executar_pipeline_extracao(
             if verbose:
                 progress = int((frame_idx / (total_frames or 1)) * 100)
                 if progress >= last_progress + 10:
-                    print(Fore.CYAN + f"[RTMPose] Progresso: {progress}% ({frame_idx}/{total_frames})")
+                    print(Fore.YELLOW + f"[RTMPOSE] {progress} %")
                     sys.stdout.flush()
                     last_progress = progress
 
