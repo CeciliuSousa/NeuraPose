@@ -28,16 +28,12 @@ Thumbs.db
 # neurapose-backend/app/modelos/
 
 # Dados de usuario (usar volumes)
-# neurapose-backend/videos/*
-neurapose/*
-neurapose_frontend/*
+neurapose_backend/videos/*
+neurapose_tauri/*
 neurapose_backend/datasets/*
 neurapose_backend/meus-modelos-treinados/*
-neurapose_backend/resultados-anotacoes/*
-neurapose_backend/resultado_processamento/*
-neurapose_backend/resultado_reidentificacao/*
-neurapose_backend/result-process-test*
-neurapose_backend/relatorios-teste/*
+neurapose_backend/resultados-*/*
+neurapose_backend/relatorios-*/*
 neurapose_backend/retreinamentos/*
 
 # Manter estrutura de pastas

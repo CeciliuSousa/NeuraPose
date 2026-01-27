@@ -94,15 +94,25 @@ app = FastAPI(title="NeuraPose API", version="1.0.0")
 # Registra cleanup para encerramento forçado
 import atexit
 
+from neurapose_backend.globals.hardware_monitor import monitor as hw_monitor
+
+@app.on_event("startup")
+def startup_event():
+    """Inicializa monitoramento."""
+    hw_monitor.start()
+    logger.info("Hardware Monitor Started")
+
 @atexit.register
 def cleanup_on_exit():
     """Último recurso para garantir encerramento limpo."""
+    hw_monitor.stop()
     if state.is_running:
         state.force_stop()
 
 @app.on_event("shutdown")
 def shutdown_event():
     """Executado quando a aplicação está encerrando (ex: Ctrl+C)."""
+    hw_monitor.stop()
     logger.info("Recebido sinal de desligamento. Forçando parada de tarefas...")
     state.force_stop()
 
@@ -721,58 +731,22 @@ def video_feed():
     )
 
 
-# Cache para system info (evita chamadas pesadas)
-_system_info_cache = {"data": None, "timestamp": 0}
-_CACHE_TTL = 2  # segundos
-
 @app.get("/system/info")
 def get_system_info():
     """Retorna informações de uso de hardware (CPU, RAM, GPU).
     
-    Usa PyTorch para GPU e cache de 2s para otimização.
+    Usa HardwareMonitorThread para evitar bloqueios no loop principal.
     """
-    import time
+    metrics = hw_monitor.get_metrics()
     
-    # Verifica cache
-    now = time.time()
-    if _system_info_cache["data"] and (now - _system_info_cache["timestamp"]) < _CACHE_TTL:
-        return _system_info_cache["data"]
-    
-    # CPU sem interval (instantâneo, usa cache interno do psutil)
-    cpu_usage = psutil.cpu_percent(interval=0)
-    ram = psutil.virtual_memory()
-    
-    gpu_name = ""
-    gpu_mem_used = 0.0
-    gpu_mem_total = 0.0
-    
-    # GPU - usa mem_get_info para uso GLOBAL da GPU (não apenas PyTorch)
-    try:
-        if torch.cuda.is_available():
-            gpu_name = torch.cuda.get_device_name(0)
-            # mem_get_info retorna (free, total) em bytes
-            free_mem, total_mem = torch.cuda.mem_get_info(0)
-            
-            gpu_mem_total = total_mem / (1024**3)
-            # Uso real = Total - Livre
-            gpu_mem_used = (total_mem - free_mem) / (1024**3)
-    except Exception:
-        pass
-    
-    result = {
-        "cpu_percent": cpu_usage,
-        "ram_used_gb": ram.used / (1024**3),
-        "ram_total_gb": ram.total / (1024**3),
-        "gpu_mem_used_gb": gpu_mem_used,
-        "gpu_mem_total_gb": gpu_mem_total,
-        "gpu_name": gpu_name
+    return {
+        "cpu_percent": metrics["cpu"],
+        "ram_used_gb": metrics["ram_used"],
+        "ram_total_gb": metrics["ram_total"],
+        "gpu_mem_used_gb": metrics["gpu_mem"],
+        "gpu_mem_total_gb": metrics["gpu_total"],
+        "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else ""
     }
-    
-    # Atualiza cache
-    _system_info_cache["data"] = result
-    _system_info_cache["timestamp"] = now
-    
-    return result
 
 
 

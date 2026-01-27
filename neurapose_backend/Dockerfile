@@ -23,17 +23,17 @@ RUN apt-get update && apt-get install -y \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:$PATH"
 
-# Copiar arquivos de dependências (do diretório pai)
-COPY ../pyproject.toml ../uv.lock ./
+# Copiar arquivos de dependências (da raiz do contexto)
+COPY pyproject.toml uv.lock ./
 
 # Instalar dependências Python
 RUN uv sync --frozen
 
-# Copiar código do backend
-COPY . ./neurapose_backend/
+# Copiar apenas o código do backend
+COPY neurapose_backend ./neurapose_backend
 
 # Expor porta
 EXPOSE 8000
 
 # Comando para iniciar o servidor
-CMD ["uv", "run", "uvicorn", "neurapose_backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "uvicorn", "neurapose_backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
