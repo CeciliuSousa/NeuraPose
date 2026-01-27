@@ -56,16 +56,56 @@ def montar_sequencia_individual(records, target_id, max_frames=None, min_frames=
     return seq
 
 
-def montar_sequencia_lote(records, ids_validos, max_frames=None):
+def montar_sequencia_lote(records, ids_validos, max_frames=None, min_frames=5):
     """
-    Gera sequências para múltiplos IDs de uma vez.
+    Gera sequências para múltiplos IDs de uma vez (Processamento O(N)).
     
+    Args:
+        records (list): Lista de todos os registros.
+        ids_validos (list): Lista de IDs a processar.
+        max_frames (int): Tamanho da janela temporal.
+        min_frames (int): Mínimo de frames para aceitar.
+        
     Returns:
         dict: {id: np.ndarray}
     """
+    if max_frames is None:
+        max_frames = cm.TIME_STEPS
+
+    # 1. Agrupamento O(N) usando Hash Map
+    # Em vez de iterar records para CADA id (O(N*IDs)), iteramos uma vez
+    grupos = {gid: [] for gid in ids_validos}
+    
+    for r in records:
+        gid = int(r.get("id_persistente", r.get("id", -1)))
+        if gid in grupos:
+            grupos[gid].append(r)
+            
     resultados = {}
-    for pid in ids_validos:
-        seq = montar_sequencia_individual(records, pid, max_frames=max_frames)
-        if seq is not None:
-            resultados[pid] = seq
+    
+    # 2. Processamento Individual dos Grupos
+    for gid, registros_alvo in grupos.items():
+        # Ordena cronologicamente
+        registros_alvo.sort(key=lambda x: int(x["frame"]))
+        
+        frames = []
+        for r in registros_alvo:
+            coords = np.array(
+                [[kp[0], kp[1]] for kp in r["keypoints"][:17]], dtype=np.float32
+            )
+            frames.append(coords)
+            
+        if len(frames) < min_frames:
+            continue
+            
+        # Padding/Truncating
+        seq = np.zeros((max_frames, 17, 2), dtype=np.float32)
+        num = min(len(frames), max_frames)
+        seq[:num] = frames[:num]
+        
+        # (T, V, C) -> (C, T, V)
+        seq = np.transpose(seq, (2, 0, 1))
+        
+        resultados[gid] = seq
+        
     return resultados

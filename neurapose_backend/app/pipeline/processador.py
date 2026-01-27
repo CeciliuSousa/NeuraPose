@@ -20,13 +20,13 @@ import neurapose_backend.config_master as cm
 
 # --- Módulos Modulares Unificados ---
 from neurapose_backend.rtmpose.extracao_pose_rtmpose import ExtratorPoseRTMPose
-from neurapose_backend.nucleo.sequencia import montar_sequencia_individual
+from neurapose_backend.nucleo.sequencia import montar_sequencia_individual, montar_sequencia_lote
 from neurapose_backend.nucleo.visualizacao import gerar_video_predicao
 from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
 from neurapose_backend.nucleo.pipeline import executar_pipeline_extracao
 
 # Módulo de Inferência LSTM (Específico do APP)
-from neurapose_backend.app.modulos.inferencia_lstm import rodar_lstm_uma_sequencia
+from neurapose_backend.app.modulos.inferencia_lstm import rodar_lstm_uma_sequencia, rodar_lstm_batch
 
 
 from neurapose_backend.nucleo.video_utils import normalizar_video
@@ -94,36 +94,44 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
     json_path = jsons_dir / f"{video_path.stem}.json"
 
 
-    # 4. CLASSIFICAÇÃO SEQUENCIAL (LSTM)
     # ============================================================
-    print(Fore.CYAN + f"[INFO] CLASSIFICANDO VÍDEO {video_path.name}...")
+    # 4. CLASSIFICAÇÃO SEQUENCIAL (BATCH OPTIMIZED)
+    # ============================================================
+    print(Fore.CYAN + f"[INFO] CLASSIFICANDO VÍDEO {video_path.name} (BATCH MODE)...")
     t0_temp = time.time()
     
     id_preds = {}   # id -> classe (0 ou 1)
     id_scores = {}  # id -> score
-    
+
+    # Inicializa todos com 0 por padrão
     for gid in ids_validos:
-        # Padrão: Classe 0 (Normal)
         id_preds[gid] = 0
         id_scores[gid] = 0.0
+
+    # 1. Monta sequências em Batch (O(N))
+    # Retorna {id: seq_np}
+    seqs_dict = montar_sequencia_lote(records, ids_validos)
+    
+    if seqs_dict:
+        # 2. Roda Inferência em Batch (GPU Paralela)
+        # Retorna {id: class_id}, {id: score}
+        batch_preds, batch_scores = rodar_lstm_batch(seqs_dict, model, mu, sigma)
         
-        # Monta sequência usando módulo central (Gararte T=30)
-        seq_np = montar_sequencia_individual(records, target_id=gid)
-        
-        if seq_np is None:
-            continue
+        # 3. Processa Resultados
+        for gid, raw_pred in batch_preds.items():
+            score = batch_scores.get(gid, 0.0)
             
-        # Inferência LSTM (Específica do App)
-        score, pred_raw = rodar_lstm_uma_sequencia(seq_np, model, mu, sigma)
-        
-        # Aplica Threshold
-        classe_id = 1 if score >= cm.CLASSE2_THRESHOLD else 0
-        
-        id_preds[gid] = classe_id
-        id_scores[gid] = score
-        
-        # Log Predição individual
-        print(Fore.YELLOW + "[PREDIÇÃO]" + Fore.WHITE + f" ID: {gid}: {cm.CLASSE2 if classe_id == 1 else cm.CLASSE1}")
+            # Aplica Threshold (se necessário revalidar lógica do modelo)
+            # O rodar_lstm_batch retorna o score raw da classe 1.
+            classe_id = 1 if score >= cm.CLASSE2_THRESHOLD else 0
+            
+            id_preds[gid] = classe_id
+            id_scores[gid] = score
+            
+            print(Fore.YELLOW + "[PREDIÇÃO]" + Fore.WHITE + f" ID: {gid}: {cm.CLASSE2 if classe_id == 1 else cm.CLASSE1} ({score:.2f})")
+    
+    # Logs para IDs sem sequencia válida (Ex: poucos frames) ficam como 0
+
 
     t1_temp = time.time()
     tempos["temporal_total"] = t1_temp - t0_temp
