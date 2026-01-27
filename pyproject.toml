@@ -25,6 +25,9 @@ dependencies = [
     "scikit-learn==1.7.2",
     "seaborn==0.13.2",
     "tensorboard==2.20.0",
+    "tensorrt-cu12>=10.14.1.48.post1",
+    "tensorrt-cu12-bindings>=10.14.1.48.post1",
+    "tensorrt-cu12-libs>=10.14.1.48.post1",
     "torch>=2.9.1",
     "torchreid==0.2.5",
     "torchvision>=0.24.1",
@@ -33,7 +36,7 @@ dependencies = [
     "uvicorn[standard]>=0.40.0",
     "yt-dlp==2025.12.8",
 ]
-
+ 
 [[tool.uv.index]]
 name = "pytorch"
 url = "https://download.pytorch.org/whl/cu128"

@@ -76,8 +76,9 @@ export default function TreinoPage() {
         }).catch(() => { });
 
         APIService.getConfig().then(res => {
-            if (res.data.status === 'success') {
-                setRoots(res.data.paths);
+            const data = res.data as any;
+            if (data.status === 'success') {
+                setRoots(data.paths);
             }
         });
 
@@ -85,34 +86,11 @@ export default function TreinoPage() {
         const savedLogs = localStorage.getItem('np_train_logs');
         if (savedLogs) setLogs(JSON.parse(savedLogs));
 
-        // [NOVO] Restaurar inputs do localStorage
-        try {
-            const savedState = localStorage.getItem('np_train_state');
-            if (savedState) {
-                const parsed = JSON.parse(savedState);
-                if (parsed.datasetPath) setDatasetPath(parsed.datasetPath);
-                if (parsed.pretrainedPath) setPretrainedPath(parsed.pretrainedPath);
-                if (parsed.mode) setMode(parsed.mode);
-                if (parsed.params) setParams(parsed.params);
-                if (parsed.modelType) setModelType(parsed.modelType);
-                if (parsed.device) setDevice(parsed.device);
-            }
-        } catch (e) { console.error('Error loading training state:', e); }
+
 
     }, []);
 
-    // [NOVO] Salvar inputs no localStorage sempre que mudarem
-    useEffect(() => {
-        const stateToSave = {
-            datasetPath,
-            pretrainedPath,
-            mode,
-            params,
-            modelType,
-            device
-        };
-        localStorage.setItem('np_train_state', JSON.stringify(stateToSave));
-    }, [datasetPath, pretrainedPath, mode, params, modelType, device]);
+
 
     // Refs para controle de buffer e logs
     const bufferRef = useRef<string[]>([]);

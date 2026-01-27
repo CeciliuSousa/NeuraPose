@@ -25,21 +25,51 @@ bot_sort.ReID = CustomReID
 class YoloStreamDetector:
     def __init__(self):
         self.ensure_model()
-        self.model = YOLO(str(cm.YOLO_PATH)).to(cm.DEVICE)
+        
+        # Seleciona o modelo correto (Engine ou PT)
+        if cm.USE_TENSORRT and self.engine_path.exists():
+            print(Fore.GREEN + f"[INFO] Usando Modelo Otimizado (TensorRT): {self.engine_path.name}")
+            # TensorRT deve ser carregado diretamente para a task 'track' ou 'predict'
+            # Ultralytics carrega .engine automaticamente via YOLO('model.engine')
+            self.model = YOLO(str(self.engine_path), task="detect")
+        else:
+            print(Fore.YELLOW + f"[INFO] Usando Modelo Padrão (PyTorch): {cm.YOLO_PATH.name}")
+            self.model = YOLO(str(cm.YOLO_PATH)).to(cm.DEVICE)
         
     def ensure_model(self):
-        model_path = cm.YOLO_PATH
-        model_path.parent.mkdir(parents=True, exist_ok=True)
-        if not model_path.exists():
+        # 1. Garante modelo PT base
+        pt_path = cm.YOLO_PATH
+        pt_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        if not pt_path.exists():
+            print(Fore.CYAN + f"[INFO] Baixando modelo base: {pt_path.name}...")
             model_base = cm.YOLO_MODEL.replace('.pt', '')
             try:
                 temp = YOLO(model_base)
-                temp.save(str(model_path))
+                temp.save(str(pt_path))
             except Exception as e:
-                if model_path.exists():
-                    os.remove(model_path)
+                if pt_path.exists(): os.remove(pt_path)
                 raise FileNotFoundError(f"Erro ao baixar {cm.YOLO_PATH}: {e}")
 
+        # 2. Lógica TensorRT
+        # O arquivo engine geralmente é gerado na mesma pasta do modelo original
+        self.engine_path = pt_path.with_suffix('.engine')
+        
+        if cm.USE_TENSORRT:
+            if not self.engine_path.exists():
+                print(Fore.MAGENTA + "="*60)
+                print(f"[OTIMIZAÇÃO] Gerando Motor TensorRT para {pt_path.name}...")
+                print(f"Isso pode levar de 5 a 10 minutos. Por favor aguarde...")
+                print("="*60 + Fore.RESET)
+                try:
+                    model = YOLO(str(pt_path))
+                    # Exporta para engine (device=0 hardcoded para pegar a GPU principal)
+                    model.export(format="engine", device=0, half=True, verbose=False)
+                    print(Fore.GREEN + "[SUCESSO] Modelo TensorRT gerado!")
+                except Exception as e:
+                    print(Fore.RED + f"[ERRO] Falha na exportação TensorRT: {e}")
+                    print(Fore.YELLOW + "[INFO] Fallback para PyTorch.")
+                    # Continua sem engine (vai usar .pt no init)
     def stream_video(self, video_path: str, batch_size=None):
         """
         Generator que processa o vídeo em batches e cede (yields) os resultados.

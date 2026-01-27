@@ -22,8 +22,9 @@ export default function ConfiguracaoPage() {
     useEffect(() => {
         loadConfig();
         APIService.getConfig().then(res => {
-            if (res.data.status === 'success') {
-                setRoots(res.data.paths);
+            const data = res.data as any;
+            if (data.status === 'success') {
+                setRoots(data.paths);
             }
         });
     }, []);
@@ -184,6 +185,7 @@ export default function ConfiguracaoPage() {
             title: "Hardware & Performance",
             description: "Otimizações de GPU e CPU para acelerar o processamento.",
             items: [
+                { key: "USE_TENSORRT", label: "Aceleração TensorRT (NVIDIA)", type: "boolean" },
                 { key: "USE_FP16", label: "Precisão FP16 (RTX 20/30/40)", type: "boolean" },
                 { key: "USE_NVENC", label: "NVENC (Decodificação GPU)", type: "boolean" },
                 { key: "NVENC_PRESET", label: "Preset NVENC (Velocidade/Qualidade)", type: "select", options: ["p1", "p2", "p3", "p4", "p5", "p6", "p7"] },

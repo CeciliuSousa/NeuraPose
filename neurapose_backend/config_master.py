@@ -11,6 +11,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # -- OTIMIZAÇÕES --
 USE_NVENC = True                    # Usar encoder GPU NVIDIA (h264_nvenc)
 NVENC_PRESET = "p4"                 # Preset NVENC (p1=fast, p7=quality)
+USE_TENSORRT = True                 # Habilitar aceleração TensorRT (.engine)
 
 USE_FP16 = True                     # Half Precision (2x speed em RTX)
 USE_PREFETCH = True                 # Pre-fetch frames
