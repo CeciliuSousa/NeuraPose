@@ -1,13 +1,74 @@
-import axios from 'axios';
+import { invoke } from '@tauri-apps/api/core';
 
-// Para Tauri, o backend roda localmente na porta 8000
-// Nota: As rotas do backend NÃO têm prefixo /api
-const api = axios.create({
-    baseURL: 'http://localhost:8000',
-    headers: {
-        'Content-Type': 'application/json',
+// =========================================================================
+// TAURI COMMANDS WRAPPER
+// =========================================================================
+// Substitui o axios por chamadas diretas ao Rust ("request_python")
+// Isso evita o overhead do browser network stack e problemas de CORS.
+
+interface ApiResponse<T> {
+    status: number;
+    data: T;
+    headers: Record<string, string>;
+}
+
+async function request<T>(method: string, path: string, body?: any, headers?: Record<string, string>): Promise<{ data: T, status: number, headers: any }> {
+    try {
+        const response = await invoke<ApiResponse<T>>('request_python', {
+            options: {
+                method,
+                path,
+                body: body || null,
+                headers: headers || null
+            }
+        });
+
+        if (response.status >= 400) {
+            throw new Error(`Request failed with status ${response.status}: ${JSON.stringify(response.data)}`);
+        }
+
+        return {
+            data: response.data,
+            status: response.status,
+            headers: response.headers
+        };
+    } catch (e) {
+        console.error(`[ApiError] ${method} ${path}`, e);
+        throw e;
+    }
+}
+
+// Wrapper style-axios para manter compatibilidade com o resto do código
+const api = {
+    get: async <T>(path: string, config?: { params?: any }) => {
+        let fullPath = path;
+        if (config?.params) {
+            const qs = new URLSearchParams(config.params).toString();
+            if (qs) fullPath += `?${qs}`;
+        }
+        const res = await request<T>('GET', fullPath);
+        return res;
     },
-});
+    post: async <T>(path: string, data?: any, config?: { params?: any }) => {
+        let fullPath = path;
+        if (config?.params) {
+            const qs = new URLSearchParams(config.params).toString();
+            if (qs) fullPath += `?${qs}`;
+        }
+        const res = await request<T>('POST', fullPath, data);
+        return res;
+    },
+    put: async <T>(path: string, data?: any) => request<T>('PUT', path, data),
+    delete: async <T>(path: string, config?: { params?: any }) => {
+        let fullPath = path;
+        if (config?.params) {
+            const qs = new URLSearchParams(config.params).toString();
+            if (qs) fullPath += `?${qs}`;
+        }
+        const res = await request<T>('DELETE', fullPath);
+        return res;
+    }
+};
 
 export interface ProcessRequest {
     input_path: string;
