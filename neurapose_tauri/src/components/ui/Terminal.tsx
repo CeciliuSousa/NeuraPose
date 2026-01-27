@@ -84,6 +84,7 @@ export function Terminal({
         const isProcess =
             log.includes('[NORMALIZAÇÃO]') ||
             log.includes('[YOLO]') ||
+            log.includes('[YOLO Stream]') ||
             log.includes('[RTMPOSE]') ||
             log.includes('[RTMPose]') ||
             log.includes('[NUCLEO]') ||

@@ -1,4 +1,3 @@
-use tauri::ipc::Response;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
