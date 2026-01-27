@@ -10,7 +10,16 @@ from pathlib import Path
 from colorama import Fore
 import neurapose_backend.config_master as cm
 
+# Importação do estado global
+try:
+    from neurapose_backend.globals.state import state
+except ImportError:
+    state = None
+
 def _normalizar_com_nvenc(input_path: Path, output_path: Path, target_fps: float) -> bool:
+    if state and state.stop_requested:
+        return False
+        
     try:
         cmd = [
             "ffmpeg",
@@ -26,14 +35,40 @@ def _normalizar_com_nvenc(input_path: Path, output_path: Path, target_fps: float
             str(output_path)
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        return result.returncode == 0
+        # Use Popen instead of run to allow interruption
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        
+        while True:
+            # Check if process finished
+            ret = process.poll()
+            if ret is not None:
+                return ret == 0
+                
+            # Check stop request
+            if state and state.stop_requested:
+                print(Fore.YELLOW + "[STOP] Normalização (NVENC) interrompida pelo usuário.")
+                process.terminate()
+                try:
+                    process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                # Clean up partial file
+                if output_path.exists():
+                    try:
+                        os.remove(output_path)
+                    except: pass
+                return False
+                
+            time.sleep(0.5)
         
     except Exception as e:
         print(Fore.RED + f"[ERRO] Falha NVENC: {e}")
         return False
 
 def _normalizar_com_opencv(input_path: Path, output_path: Path, target_fps: float) -> bool:
+    if state and state.stop_requested:
+        return False
+
     cap = cv2.VideoCapture(str(input_path))
     if not cap.isOpened(): return False
 
@@ -57,6 +92,10 @@ def _normalizar_com_opencv(input_path: Path, output_path: Path, target_fps: floa
     last_p = -1
     
     while True:
+        if state and state.stop_requested:
+            print(Fore.YELLOW + "[STOP] Normalização (OpenCV) interrompida pelo usuário.")
+            break
+            
         ret, frame = cap.read()
         if not ret: break
         writer.write(frame)
@@ -71,6 +110,15 @@ def _normalizar_com_opencv(input_path: Path, output_path: Path, target_fps: floa
     sys.stdout.write("\n")
     cap.release()
     writer.release()
+    
+    # Se interrompido, apaga arquivo parcial
+    if state and state.stop_requested:
+        if output_path.exists():
+            try:
+                os.remove(output_path)
+            except: pass
+        return False
+        
     return True
 
 def normalizar_video(input_path: Path, output_dir: Path, target_fps: float = None, tolerancia: float = 0.5) -> (Path, float):

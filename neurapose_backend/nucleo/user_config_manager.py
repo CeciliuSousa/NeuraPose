@@ -39,10 +39,19 @@ class UserConfigManager:
 
     @staticmethod
     def save_config(config: Dict[str, Any]):
-        """Salva as configurações no arquivo JSON."""
+        """Salva as configurações no arquivo JSON (sem caminhos absolutos ou hardware)."""
         try:
+            # Cria cópia para não alterar o dict original em memória
+            config_to_save = config.copy()
+            
+            # Remove chaves que não devem ser persistidas para garantir portabilidade
+            keys_to_exclude = ["ROOT", "DEVICE", "models_dir", "openh264_dll"] 
+            for k in keys_to_exclude:
+                if k in config_to_save:
+                    del config_to_save[k]
+
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=4, ensure_ascii=False)
+                json.dump(config_to_save, f, indent=4, ensure_ascii=False)
             print(f"[OK] Configurações salvas em {CONFIG_FILE}")
         except Exception as e:
             print(f"[ERROR] Falha ao salvar user_settings.json: {e}")

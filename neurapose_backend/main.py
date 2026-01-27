@@ -1097,6 +1097,7 @@ async def train_model_start(req: TrainStartRequest, background_tasks: Background
     dataset_name = dataset_path.name
     
     def run_train():
+        state.reset()
         state.is_running = True
         state.current_process = 'train'
         state.process_status = 'processing'
@@ -1166,6 +1167,7 @@ async def train_model_retrain(req: TrainRetrainRequest, background_tasks: Backgr
     dataset_name = dataset_path.name
     
     def run_retrain():
+        state.reset()
         state.is_running = True
         state.current_process = 'train'
         state.process_status = 'processing'

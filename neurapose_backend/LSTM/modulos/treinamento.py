@@ -10,6 +10,9 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
     model.train()
     running_loss, y_true, y_pred = 0.0, [], []
     for xb, yb in loader:
+        from neurapose_backend.globals.state import state
+        if state.stop_requested:
+            break
         xb, yb = xb.to(device), yb.to(device)
         optimizer.zero_grad()
         out = model(xb)

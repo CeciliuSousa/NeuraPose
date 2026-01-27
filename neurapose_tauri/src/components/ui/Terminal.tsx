@@ -87,7 +87,10 @@ export function Terminal({
             log.includes('[RTMPOSE]') ||
             log.includes('[RTMPose]') ||
             log.includes('[NUCLEO]') ||
-            log.includes('[PREDIÇÃO]');
+            log.includes('[PREDIÇÃO]') ||
+            log.includes('[ALERT]') ||
+            log.includes('[BALANCEANDO]') ||
+            log.includes('[TREINANDO]');
 
         // Info e Headers (Azul)
         // Verifica [INFO] ou padrão [1/10] ou ENCONTRADOS

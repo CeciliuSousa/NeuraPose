@@ -11,6 +11,7 @@ import json
 import torch
 import numpy as np
 import torch.optim as optim
+import psutil
 from pathlib import Path
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from tqdm import tqdm
@@ -58,14 +59,108 @@ def main():
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
     
-    # Banner
-    print("\n" + "="*70)
-    print("NEURAPOSE - TREINAMENTO")
-    print("="*70)
-    print(f"[DISPOSITIVO] {get_gpu_info()}")
-    print(f"[MODELO] {args.model.upper()}")
-    print(f"[DATASET] {args.name}")
-    print("="*70 + "\n")
+    # -------------------------------------------------------------------------
+    # 1. BANNER E INFORMAÇÕES DO SISTEMA (PADRONIZADO)
+    # -------------------------------------------------------------------------
+    
+    # Coleta info do sistema
+    mem = psutil.virtual_memory()
+    ram_used = mem.used / (1024**3)
+    ram_total = mem.total / (1024**3)
+    ram_info = f"{ram_used:.1f}GB / {ram_total:.1f}GB"
+    
+    gpu_name = "Não detectada"
+    vram_info = "N/A"
+    gpu_ok = False
+    if torch.cuda.is_available():
+        gpu_ok = True
+        gpu_name = torch.cuda.get_device_name(0)
+        free, total = torch.cuda.mem_get_info(0)
+        vram_used = (total - free) / (1024**3)
+        vram_total = total / (1024**3)
+        vram_info = f"{vram_used:.1f}GB / {vram_total:.1f}GB"
+
+    def status_ok(val=True):
+        return Fore.GREEN + "[OK]" if val else Fore.RED + "[ERRO]"
+    
+    def status_usage(is_used):
+        return Fore.GREEN + "[OK]" if is_used else Fore.YELLOW + "[ALERT]"
+
+    # Lógica de auditoria de parâmetros por modelo
+    m = args.model.lower()
+    
+    # Definição de quais modelos usam quais parâmetros
+    # (Baseado na análise do models.py)
+    usage = {
+        "dataset": True,
+        "epochs": True,
+        "batch_size": True,
+        "lr": True,
+        "dropout": True,       # Maioria usa, exceto talvez alguns simples se não configurado
+        "hidden_size": True,   # TFT, LSTM, Robust, BiLSTM...
+        "num_layers": True,    # LSTM variants
+        "num_heads": False,    # Apenas TFT e Transformer
+        "kernel_size": False   # Apenas CNN/TCN/WaveNet
+    }
+
+    if "tft" in m or "transformer" in m:
+        usage["num_heads"] = True
+    
+    if "tcn" in m or "wavenet" in m or "cnn" in m:
+        usage["kernel_size"] = True
+        # TCN não usa hidden_size/num_layers da mesma forma que RNNs, 
+        # mas usa channels (derivado). Para simplificar a UI, marcamos como ALERT se não for óbvio.
+        if "tcn" in m:
+            usage["hidden_size"] = False # TCN usa channels
+            usage["num_layers"] = False  # TCN usa dilations (fixo no code ou derivado)
+
+    print(Fore.WHITE + "\n" + "="*62)
+    print(Fore.WHITE + "TREINAMENTO DE MODELO — NEURAPOSE")
+    print(Fore.WHITE + "="*62)
+    
+    # Nome amigável
+    model_friendly_name = args.model.upper()
+    if args.model == 'tft': model_friendly_name = "Temporal Fusion Transformer"
+    elif args.model == 'lstm': model_friendly_name = "LSTM"
+    
+    # Impressão auditada
+    # Parâmetros Universais
+    print(Fore.WHITE + f"MODELO            : {status_ok(True)} {Fore.WHITE}{model_friendly_name}")
+    print(Fore.WHITE + f"DATASET           : {status_ok(True)} {Fore.WHITE}{args.name}")
+    print(Fore.WHITE + f"EPOCAS            : {status_usage(usage['epochs'])} {Fore.WHITE}{args.epochs}")
+    print(Fore.WHITE + f"BATCH SIZE        : {status_usage(usage['batch_size'])} {Fore.WHITE}{args.batch_size}")
+    print(Fore.WHITE + f"LEARNING RATE     : {status_usage(usage['lr'])} {Fore.WHITE}{args.lr}")
+    
+    # Parâmetros Específicos
+    val_dropout = f"{usage['dropout']}" if not usage['dropout'] else f"{args.dropout}"
+    print(Fore.WHITE + f"DROPOUT           : {status_usage(usage['dropout'])} {Fore.WHITE}{val_dropout if usage['dropout'] else 'Parametro não utilizado!'}")
+    
+    val_hidden = f"{args.hidden_size}"
+    print(Fore.WHITE + f"HIDDEN SIZE       : {status_usage(usage['hidden_size'])} {Fore.WHITE}{val_hidden if usage['hidden_size'] else 'Parametro não utilizado!'}")
+    
+    val_layers = f"{args.num_layers}"
+    print(Fore.WHITE + f"NUM LAYERS        : {status_usage(usage['num_layers'])} {Fore.WHITE}{val_layers if usage['num_layers'] else 'Parametro não utilizado!'}")
+
+    val_heads = f"{args.num_heads}"
+    print(Fore.WHITE + f"NUM HEADS         : {status_usage(usage['num_heads'])} {Fore.WHITE}{val_heads if usage['num_heads'] else 'Parametro não utilizado!'}")
+    
+    val_kernel = f"{args.kernel_size}"
+    print(Fore.WHITE + f"KERNEL SIZE       : {status_usage(usage['kernel_size'])} {Fore.WHITE}{val_kernel if usage['kernel_size'] else 'Parametro não utilizado!'}")
+
+    print(Fore.WHITE + "-"*62)
+    
+    # Hardware
+    print(Fore.WHITE + f"GPU detectada     : {status_ok(gpu_ok)} {Fore.WHITE}{gpu_name}")
+    print(Fore.WHITE + f"VRAM              : {status_ok(gpu_ok)} {Fore.WHITE}{vram_info}")
+    print(Fore.WHITE + f"RAM               : {status_ok(True)} {Fore.WHITE}{ram_info}")
+    
+    print(Fore.WHITE + "="*62 + "\n")
+
+    print(Fore.GREEN + "[OK] BANCO DE TREINAMENTO ENCONTRADO!\n")
+
+    # -------------------------------------------------------------------------
+    # 2. CARREGAMENTO DE DADOS
+    # -------------------------------------------------------------------------
 
     # Nomes das classes
     primeiraClasse = cm.CLASS_NAMES[0].lower()
@@ -73,6 +168,10 @@ def main():
     
     # Carrega dataset
     DATA_PATH = args.dataset
+    if not Path(DATA_PATH).exists():
+        print(Fore.RED + f"[ERRO] Dataset não encontrado: {DATA_PATH}")
+        return
+
     full_ds, y_all = load_data_pt(DATA_PATH)
     X_all, y_all = full_ds.tensors
     
@@ -99,28 +198,29 @@ def main():
     total = n0 + n1
     ratio = max(n0, n1) / max(1, min(n0, n1))
     
-    print(Fore.CYAN + "\n[BALANCEAMENTO]")
-    print(f"  Total treino: {total}")
-    print(f"  {primeiraClasse}: {n0} | {segundaClasse}: {n1}")
-    print(f"  Razao: {ratio:.2f}x")
+    print(Fore.BLUE + "[INFO] INICIANDO O PROCESSO DE BALANCEAMENTO\n")
+
+    print(Fore.YELLOW + f"[BALANCEANDO] TOTAL DE DADOS: {total}")
+    print(Fore.YELLOW + f"[BALANCEANDO] {primeiraClasse.upper()}: {n0}")
+    print(Fore.YELLOW + f"[BALANCEANDO] {segundaClasse.upper()}: {n1}")
+    print(Fore.YELLOW + f"[BALANCEANDO] RAZÃO: {ratio:.2f}x\n")
 
     # Sampler ponderado se desbalanceado
     if ratio > 1.1:
-        print(Fore.YELLOW + f"  Aplicando sampler ponderado")
+        # print(Fore.YELLOW + f"[INFO] Aplicando sampler ponderado para corrigir desbalanceamento.")
         weights_per_class = torch.tensor([1.0 / n0, 1.0 / n1])
         sample_weights = weights_per_class[y_train]
         train_sampler = WeightedRandomSampler(sample_weights, len(sample_weights), replacement=True)
         balanced_mode = True
     else:
-        print(Fore.GREEN + "  Dataset balanceado")
+        print(Fore.GREEN + "[OK] DATASET BALANCEADO!\n")
         train_sampler = None
         balanced_mode = False
-
+    
     # DataLoaders
     train_ds = AugmentedDataset(X_train, y_train, augment=True)
     val_ds = AugmentedDataset(X_val, y_val, augment=False)
 
-    # Configuracao de DataLoader otimizada
     num_workers = min(4, os.cpu_count() or 1)
     pin_memory = True if DEVICE == 'cuda' else False
 
@@ -134,7 +234,7 @@ def main():
     inv_freq = torch.tensor([1.0 / n0, 1.0 / n1], device=DEVICE)
     weights = inv_freq / inv_freq.sum() * 2
     
-    print(Fore.YELLOW + f"\n[LOSS] Focal Loss (gamma=2.0)")
+    # print(Fore.YELLOW + f"[LOSS] Focal Loss (gamma=2.0)") 
     criterion = FocalLoss(alpha=weights, gamma=2.0).to(DEVICE)
 
     # Modelo e otimizador
@@ -148,15 +248,9 @@ def main():
     model_dir.mkdir(parents=True, exist_ok=True)
     
     best_model_path = model_dir / cm.MODEL_BEST_FILENAME
-    final_model_path = model_dir / cm.MODEL_FINAL_FILENAME
-    curves_path = model_dir / "curvas_treino_validacao.png"
-    cm_val_path = model_dir / "matriz_confusao_validacao.png"
 
     # Salva estatisticas de normalizacao
     torch.save({"mu": mu.cpu(), "sigma": sigma.cpu()}, model_dir / cm.NORM_STATS_FILENAME)
-
-    print(Fore.CYAN + f"\n[PATHS]")
-    print(f"  Modelo: {model_dir}")
 
     # Early stopping
     early = EarlyStopper(patience=12)
@@ -165,7 +259,10 @@ def main():
 
     # Loop de treinamento
     from neurapose_backend.globals.state import state
-    print(Fore.CYAN + "\n[TREINO]")
+    print(Fore.BLUE + "[INFO] INICIANDO TREINAMENTO...\n")
+    
+    digits = len(str(args.epochs))
+
     for epoch in range(1, args.epochs + 1):
         # Verifica interrupção
         if state.stop_requested:
@@ -188,23 +285,28 @@ def main():
             best_val_f1, best_epoch = va_f1m, epoch
             torch.save(model.state_dict(), best_model_path)
 
-        # Print otimizado (apenas algumas épocas ou no final para não travar o log)
-        if epoch == 1 or epoch % 1 == 0 or epoch == args.epochs:
-            print(f"[{epoch:03d}/{args.epochs}] Train loss: {tr_loss:.4f} | Val loss: {va_loss:.4f} | Acc: {va_acc*100:.1f}% | F1: {va_f1m:.4f}")
+        # Log formatado: [TREINANDO] Epoca X/Y ...
+        print(f"{Fore.YELLOW}[TREINANDO] Epoca {epoch:0{digits}d}/{args.epochs} | Train loss: {tr_loss:.4f} | Val loss: {va_loss:.4f} | Acc: {va_acc*100:.1f}% | F1: {va_f1m:.4f}")
 
         if early.should_stop(va_f1m, va_loss):
-            print(Fore.MAGENTA + f"[STOP] Early stopping na epoca {epoch}")
+            print(Fore.MAGENTA + f"\n[STOP] Early stopping na epoca {epoch}")
             break
 
     if state.stop_requested:
         return
 
     # Avaliacao final
+    print(Fore.GREEN + "\n[OK] TREINAMENTO CONCLUÍDO!\n")
+    print(Fore.BLUE + f"[INFO] SALVANDO MODELO {model_name}\n")
+    print(Fore.GREEN + "[OK] FINALIZANDO O PROGRAMA DE TREINAMENTO...")
+
+    # Recarrega melhor modelo para avaliação final
     model.load_state_dict(torch.load(best_model_path, map_location=DEVICE))
-    tr_loss, tr_acc, tr_f1m, tr_f1w, _, _, _, _ = evaluate(model, train_loader, DEVICE, criterion)
+    # Avaliações finais
+    # tr_loss, tr_acc, tr_f1m, tr_f1w, _, _, _, _ = evaluate(model, train_loader, DEVICE, criterion)
     va_loss, va_acc, va_f1m, va_f1w, va_report, _, _, va_cm = evaluate(model, val_loader, DEVICE, criterion)
 
-    # Nomenclatura final do diretório: <dataset>-modelo_<abbr>-acc_<float>
+    # Nomenclatura final do diretório
     def get_model_abbr(m):
         m = m.lower()
         if "temporal fusion" in m or m == "tft": return "tft"
@@ -230,9 +332,12 @@ def main():
     plot_curves(history, final_model_dir / "curvas_treino_validacao.png")
     plot_confusion_matrix(va_cm, [primeiraClasse, segundaClasse], final_model_dir / "matriz_confusao_validacao.png")
     torch.save(model.state_dict(), final_model_dir / cm.MODEL_FINAL_FILENAME)
+    
     # Move o model_best.pt e o norm_stats.pt
-    shutil.move(str(best_model_path), str(final_model_dir / cm.MODEL_BEST_FILENAME))
-    shutil.move(str(model_dir / cm.NORM_STATS_FILENAME), str(final_model_dir / cm.NORM_STATS_FILENAME))
+    if best_model_path.exists():
+        shutil.move(str(best_model_path), str(final_model_dir / cm.MODEL_BEST_FILENAME))
+    if (model_dir / cm.NORM_STATS_FILENAME).exists():
+        shutil.move(str(model_dir / cm.NORM_STATS_FILENAME), str(final_model_dir / cm.NORM_STATS_FILENAME))
 
     # Relatorio
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -252,20 +357,18 @@ def main():
     with open(hist_json_path, "w", encoding="utf-8") as jf:
         json.dump(history, jf, indent=2)
 
-    # Limpa diretório temporário se estiver vazio ou deleta se quiser limpar tudo
+    # Limpa diretório temporário
     try:
         if model_dir != final_model_dir:
-            # Remove arquivos temporários se houver
             for item in model_dir.iterdir():
                 if item.is_file(): item.unlink()
             model_dir.rmdir()
     except: pass
 
-    print(Fore.GREEN + "\n[SUCESSO] Treinamento concluido!")
-    print(f"Modelo: {final_model_dir / cm.MODEL_BEST_FILENAME}")
-    print(f"Acc (val): {accuracy_percent:.1f}%")
-    print(f"F1 (val): {va_f1m:.4f}")
-
-
-if __name__ == "__main__":
-    main()
+    # Caminho final relativo para exibição
+    # try:
+    #     rel_path = final_model_dir.relative_to(cm.ROOT_DIR)
+    # except:
+    #     rel_path = final_model_dir
+    
+    # print(Fore.WHITE + f"\n[INFO] Arquivos salvos em: {rel_path}")

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
     Dumbbell,
@@ -115,11 +115,13 @@ export default function TreinoPage() {
     }, [datasetPath, pretrainedPath, mode, params, modelType, device]);
 
     // Refs para controle de buffer e logs
-    // const bufferRef = useRef<string[]>([]);
+    const bufferRef = useRef<string[]>([]);
 
     // Logs via WebSocket
     useEffect(() => {
         if (loading) {
+            let flushInterval: ReturnType<typeof setInterval>;
+
             import('../services/websocket').then(mod => {
                 const ws = mod.default;
                 ws.connectLogs('train');
@@ -128,30 +130,34 @@ export default function TreinoPage() {
                 const handleLogs = (data: any) => {
                     // 1. Tratamento robusto do payload (igual aos outros arquivos funcionais)
                     const newLogs = Array.isArray(data) ? data : (data.logs || []);
-                    const total = data.total || 0;
+                    // const total = data.total || 0;
 
-                    setLogs((prev) => {
-                        // 2. Detecção de "Full Sync" (se o backend mandar tudo de novo, limpamos o anterior)
-                        // Se recebermos um pacote grande que parece ser o histórico todo, resetamos.
-                        let currentLogs = (newLogs.length >= total && total > 0) ? [] : [...prev];
-
-                        // 3. Adiciona novos logs
-                        newLogs.forEach((log: string) => {
-                            // Remove \r para evitar problemas de quebra de linha visual
-                            const content = log.replace(/\r/g, '');
-                            if (content.trim()) {
-                                currentLogs.push(content);
-                            }
-                        });
-
-                        // 4. SEGURANÇA: Limita a 1000 linhas para evitar Tela Preta (Crash)
-                        if (currentLogs.length > 1000) {
-                            return currentLogs.slice(-1000);
-                        }
-
-                        return currentLogs;
-                    });
+                    // Adiciona ao buffer persistente
+                    if (newLogs.length > 0) {
+                        bufferRef.current.push(...newLogs);
+                    }
                 };
+
+                // Flush do buffer para o estado a cada 100ms
+                flushInterval = setInterval(() => {
+                    if (bufferRef.current.length > 0) {
+                        const logsToFlush = [...bufferRef.current];
+                        bufferRef.current = []; // Limpa buffer
+
+                        setLogs((prev) => {
+                            // Limpa logs visualmente feios (opcional) e junta
+                            const processedLogs = logsToFlush.map(l => l.replace(/\r/g, '')).filter(l => l.trim());
+
+                            const updated = [...prev, ...processedLogs];
+
+                            // Mantém apenas as últimas 1000 linhas para performance/evitar crash
+                            if (updated.length > 1000) {
+                                return updated.slice(-1000);
+                            }
+                            return updated;
+                        });
+                    }
+                }, 100);
 
                 const handleStatus = (status: any) => {
                     if (!status.is_running && loading) {
@@ -169,6 +175,10 @@ export default function TreinoPage() {
                     ws.events.off('status', handleStatus);
                 };
             });
+
+            return () => {
+                if (flushInterval) clearInterval(flushInterval);
+            };
         }
     }, [loading]);
 
@@ -184,10 +194,10 @@ export default function TreinoPage() {
 
         setLoading(true);
         setMessage({ text: `⏳ Iniciando ${mode === 'treinar' ? 'treinamento' : 'retreinamento'}...`, type: 'processing' });
-        setLogs(prev => [...prev, `[INFO] Modo: ${mode.toUpperCase()}`]);
-        setLogs(prev => [...prev, `[INFO] Dataset: ${datasetName}`]);
-        setLogs(prev => [...prev, `[INFO] Modelo: ${MODEL_OPTIONS.find(m => m.value === modelType)?.label}`]);
-        setLogs(prev => [...prev, `[INFO] Hardware: ${device === 'cuda' ? 'GPU (CUDA)' : 'CPU'}`]);
+        // setLogs(prev => [...prev, `[INFO] Modo: ${mode.toUpperCase()}`]); // Removido para limpeza
+        // setLogs(prev => [...prev, `[INFO] Dataset: ${datasetName}`]);     // Removido para limpeza
+        // setLogs(prev => [...prev, `[INFO] Modelo: ${MODEL_OPTIONS.find(m => m.value === modelType)?.label}`]); // Removido para limpeza
+        // setLogs(prev => [...prev, `[INFO] Hardware: ${device === 'cuda' ? 'GPU (CUDA)' : 'CPU'}`]); // Removido para limpeza
 
         try {
             const data = {
