@@ -424,7 +424,7 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
                     if state.stop_requested:
                         print(Fore.YELLOW + "[INFO] PROCESSAMENTO INTERROMPIDO PELO USUARIO.")
                         break
-                    print(Fore.CYAN + f"[{i}/{len(videos)}] PROCESSANDO {v.name}")
+                    print(Fore.CYAN + f"[{i}/{len(videos)}] PROCESSANDO: {v.name}")
                     processar_video(v, output_path, show=show)
                     state.current_frame = None  # Limpa frame entre vídeos
             
@@ -490,7 +490,7 @@ def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, 
                 print(f"[INFO] ENCONTRADOS {len(videos)} VIDEOS")
                 for i, v in enumerate(videos, 1):
                     if state.stop_requested: break
-                    print(f"\n[{i}/{len(videos)}] PROCESSANDO {v.name}")
+                    print(f"\n[{i}/{len(videos)}] PROCESSANDO: {v.name}")
                     processar_video(v, output_path, show=show)
                     # Limpa frame entre vídeos para mostrar placeholder
                     state.current_frame = None

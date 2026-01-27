@@ -190,7 +190,7 @@ def main():
 
         # Print otimizado (apenas algumas épocas ou no final para não travar o log)
         if epoch == 1 or epoch % 1 == 0 or epoch == args.epochs:
-            print(f"[{epoch:03d}/{args.epochs}] Loss: {tr_loss:.4f}/{va_loss:.4f} | Acc: {va_acc*100:.1f}% | F1: {va_f1m:.4f}")
+            print(f"[{epoch:03d}/{args.epochs}] Train loss: {tr_loss:.4f} | Val loss: {va_loss:.4f} | Acc: {va_acc*100:.1f}% | F1: {va_f1m:.4f}")
 
         if early.should_stop(va_f1m, va_loss):
             print(Fore.MAGENTA + f"[STOP] Early stopping na epoca {epoch}")

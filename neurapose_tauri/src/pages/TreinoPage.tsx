@@ -114,6 +114,9 @@ export default function TreinoPage() {
         localStorage.setItem('np_train_state', JSON.stringify(stateToSave));
     }, [datasetPath, pretrainedPath, mode, params, modelType, device]);
 
+    // Refs para controle de buffer e logs
+    // const bufferRef = useRef<string[]>([]);
+
     // Logs via WebSocket
     useEffect(() => {
         if (loading) {
@@ -122,8 +125,32 @@ export default function TreinoPage() {
                 ws.connectLogs('train');
                 ws.connectStatus();
 
-                const handleLogs = (newLogs: string[]) => {
-                    setLogs((prev) => [...prev, ...newLogs]);
+                const handleLogs = (data: any) => {
+                    // 1. Tratamento robusto do payload (igual aos outros arquivos funcionais)
+                    const newLogs = Array.isArray(data) ? data : (data.logs || []);
+                    const total = data.total || 0;
+
+                    setLogs((prev) => {
+                        // 2. Detecção de "Full Sync" (se o backend mandar tudo de novo, limpamos o anterior)
+                        // Se recebermos um pacote grande que parece ser o histórico todo, resetamos.
+                        let currentLogs = (newLogs.length >= total && total > 0) ? [] : [...prev];
+
+                        // 3. Adiciona novos logs
+                        newLogs.forEach((log: string) => {
+                            // Remove \r para evitar problemas de quebra de linha visual
+                            const content = log.replace(/\r/g, '');
+                            if (content.trim()) {
+                                currentLogs.push(content);
+                            }
+                        });
+
+                        // 4. SEGURANÇA: Limita a 1000 linhas para evitar Tela Preta (Crash)
+                        if (currentLogs.length > 1000) {
+                            return currentLogs.slice(-1000);
+                        }
+
+                        return currentLogs;
+                    });
                 };
 
                 const handleStatus = (status: any) => {
@@ -373,8 +400,6 @@ export default function TreinoPage() {
                     <Terminal
                         logs={logs}
                         title="Console de Treinamento"
-                        height="700px"
-                        width="100%"
                         isLoading={loading}
                         onClear={async () => {
                             setLogs([]);

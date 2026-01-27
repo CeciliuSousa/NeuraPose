@@ -89,7 +89,7 @@ def main():
     
     for i, video_path in enumerate(video_list):
         if state.stop_requested: break
-        print(Fore.BLUE + f"[{i+1}/{total_videos}] PROCESSANDO {video_path.name}")
+        print(Fore.BLUE + f"[{i+1}/{total_videos}] PROCESSANDO: {video_path.name}")
         
         predictions = processar_video(video_path, lstm_model, norm_stats.get("mu"), norm_stats.get("sigma"), show_preview=args.show, output_dir=out_report_dir)
         all_predictions[video_path.stem] = predictions

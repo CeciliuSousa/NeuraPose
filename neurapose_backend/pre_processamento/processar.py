@@ -70,7 +70,7 @@ def main():
     
     total_videos = len(v_list)
     for i, v in enumerate(v_list):
-        print(Fore.CYAN + f"[{i+1}/{total_videos}] PROCESSANDO {v.name}")
+        print(Fore.CYAN + f"[{i+1}/{total_videos}] PROCESSANDO: {v.name}")
         
         # Output especifico por video (se for pasta)
         if args.input_video:
