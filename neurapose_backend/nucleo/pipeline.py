@@ -1,20 +1,18 @@
-# ==============================================================
-# neurapose_backend/nucleo/pipeline.py
-# ==============================================================
-# Módulo que unifica a lógica de Detecção (YOLO+BoTSORT) + 
-# Extração de Pose (RTMPose) + Filtragem (Ghosting/V6).
-# Garante consistência total entre App e Pré-processamento.
-# ==============================================================
-
 import time
 import cv2
 import torch
 import sys
+import threading
+import queue
+import traceback
 from pathlib import Path
 from colorama import Fore
+import numpy as np
+import random
 
 import neurapose_backend.config_master as cm
-from neurapose_backend.detector.yolo_detector import yolo_detector_botsort as yolo_detector
+from neurapose_backend.detector.yolo_stream import YoloStreamDetector
+from neurapose_backend.detector.yolo_detector import merge_tracks
 from neurapose_backend.nucleo.filtros import filtrar_ids_validos_v6, filtrar_ghosting_v5
 
 # Import opcional para feedback de estado no App
@@ -22,8 +20,98 @@ try:
     from neurapose_backend.globals.state import state
 except ImportError:
     state = None
-import random
-import numpy as np
+
+class PipelineParalelo:
+    def __init__(self, pose_extractor, verbose=True):
+        self.pose_extractor = pose_extractor
+        self.verbose = verbose
+        # Fila limita memory usage se YOLO for muito mais rapido que Pose
+        self.queue = queue.Queue(maxsize=4) 
+        self.records = []
+        self.error = None
+        
+    def worker_rtmpose(self):
+        """Consome batches da fila e processa poses"""
+        try:
+            while True:
+                item = self.queue.get()
+                if item is None: # Sentinel
+                    self.queue.task_done()
+                    break
+                
+                # Desempacota
+                frame_idx_start, batch_data = item
+                
+                # Processa cada frame do batch
+                for i, data in enumerate(batch_data):
+                    current_idx = frame_idx_start + i
+                    frame_img = data["frame"]
+                    boxes = data["boxes"]
+                    
+                    # ID Map temporario vazio pois o merge final ocorre depois
+                    # RTMPose vai usar o ID cru do YOLO/BoTSORT
+                    frame_regs, _ = self.pose_extractor.processar_frame(
+                        frame_img=frame_img,
+                        detections_yolo=boxes,
+                        frame_idx=current_idx,
+                        id_map={}, 
+                        desenhar_no_frame=False
+                    )
+                    
+                    self.records.extend(frame_regs)
+                
+                self.queue.task_done()
+                
+        except Exception as e:
+            self.error = e
+            traceback.print_exc()
+
+    def executar(self, video_path, batch_size):
+        # Inicializa Detector com Stream
+        streamer = YoloStreamDetector()
+        
+        # Inicia Thread Consumidora
+        t_consumer = threading.Thread(target=self.worker_rtmpose)
+        t_consumer.start()
+        
+        generator = streamer.stream_video(video_path, batch_size)
+        
+        track_data_final = None
+        fps = 30.0
+        final_frame_idx = 0
+        
+        try:
+            for item in generator:
+                # O generator do yolo_stream yielda tuplas normais ou o sinal final
+                if len(item) == 3 and item[0] == "DONE":
+                    _, track_data_final, fps = item
+                    continue
+                
+                # Se houver erro na thread, paramos
+                if self.error:
+                    break
+                    
+                # Yield normal: (idx, batch_results)
+                # Envia para consumidor
+                self.queue.put(item)
+                final_frame_idx = item[0] + len(item[1])
+
+            # Sinal de parada
+            self.queue.put(None)
+            
+            # Aguarda fim do processamento de poses
+            t_consumer.join()
+            
+            if self.error:
+                raise self.error
+                
+        except Exception as e:
+            # Em caso de crash, tenta limpar
+            self.queue.put(None) # Libera thread se estiver presa
+            t_consumer.join(timeout=2)
+            raise e
+            
+        return self.records, track_data_final, final_frame_idx
 
 def executar_pipeline_extracao(
     video_path_norm: Path,
@@ -32,28 +120,10 @@ def executar_pipeline_extracao(
     verbose: bool = True
 ):
     """
-    Executa o núcleo do pipeline:
-    1. Detecção e Tracking (YOLO + BoTSORT)
-    2. Extração de Pose (RTMPose)
-    3. Filtragem de Ghosting
-    4. Filtragem de IDs Válidos
-
-    Args:
-        video_path_norm: Caminho do vídeo JÁ NORMALIZADO.
-        pose_extractor: Instância de ExtratorPoseRTMPose (já inicializada).
-        batch_size: Tamanho do batch para YOLO (default: cm.YOLO_BATCH_SIZE).
-        verbose: Se True, imprime logs coloridos.
-
-    Returns:
-        Um tupla contendo:
-        - registros_finais (List[dict]): Lista de registros de pose filtrados.
-        - id_map_full (dict): Mapa completo de IDs original do tracker.
-        - ids_validos (List[int]): Lista de IDs que passaram no filtro.
-        - total_frames (int): Total de frames processados.
-        - tempos (dict): Dicionário com tempos de execução ('yolo', 'rtmpose').
+    Executa o pipeline otimizado com paralelismo (Producer-Consumer).
     """
     
-    # Fixa seeds para determinismo (Garante paridade App x Processamento)
+    # Fixa seeds para determinismo
     torch.manual_seed(42)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(42)
@@ -65,157 +135,86 @@ def executar_pipeline_extracao(
 
     tempos = {"yolo": 0.0, "rtmpose": 0.0}
 
-    # 1. DETECTOR (YOLO + BoTSORT)
+    # --------------------------------------------------------
+    # 1. EXECUÇÃO PARALELA (YOLO + RTMPose)
     # --------------------------------------------------------
     if verbose:
-        # print(Fore.CYAN + f"[INFO] Iniciando deteccao YOLO + BoTSORT + OSNet")
-        # print(Fore.CYAN + f"[INFO] Iniciando deteccao YOLO + BoTSORT (Batch {batch_size})...")
-        pass
-
+        print(Fore.CYAN + f"[INFO] INICIANDO PIPELINE PARALELO (threads)...")
     
-    t0 = time.time()
-    # Executa YOLO
-    resultados_list = yolo_detector(videos_dir=video_path_norm, batch_size=batch_size)
-    t1 = time.time()
-    tempos["yolo"] = t1 - t0
-
-    if not resultados_list:
-        if verbose: print(Fore.RED + "[ERRO] Nenhuma detecção retornada pelo YOLO.")
+    t0_global = time.time()
+    
+    pipeline = PipelineParalelo(pose_extractor, verbose)
+    
+    # O "custo" de YOLO e RTMPose agora é entrelaçado.
+    # Vamos medir o tempo total desse bloco
+    
+    try:
+        raw_records, track_data, total_frames = pipeline.executar(video_path_norm, batch_size)
+    except Exception as e:
+        print(Fore.RED + f"[CRITICAL] Erro no pipeline paralelo: {e}")
         return [], {}, [], 0, tempos
 
-    res = resultados_list[0]
-    results_yolo = res["results"] # Lista de dicts por frame
-    id_map_full = res.get("id_map", {})
+    t_total_extracao = time.time() - t0_global
+    
+    # Para compatibilidade de logs, dividimos o tempo igualmente ou deixamos unificado
+    # Como rodou junto, o "gargalo" define o tempo.
+    # Vamos atribuir 50% para cada visualmente ou apenas registrar total
+    tempos["yolo"] = t_total_extracao / 2  # Estimativa
+    tempos["rtmpose"] = t_total_extracao / 2 # Estimativa
 
-    # 2. EXTRAÇÃO DE POSE (RTMPose Modular)
+    if not raw_records or not track_data:
+        if verbose: print(Fore.RED + "[AVISO] Nenhuma detecção ou track valido.")
+        return [], {}, [], total_frames, tempos
+
+    if verbose:
+        print(Fore.GREEN + "[OK]" + Fore.WHITE + f" EXTRAÇÃO PARALELA CONCLUÍDA em {t_total_extracao:.2f}s!")
+        print(Fore.CYAN + f"[INFO] CONSOLIDANDO IDs (Merge Tracks)...")
+
+    # --------------------------------------------------------
+    # 2. PÓS-PROCESSAMENTO (Merge Tracks + Remap IDs)
+    # --------------------------------------------------------
+    # Executa a fusão de IDs (BoTSORT logic para gaps)
+    # Precisamos da função merge_tracks do yolo_detector
+    merged_tracks, id_map_full = merge_tracks(track_data)
+    
+    # Atualiza IDs nos registros de pose
+    # RTMPose rodou com IDs "crus", agora aplicamos o mapa final
+    count_remapped = 0
+    
+    for r in raw_records:
+        old_id = r["id_persistente"]
+        if old_id in id_map_full:
+            new_id = id_map_full[old_id]
+            if new_id != old_id:
+                r["id_persistente"] = new_id
+                r["id"] = new_id # Atualiza ambos por segurança
+                count_remapped += 1
+                
+    if verbose and count_remapped > 0:
+        print(Fore.BLUE + f"[INFO] {count_remapped} registros tiveram IDs unificados.")
+
+    # --------------------------------------------------------
+    # 3. FILTRAGEM FINAL
     # --------------------------------------------------------
     if verbose:
-        print(Fore.CYAN + f"[INFO] PROCESSANDO EXTRAÇÃO DE POSE...")
+        print(Fore.CYAN + f"[INFO] FILTRANDO GHOSTING E VALIDADE...")
+
+    # A) Anti-Ghosting
+    records_clean = filtrar_ghosting_v5(raw_records, iou_thresh=0.8)
     
-    t0 = time.time()
-    records = []
-    
-    # Usa VideoReaderAsync para pre-fetch de frames (quando habilitado)
-    if cm.USE_PREFETCH:
-        from neurapose_backend.nucleo.video_reader import VideoReaderAsync
-        
-        with VideoReaderAsync(video_path_norm) as reader:
-            total_frames = reader.total_frames
-            
-            if verbose: print("")
-            last_progress = 0
-        
-            for frame_idx, frame in reader:
-                # Verifica parada solicitada (App)
-                if state and state.stop_requested:
-                    if verbose: print(Fore.YELLOW + "[STOP] Interrompido pelo usuário.")
-                    break
-                
-                # Recupera boxes do frame atual
-                dets = None
-                if frame_idx <= len(results_yolo):
-                    dets = results_yolo[frame_idx-1].get("boxes")
-                
-                # Processa frame com o Extrator Unificado
-                frame_regs, _ = pose_extractor.processar_frame(
-                    frame_img=frame,
-                    detections_yolo=dets,
-                    frame_idx=frame_idx,
-                    id_map=id_map_full,
-                    desenhar_no_frame=False
-                )
-                
-                records.extend(frame_regs)
-                
-                # Log de progresso (a cada 10%)
-                if verbose:
-                    progress = int((frame_idx / (total_frames or 1)) * 100)
-                    if progress >= last_progress + 10:
-                        sys.stdout.write(f"\r{Fore.YELLOW}[RTMPose]{Fore.WHITE} Progresso: {progress}%")
-                        sys.stdout.flush()
-                        last_progress = progress
-            
-            if verbose:
-                sys.stdout.write('\n')
-                sys.stdout.flush()
-                        
-            final_frame_idx = frame_idx if 'frame_idx' in dir() else 0
-    else:
-        # Fallback: leitura síncrona com OpenCV
-        cap = cv2.VideoCapture(str(video_path_norm))
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        frame_idx = 1
-        last_progress = 0
-        if verbose: print("")
-
-        while True:
-            if state and state.stop_requested:
-                if verbose: print(Fore.YELLOW + "[STOP] Interrompido pelo usuário.")
-                break
-                
-            ok, frame = cap.read()
-            if not ok: break
-            
-            dets = None
-            if frame_idx <= len(results_yolo):
-                dets = results_yolo[frame_idx-1].get("boxes") 
-            
-            frame_regs, _ = pose_extractor.processar_frame(
-                frame_img=frame,
-                detections_yolo=dets,
-                frame_idx=frame_idx,
-                id_map=id_map_full,
-                desenhar_no_frame=False
-            )
-            
-            records.extend(frame_regs)
-            
-            if verbose:
-                progress = int((frame_idx / (total_frames or 1)) * 100)
-                if progress >= last_progress + 10:
-                    sys.stdout.write(f"\r{Fore.YELLOW}[RTMPose]{Fore.WHITE} Progresso: {progress}%")
-                    sys.stdout.flush()
-                    last_progress = progress
-
-            frame_idx += 1
-            
-        cap.release()
-        if verbose:
-            sys.stdout.write('\n')
-            sys.stdout.flush()
-        final_frame_idx = frame_idx - 1
-        
-    t1 = time.time()
-    tempos["rtmpose"] = t1 - t0
-
-    if not records:
-        if verbose: print(Fore.RED + "[AVISO] Nenhuma pose detectada.")
-        return [], id_map_full, [], final_frame_idx, tempos
-
-    if verbose:
-        print(Fore.GREEN + "[OK]" + Fore.WHITE + " EXTRAÇÃO DE POSE CONCLUÍDA!")
-        print(Fore.CYAN + f"[INFO] FILTRANDO OS IDs...")
-
-    # A) Anti-Ghosting (CRÍTICO: Garante que IDs duplicados/fantasmas sejam removidos antes da validação)
-    records = filtrar_ghosting_v5(records, iou_thresh=0.8)
-    
-    # B) Filtros de Validade (Duração, Movimento)
+    # B) Filtros de Validade
     ids_validos = filtrar_ids_validos_v6(
-        registros=records,
-        min_frames=cm.MIN_FRAMES_PER_ID, # 30
-        min_dist=50.0,                   # Padrão V6
+        registros=records_clean,
+        min_frames=cm.MIN_FRAMES_PER_ID,
+        min_dist=50.0,
         verbose=verbose
     )
     
     if verbose:
         print(Fore.YELLOW + "[NUCLEO]" + Fore.WHITE + f" IDs APROVADOS: {sorted(ids_validos)}")
-        print(Fore.GREEN + "[OK]" + Fore.WHITE + f" FILTRAGEM CONCLUÍDA!")
     
     # C) Filtra registros finais
-    registros_finais = [r for r in records if r["id_persistente"] in ids_validos]
-
-    if not registros_finais:
-        if verbose: print(Fore.RED + "[AVISO] Todos os IDs foram removidos pelo filtro.")
+    registros_finais = [r for r in records_clean if r["id_persistente"] in ids_validos]
     
-    return registros_finais, id_map_full, ids_validos, final_frame_idx, tempos
+    return registros_finais, id_map_full, ids_validos, total_frames, tempos
 
