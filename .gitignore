@@ -11,6 +11,7 @@ wheels/
 neurapose_backend_antigo
 neurapose_backend/**/*.pt
 neurapose_backend/**/*.pth
+neurapose_backend/**/*.engine
 neurapose_backend/**/*.onnx
 neurapose_backend/**/*.json
 neurapose_backend/**/*.pkl

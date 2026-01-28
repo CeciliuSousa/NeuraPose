@@ -107,7 +107,7 @@ export default function ConfiguracaoPage() {
             title: "Modelos de IA",
             description: "Modelos usados para detecção, pose e re-identificação.",
             items: [
-                { key: "YOLO_MODEL", label: "Modelo YOLO (Detecção)", type: "select", options: ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt"] },
+                { key: "YOLO_MODEL", label: "Modelo YOLO (Detecção)", type: "select", options: ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolo11m.pt"] },
                 { key: "OSNET_MODEL", label: "Modelo OSNet (Re-ID)", type: "path", rootKey: "modelos_reid" },
                 { key: "RTMPOSE_MODEL", label: "Modelo RTMPose (Pose)", type: "path", rootKey: "modelos_pose" },
                 { key: "RTMPOSE_INPUT_SIZE", label: "Resol. Entrada RTMPose", type: "select", options: ["256x192", "384x288"] },

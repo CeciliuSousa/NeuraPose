@@ -11,7 +11,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # -- OTIMIZAÇÕES --
 USE_NVENC = True                    # Usar encoder GPU NVIDIA (h264_nvenc)
 NVENC_PRESET = "p4"                 # Preset NVENC (p1=fast, p7=quality)
-USE_TENSORRT = True                 # Habilitar aceleração TensorRT (.engine)
+USE_TENSORRT = False                 # Habilitar aceleração TensorRT (.engine)
 
 USE_FP16 = True                     # Half Precision (2x speed em RTX)
 USE_PREFETCH = True                 # Pre-fetch frames
@@ -24,7 +24,7 @@ except ImportError: pass
 
 # -- MODELOS --
 # YOLO (Detecção)
-YOLO_MODEL = "yolov8l.pt"
+YOLO_MODEL = "yolo11m.pt"
 YOLO_IMGSZ = 640
 YOLO_CONF_THRESHOLD = 0.35
 YOLO_CLASS_PERSON = 0

@@ -51,9 +51,7 @@ class YoloStreamDetector:
                 if pt_path.exists(): os.remove(pt_path)
                 raise FileNotFoundError(f"Erro ao baixar {cm.YOLO_PATH}: {e}")
 
-        # 2. Lógica TensorRT
-        # O arquivo engine geralmente é gerado na mesma pasta do modelo original
-        self.engine_path = pt_path.with_suffix('.engine')
+        self.engine_path = pt_path.with_name(f"{pt_path.stem}_b{cm.YOLO_BATCH_SIZE}.engine")
         
         if cm.USE_TENSORRT:
             if not self.engine_path.exists():
@@ -63,9 +61,39 @@ class YoloStreamDetector:
                 print("="*60 + Fore.RESET)
                 try:
                     model = YOLO(str(pt_path))
-                    # Exporta para engine (device=0 hardcoded para pegar a GPU principal)
-                    model.export(format="engine", device=0, half=True, verbose=False)
-                    print(Fore.GREEN + "[SUCESSO] Modelo TensorRT gerado!")
+
+                    batch_size = cm.YOLO_BATCH_SIZE
+                    print(Fore.CYAN + f"[TRT] Exportando com Batch Size = {batch_size}...")
+                    
+                    model.export(
+                        format="engine",
+                        device=0,
+                        half=True,
+                        verbose=False,
+                        batch=batch_size,
+                        workspace=4         # Aumenta workspace para otimização (GB)
+                    )
+                    
+                    # Renomeia Engine e ONNX para incluir o batch size
+                    # Ultralytics gera: yolov8l.engine e yolov8l.onnx
+                    # Queremos: yolov8l_b32.engine e yolov8l_b32.onnx
+                    
+                    default_engine = pt_path.with_suffix('.engine')
+                    default_onnx = pt_path.with_suffix('.onnx')
+                    
+                    target_onnx = self.engine_path.with_suffix('.onnx')
+                    
+                    # Renomeia Engine force-overwrite
+                    if default_engine.exists() and default_engine != self.engine_path:
+                        if self.engine_path.exists(): self.engine_path.unlink()
+                        default_engine.rename(self.engine_path)
+                        
+                    # Renomeia ONNX force-overwrite
+                    if default_onnx.exists() and default_onnx != target_onnx:
+                        if target_onnx.exists(): target_onnx.unlink()
+                        default_onnx.rename(target_onnx)
+                        
+                    print(Fore.GREEN + "[SUCESSO] Modelo TensorRT gerado e versionado!")
                 except Exception as e:
                     print(Fore.RED + f"[ERRO] Falha na exportação TensorRT: {e}")
                     print(Fore.YELLOW + "[INFO] Fallback para PyTorch.")
@@ -115,9 +143,22 @@ class YoloStreamDetector:
                 if not frames_batch:
                     break
                 
+                # TensorRT Batch Padding Logic
+                # Se o batch atual for menor que o esperado pelo Engine (ex: final do vídeo), preenchemos.
+                actual_batch_size = len(frames_batch)
+                padded_frames = frames_batch
+                
+                if cm.USE_TENSORRT and actual_batch_size < batch_size:
+                    padding_needed = batch_size - actual_batch_size
+                    # Cria frames pretos (zeros) com mesmo shape
+                    # Assumindo que todos frames tem mesmo shape do primeiro
+                    h, w, c = frames_batch[0].shape
+                    black_frame = np.zeros((h, w, c), dtype=np.uint8)
+                    padded_frames = frames_batch + [black_frame] * padding_needed
+
                 # Inference
                 batch_results = self.model.track(
-                    source=frames_batch,
+                    source=padded_frames,
                     imgsz=cm.YOLO_IMGSZ,
                     conf=cm.DETECTION_CONF,
                     device=cm.DEVICE,
@@ -128,6 +169,10 @@ class YoloStreamDetector:
                     half=True,
                     stream=False
                 )
+                
+                # Remove padding results se necessário
+                if cm.USE_TENSORRT and actual_batch_size < batch_size:
+                    batch_results = batch_results[:actual_batch_size]
                 
                 # Processamento leve para extrair features e montar track_data
                 processed_batch_results = []

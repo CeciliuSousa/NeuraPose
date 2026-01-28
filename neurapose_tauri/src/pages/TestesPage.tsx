@@ -43,18 +43,24 @@ export default function TestesPage() {
                 setLoading(true);
                 setMessage({ text: '⏳ Teste em andamento...', type: 'processing' });
                 setPageStatus('test', 'processing');
+
+                // Recarrega logs se rodando
+                const savedLogs = localStorage.getItem('np_test_logs');
+                if (savedLogs) setLogs(JSON.parse(savedLogs));
+            } else {
+                // Se NÃO está rodando, garante limpo para não mostrar "Pronto" falso
+                setLogs([]);
+                localStorage.removeItem('np_test_logs');
+                setPageStatus('test', 'idle'); // Reset status visual se hook suportar, ou ignora
             }
         }).catch(() => { });
 
         APIService.getConfig().then(res => {
-            if (res.data.status === 'success') {
-                setRoots(res.data.paths);
+            const data = res.data as any; // Cast explicito
+            if (data.status === 'success') {
+                setRoots(data.paths);
             }
         });
-
-        // Restaurar logs do localStorage
-        const savedLogs = localStorage.getItem('np_test_logs');
-        if (savedLogs) setLogs(JSON.parse(savedLogs));
 
         // Restore Config
         const savedConfig = localStorage.getItem('np_test_config');
@@ -95,6 +101,8 @@ export default function TestesPage() {
                         if (content.trim()) currentLogs.push(content);
                     });
 
+                    // Persiste on-the-fly para F5
+                    localStorage.setItem('np_test_logs', JSON.stringify(currentLogs));
                     return currentLogs;
                 });
             };
@@ -131,9 +139,14 @@ export default function TestesPage() {
             setMessage({ text: 'Por favor, selecione o modelo e o dataset de teste.', type: 'error' });
             return;
         }
+
+        // LIMPEZA DE ESTADO ANTES DE INICIAR (CRÍTICO)
+        setLogs([]);
+        localStorage.removeItem('np_test_logs');
+
         setLoading(true);
         setMessage({ text: '⏳ Executando testes de validação...', type: 'processing' });
-        setLogs(prev => [...prev, `[INFO] Iniciando validação de modelo...`]);
+        setLogs([`[INFO] Iniciando validação de modelo...`]);
         setPageStatus('test', 'processing');
         try {
             await APIService.startTesting({

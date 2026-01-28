@@ -66,12 +66,26 @@ export default function TreinoPage() {
 
     // Carregar caminhos do backend e restaurar estado
     useEffect(() => {
+        // Limpeza de estado residual ao entrar na página (GARANTE TERMINAL LIMPO)
+        setLogs([]);
+        localStorage.removeItem('np_train_logs');
+        // Não removemos loading aqui para permitir reconexão se F5, mas logs limpamos. (ou mantemos? O usuário pediu limpar para evitar "Pronto")
+        // Se limpamos logs, perdemos histórico do F5. O usuário quer evitar que EM UMA NOVA EXECUÇÃO apareça pronto.
+        // Então a limpeza crítica é no handleTrain. Mas no mount também ajuda a não ver lixo antigo.
+
         // Restaurar estado se houver treino em andamento
         APIService.healthCheck().then(res => {
             // Só mostra mensagem se for ESTE processo (train)
             if (res.data.processing && res.data.current_process === 'train') {
                 setLoading(true);
                 setMessage({ text: '⏳ Treinamento em andamento...', type: 'processing' });
+                // Se está rodando, recuperamos logs
+                const savedLogs = localStorage.getItem('np_train_logs');
+                if (savedLogs) setLogs(JSON.parse(savedLogs));
+            } else {
+                // Se NÃO está rodando, garante limpo
+                setLogs([]);
+                localStorage.removeItem('np_train_logs');
             }
         }).catch(() => { });
 
@@ -81,12 +95,6 @@ export default function TreinoPage() {
                 setRoots(data.paths);
             }
         });
-
-        // Restaurar logs do localStorage
-        const savedLogs = localStorage.getItem('np_train_logs');
-        if (savedLogs) setLogs(JSON.parse(savedLogs));
-
-
 
     }, []);
 
@@ -113,6 +121,8 @@ export default function TreinoPage() {
                     // Adiciona ao buffer persistente
                     if (newLogs.length > 0) {
                         bufferRef.current.push(...newLogs);
+                        // Salva no localStorage on-the-fly para F5
+                        // (O ideal seria salvar com debounce, mas aqui simplificamos)
                     }
                 };
 
@@ -130,8 +140,11 @@ export default function TreinoPage() {
 
                             // Mantém apenas as últimas 1000 linhas para performance/evitar crash
                             if (updated.length > 1000) {
-                                return updated.slice(-1000);
+                                const sliced = updated.slice(-1000);
+                                localStorage.setItem('np_train_logs', JSON.stringify(sliced));
+                                return sliced;
                             }
+                            localStorage.setItem('np_train_logs', JSON.stringify(updated));
                             return updated;
                         });
                     }
@@ -169,6 +182,10 @@ export default function TreinoPage() {
             setMessage({ text: 'Para retreinar, selecione um modelo pré-treinado.', type: 'error' });
             return;
         }
+
+        // LIMPEZA DE ESTADO ANTES DE INICIAR (CRÍTICO)
+        setLogs([]);
+        localStorage.removeItem('np_train_logs');
 
         setLoading(true);
         setMessage({ text: `⏳ Iniciando ${mode === 'treinar' ? 'treinamento' : 'retreinamento'}...`, type: 'processing' });

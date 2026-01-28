@@ -32,21 +32,19 @@ export default function ProcessamentoPage() {
     const [roots, setRoots] = useState<Record<string, string>>({});
 
 
-    // Carregamento inicial de caminhos e logs - apenas UMA VEZ na montagem
+    // Carregamento inicial de caminhos - apenas UMA VEZ na montagem
     useEffect(() => {
-        const savedLogs = localStorage.getItem('np_process_logs');
-        if (savedLogs) {
-            try {
-                setLogs(JSON.parse(savedLogs));
-            } catch (e) {
-                console.error("Erro ao carregar logs salvos:", e);
-                localStorage.removeItem('np_process_logs');
-            }
-        }
+        // Limpa logs e estado residual ao entrar na página para garantir estado fresco
+        // Se quisermos persistência, deveria ser apenas se 'loading' fosse true.
+        // Como o usuário reportou confusão, melhor limpar sempre que recarregar.
+        setLogs([]);
+        localStorage.removeItem('np_process_logs');
+        localStorage.removeItem('np_process_loading');
 
         APIService.getConfig().then(res => {
-            if (res.data.status === 'success') {
-                setRoots(res.data.paths);
+            const data = res.data as any;
+            if (data.status === 'success') {
+                setRoots(data.paths);
                 setConfig(prev => ({
                     ...prev,
                     inputPath: ''
@@ -132,9 +130,12 @@ export default function ProcessamentoPage() {
             return;
         }
 
+        // Limpeza MANDATÓRIA antes de iniciar novo processo
+        setLogs([`[INFO] Iniciando novo processamento...`]);
+        localStorage.removeItem('np_process_logs');
+        localStorage.removeItem('np_process_loading');
+
         setLoading(true);
-        // Limpa logs anteriores ao iniciar
-        setLogs([`[${new Date().toLocaleTimeString()}] Iniciando comunicação com o servidor...`]);
 
         try {
             await APIService.startProcessing({
