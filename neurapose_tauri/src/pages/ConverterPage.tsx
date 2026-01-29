@@ -26,6 +26,7 @@ export default function ConverterPage() {
     const [extension, setExtension] = useState('.pt');
     const [explorerOpen, setExplorerOpen] = useState(false);
     const [roots, setRoots] = useState<Record<string, string>>({});
+    const [outputName, setOutputName] = useState('');
 
     // Nome do dataset derivado do caminho
     const datasetName = datasetPath ? datasetPath.replace(/\\/g, '/').split('/').pop() || '' : '';
@@ -41,9 +42,9 @@ export default function ConverterPage() {
             }
         }).catch(() => { });
 
-        APIService.getConfig().then(res => {
+        APIService.getConfig().then((res: any) => {
             if (res.data.status === 'success') {
-                setRoots(res.data.paths);
+                setRoots((res as any).data.paths);
             }
         });
 
@@ -86,7 +87,8 @@ export default function ConverterPage() {
         try {
             await APIService.convertDataset({
                 dataset_path: datasetPath,
-                extension: extension
+                extension: extension,
+                output_name: outputName || undefined
             });
         } catch (error: any) {
             setLoading(false);
@@ -127,6 +129,22 @@ export default function ConverterPage() {
                                         Dataset: <span className="font-mono text-primary">{datasetName}</span>
                                     </p>
                                 )}
+                            </div>
+
+                            {/* Output Name Selection */}
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Nome do Dataset de Saída (Opcional)</label>
+                                <input
+                                    type="text"
+                                    value={outputName}
+                                    onChange={(e) => setOutputName(e.target.value)}
+                                    placeholder={`Ex: ${datasetName || 'dataset'}-temporal`}
+                                    className="w-full px-3 py-2 rounded-lg bg-secondary/50 border border-border text-sm placeholder:text-muted-foreground/50"
+                                />
+                                <p className="text-[10px] text-muted-foreground">
+                                    Deixe vazio para salvar na mesma pasta (sobrescrever).
+                                    Se preenchido, cria "datasets/&lt;nome&gt;".
+                                </p>
                             </div>
 
                             {/* Extension Selection */}

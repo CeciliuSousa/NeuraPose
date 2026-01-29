@@ -7,7 +7,7 @@ from pathlib import Path
 import logging
 import json
 import shutil
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from pydantic import BaseModel
 from colorama import Fore
 
@@ -33,6 +33,7 @@ for p in [str(CURRENT_DIR), str(ROOT_DIR)]:
 
 from neurapose_backend.nucleo.log_service import LogBuffer, CaptureOutput
 from neurapose_backend.nucleo.user_config_manager import UserConfigManager
+from neurapose_backend.globals.state import state
 
 
 # ==============================================================
@@ -172,9 +173,14 @@ class ReIDApplyRequest(BaseModel):
     cuts: List[ReIDCut] = []
     action: str = "process" # 'process' or 'delete'
 
+class AnnotationComplex(BaseModel):
+    classe: str
+    intervals: List[List[int]]  # Lista de [inicio, fim]
+
 class AnnotationRequest(BaseModel):
     video_stem: str
-    annotations: Dict[str, str]  # { "id_persistente": "classe" }
+    # Suporta anotação simples ("FURTO") ou complexa ({classe: "FURTO", intervals: [...]})
+    annotations: Dict[str, Union[str, AnnotationComplex]]
     root_path: str  # Pasta raiz do dataset
 
 class SplitRequest(BaseModel):
@@ -184,6 +190,13 @@ class SplitRequest(BaseModel):
     train_split: str = "treino"
     test_split: str = "teste"
     train_ratio: float = 0.85  # Porcentagem de treino (0.0 a 1.0)
+
+
+# ... (Manter código intermediário se necessário ou usar ferramenta de replace mais granular, mas aqui estou trocando o bloco todo de classes para garantir ordem) 
+# Ops, block replacement might be too big if I include SplitRequest. Let me target just AnnotationRequest first.
+
+# Vou usar replace apenas para AnnotationRequest e AnnotationComplex a inserindo antes
+
 
 class TestRequest(BaseModel):
     model_path: Optional[str] = None
@@ -308,7 +321,6 @@ def ensure_gpu_memory(required_gb: float = 2.0) -> bool:
 
 # HELPERS
 # ==============================================================
-from neurapose_backend.globals.state import state
 
 # ==============================================================
 # RUNTIME CONFIGURATION (In-memory, resets on restart)
@@ -1741,7 +1753,7 @@ def get_annotation_details(video_id: str, root_path: Optional[str] = None):
     # Lista arquivos disponíveis para debug
     if json_dir.exists():
         available = [f.name for f in json_dir.glob("*.json")]
-        logger.info(f"[ANNOTATE] JSONs disponíveis: {available}")
+        logger.info(f"[ANNOTATE] JSONs disponíveis: {len(available)}")
     
     json_path = json_dir / f"{video_id}.json"
     logger.info(f"[ANNOTATE] Tentando: {json_path.name} | Existe: {json_path.exists()}")
@@ -1808,8 +1820,15 @@ def save_annotations(req: AnnotationRequest):
             pass
     
     # Atualiza com novas anotações
-    # Formato: { "video_stem": { "ID": "classe", ... } }
-    todas_labels[req.video_stem] = req.annotations
+    # Formato: { "video_stem": { "ID": "classe", ... } } ou { "ID": { "classe": "...", "intervals": ... } }
+    clean_annotations = {}
+    for lid, lval in req.annotations.items():
+        if isinstance(lval, BaseModel):
+             clean_annotations[lid] = lval.dict()
+        else:
+             clean_annotations[lid] = lval
+
+    todas_labels[req.video_stem] = clean_annotations
     
     try:
         with open(labels_path, "w", encoding="utf-8") as f:
@@ -1854,10 +1873,16 @@ async def split_dataset(req: SplitRequest, background_tasks: BackgroundTasks):
     return {"status": "started", "message": f"Split iniciado para o dataset {req.dataset_name}"}
 
 
+
+class ConvertRequest(BaseModel):
+    dataset_path: str
+    extension: str = ".pt"
+    output_name: Optional[str] = None # Se fornecido, cria novo dataset em datasets/output_name
+
 @app.post("/convert/pt")
 async def convert_dataset_to_pt(req: ConvertRequest, background_tasks: BackgroundTasks):
     """Converte JSONs de anotações para formato PyTorch (.pt)."""
-    from neurapose_backend.pre_processamento.converte_pt import main as converte_main
+    # from neurapose_backend.pre_processamento.converte_pt import main as converte_main
     
     dataset_path = Path(req.dataset_path).resolve()
     
@@ -1885,10 +1910,22 @@ async def convert_dataset_to_pt(req: ConvertRequest, background_tasks: Backgroun
                 original_jsons = cm.PROCESSING_JSONS_DIR
                 original_labels = cm.PROCESSING_ANNOTATIONS_DIR
                 
-                # Nome do dataset e caminhos de saída
-                dataset_name = dataset_path.name
-                out_dir = (dataset_path / "treino" / "data").resolve()
-                out_dir.mkdir(parents=True, exist_ok=True)
+                # Definição do Caminho de Saída
+                if req.output_name:
+                    # Cria nova pasta independente
+                    # Tenta usar CM.DATASETS_DIR ou fallback para pai do dataset atual
+                    base_dest = getattr(cm, 'DATASETS_DIR', dataset_path.parent)
+                    dest_dataset_root = base_dest / req.output_name
+                    out_dir = dest_dataset_root / "treino" / "data"
+                    dataset_name = req.output_name
+                    
+                    logger.info(f"[CONVERTE] Criando Novo Dataset em: {dest_dataset_root}")
+                else:
+                    # Modo Padrão (In-Place)
+                    dataset_name = dataset_path.name
+                    out_dir = (dataset_path / "treino" / "data")
+                
+                out_dir.resolve().mkdir(parents=True, exist_ok=True)
                 out_file = out_dir / f"data{req.extension}"
                 
                 # FORÇA a atualização das variáveis dentro do módulo converte_pt

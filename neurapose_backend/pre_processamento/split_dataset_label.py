@@ -24,9 +24,21 @@ def get_major_class(video_id, labels):
     pessoas = labels[video_id]
     counts = {primeiraClasse: 0, segundaClasse: 0}
     for v in pessoas.values():
-        if v.lower() in counts:
-            counts[v.lower()] += 1
-    return max(counts, key=counts.get)
+        if isinstance(v, dict):
+            # Formato Complexo: {"classe": "FURTO", "intervals": ...}
+            raw_cls = v.get("classe", primeiraClasse)
+        else:
+            # Formato Simples: "FURTO"
+            raw_cls = str(v)
+            
+        cls = raw_cls.lower()
+        if cls in counts:
+            counts[cls] += 1
+    
+    # Se empate ou vazio, retorna primeira classe (majoritaria default)
+    if counts[segundaClasse] > counts[primeiraClasse]:
+        return segundaClasse
+    return primeiraClasse
 
 
 def find_file(base_dir: Path, video_name: str, exts):

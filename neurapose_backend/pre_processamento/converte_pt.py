@@ -6,6 +6,11 @@
 Converte JSONs de keypoints para formato PyTorch (.pt).
 Entrada: JSONs do pre-processamento + labels.json
 Saida: data.pt com tensores de sequencias normalizadas
+
+[NOVO] Suporta Anotação Temporal:
+- Se label for String ("FURTO"): Pega sequencia inteira.
+- Se label for Dict ({"classe": "FURTO", "intervals": [[10, 50], [90, 120]]}): 
+  Gera MÚLTIPLAS sequencias (samples), uma para cada intervalo.
 """
 
 import sys
@@ -48,6 +53,8 @@ def log(msg, console=True):
     """Escreve mensagem no log e console."""
     timestamp = datetime.now().strftime("[%H:%M:%S]")
     line = f"{timestamp} {msg}"
+    # Garante que diretorio de log existe
+    Path(DEBUG_LOG).parent.mkdir(parents=True, exist_ok=True)
     with open(DEBUG_LOG, "a", encoding="utf-8") as f:
         f.write(line + "\n")
     if console:
@@ -94,8 +101,12 @@ def parse_scene_clip(stem: str):
     return 0, 0
 
 
-def extract_sequence(records, target_id, max_frames=60, min_frames=5):
-    """Extrai sequencia de keypoints (C,T,V) para um ID."""
+def extract_sequence(records, target_id, interval=None, max_seq_len=60, min_seq_len=5):
+    """
+    Extrai sequencia de keypoints (C,T,V) para um ID.
+    Args:
+        interval: (start_frame, end_frame) ou None para video todo.
+    """
     frames = []
     
     try:
@@ -103,6 +114,7 @@ def extract_sequence(records, target_id, max_frames=60, min_frames=5):
     except:
         return None
 
+    # Filtra records relevantes
     for r in records:
         rid = r.get("id_persistente", None)
         try:
@@ -112,6 +124,13 @@ def extract_sequence(records, target_id, max_frames=60, min_frames=5):
             
         if rid != id_target:
             continue
+
+        # [NOVO] Filtro Temporal
+        frame_idx = r.get("frame", -1)
+        if interval:
+            start_f, end_f = interval
+            if not (start_f <= frame_idx <= end_f):
+                continue
 
         kps = r.get("keypoints", [])
         if not isinstance(kps, list) or len(kps) < 2:
@@ -125,22 +144,22 @@ def extract_sequence(records, target_id, max_frames=60, min_frames=5):
         frames.append(coords)
 
     total_frames = len(frames)
-    if total_frames < min_frames:
+    if total_frames < min_seq_len:
         return None
 
-    # Normaliza para max_frames (padding com ultimo frame)
-    seq = np.zeros((max_frames, V, C), dtype=np.float32)
-    num_frames = min(total_frames, max_frames)
+    # Normaliza para max_seq_len (padding com ultimo frame ou corte)
+    seq = np.zeros((max_seq_len, V, C), dtype=np.float32)
+    num_frames = min(total_frames, max_seq_len)
 
     for t in range(num_frames):
         seq[t, :, :] = frames[t]
 
-    if num_frames < max_frames:
+    if num_frames < max_seq_len:
         last = frames[-1]
-        for t in range(num_frames, max_frames):
+        for t in range(num_frames, max_seq_len):
             seq[t, :, :] = last
 
-    # Transpoe para formato (C, T, V)
+    # Transpoe para formato (C, T, V) esperada pelo modelo
     return np.transpose(seq, (2, 0, 1))
 
 
@@ -159,12 +178,14 @@ def main():
     total_videos = len(labels)
 
     data, y_labels, metadata, invalid = [], [], [], []
-    processed = 0
+    processed_videos = 0
+    total_samples = 0
+    
     positive_class = cm.CLASS_NAMES[1].lower()  # ex: "furto"
 
     for video_stem, id_map in sorted(labels.items()):
-        processed += 1
-        log(f"\n[{processed}/{total_videos}] {video_stem}")
+        processed_videos += 1
+        log(f"\n[{processed_videos}/{total_videos}] {video_stem}")
 
         json_path = find_json(JSONS_DIR, video_stem)
         if not json_path:
@@ -176,20 +197,66 @@ def main():
             invalid.append(f"JSON vazio: {video_stem}")
             continue
 
-        for pid, label in sorted(id_map.items(), key=lambda x: int(x[0])):
-            seq = extract_sequence(records, pid, max_frames, min_frames_validos)
+        # Itera sobre cada ID anotado
+        for pid, label_info in sorted(id_map.items(), key=lambda x: int(x[0])):
             
-            if seq is None:
-                invalid.append(f"Sem frames: {video_stem} (id={pid})")
-                continue
+            # Normaliza Label (String vs Dict)
+            if isinstance(label_info, dict):
+                # Anotação Complexa (Temporal)
+                classe = label_info.get("classe", "NORMAL")
+                intervals = label_info.get("intervals", [])
+            else:
+                # Anotação Simples (Legado)
+                classe = str(label_info)
+                intervals = []
 
-            y = 1 if label.lower() == positive_class else 0
-            scene, clip = parse_scene_clip(video_stem)
+            # Se for normal ou furto sem intervalo, processa como video inteiro (interval=None)
+            # MAS: Se for FURTO e tiver intervalos, gera 1 sample por intervalo.
+            # Se for NORMAL, geralmente é o video todo, exceto se eu quiser normalizar trechos? 
+            # R: Para normal, pega tudo (None). Para furto complexo, pega intervalos.
             
-            data.append(seq)
-            y_labels.append(y)
-            metadata.append((scene, clip, int(pid), 0))
-            log(f"  [OK] ID {pid} ({label}) - {seq.shape[1]} frames", console=False)
+            is_positive = (classe.lower() == positive_class)
+            
+            # Lista de tarefas para extração: [(intervalo, sufixo_meta)]
+            extraction_tasks = []
+            
+            if is_positive and intervals:
+                # Gera multiplas samples
+                for i, inter in enumerate(intervals):
+                    extraction_tasks.append((inter, i)) # i é indice do clip
+            else:
+                # Gera sample única (None = todo video)
+                extraction_tasks.append((None, 0))
+
+            # Executa extrações
+            for interval, clip_idx in extraction_tasks:
+                seq = extract_sequence(records, pid, interval, max_frames, min_frames_validos)
+                
+                if seq is None:
+                    # Se falhou extrair (muito curto), loga aviso apenas se era intervalo explícito
+                    if interval:
+                        log(f"  [WARN] Intervalo curto ignorado: ID {pid} frames {interval}", console=False)
+                    else:
+                        invalid.append(f"Sem frames suficientes: {video_stem} (id={pid})")
+                    continue
+
+                y = 1 if is_positive else 0
+                scene, video_clip_num = parse_scene_clip(video_stem)
+                
+                data.append(seq)
+                y_labels.append(y)
+                
+                # Metadata: (scene, video_clip, pid, sample_idx)
+                # sample_idx diferencia múltiplos trechos do mesmo ID no mesmo video
+                metadata.append((scene, video_clip_num, int(pid), clip_idx))
+                
+                int_str = str(interval) if interval else "FULL"
+                log(f"  [OK] ID {pid} ({classe}) [{int_str}] - {seq.shape[1]} frames", console=False)
+                total_samples += 1
+
+    if len(data) == 0:
+        log("[ERRO] Nenhuma amostra válida gerada!")
+        return
 
     # Salva tensor final
     data_array = np.stack(data, axis=0)
@@ -198,6 +265,7 @@ def main():
     data_tensor = torch.from_numpy(data_array).float()
     labels_tensor = torch.from_numpy(labels_array).long()
 
+    # Metadata agora tem 4 colunas: scene, video_clip, pid, sample_idx
     final_data = {"data": data_tensor, "labels": labels_tensor, "metadata": metadata}
     torch.save(final_data, OUT_PT)
 
@@ -207,7 +275,7 @@ def main():
 
     log(f"[OK] Dataset salvo: {OUT_PT}")
     log(f"[OK] Total amostras: {len(data_tensor)}")
-    log(f"Conversao concluida ({total_videos} videos)")
+    log(f"Conversao concluida ({total_videos} videos originais -> {total_samples} amostras)")
 
 
 if __name__ == "__main__":

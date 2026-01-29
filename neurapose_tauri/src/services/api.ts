@@ -112,6 +112,7 @@ export interface TestRequest {
 export interface ConvertRequest {
     dataset_path: string;  // Caminho do dataset (datasets/<nome>)
     extension?: string;    // Extensão de saída (.pt, .pth)
+    output_name?: string;  // Nome do dataset de saída (opcional, para criar cópia/fork)
 }
 
 export interface BrowseResponse {

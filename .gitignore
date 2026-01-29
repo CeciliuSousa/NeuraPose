@@ -18,6 +18,7 @@ neurapose_backend/**/*.json
 neurapose_backend/**/*.pkl
 neurapose_backend/**/*.jpg
 neurapose_backend/**/*.mp4
+neurapose_backend/**/*.txt
 
 neurapose_backend/datasets/
 neurapose_backend/info/

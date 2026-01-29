@@ -128,5 +128,12 @@ def processar_video(video_path: Path, out_root: Path, show=False):
     tracking_path = json_dir / f"{video_path.stem}_{int(cm.FPS_TARGET)}fps_tracking.json"
     
     gerar_relatorio_tracking(
+        registros=registros,
+        id_map=id_map,
+        ids_validos=ids_validos,
+        total_frames=total_frames,
+        video_name=video_path.name,
+        output_path=tracking_path
+    )
     
     return {"yolo": time_yolo, "rtmpose": time_rtmpose, "total": time_total}

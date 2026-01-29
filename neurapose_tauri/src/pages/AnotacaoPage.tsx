@@ -6,7 +6,11 @@ import {
     RefreshCcw,
     Clock,
     CheckCircle2,
-    Pencil
+    Pencil,
+    Plus,
+    Trash2,
+    Camera,
+    AlertTriangle
 } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { APIService } from '../services/api';
@@ -37,6 +41,16 @@ export default function AnotacaoPage() {
     // Dados do vídeo selecionado
     const [videoIds, setVideoIds] = useState<{ id: number; frames: number }[]>([]);
     const [annotations, setAnnotations] = useState<Record<string, string>>({});
+
+    // Temporal Mode State
+    const [temporalMode, setTemporalMode] = useState(false);
+    const [currentFrame, setCurrentFrame] = useState(0);
+    const [idIntervals, setIdIntervals] = useState<Record<string, Array<[number, number]>>>({});
+
+    // Editor State (para input manual)
+    const [startInput, setStartInput] = useState<string>('');
+    const [endInput, setEndInput] = useState<string>('');
+    const [activeIdForEdit, setActiveIdForEdit] = useState<string | null>(null);
 
     // Config
     const [inputPath, setInputPath] = useState('');
@@ -76,12 +90,11 @@ export default function AnotacaoPage() {
 
     // Load inicial
     useEffect(() => {
-        APIService.getConfig().then(res => {
+        APIService.getConfig().then((res: any) => {
             if (res.data.status === 'success') {
                 setRoots(res.data.paths);
-                setInputPath(''); // Inicia vazio para mostrar placeholder
+                setInputPath(''); // Inicia vazio
 
-                // Classes do config
                 if (res.data.classes) {
                     setClasse1(res.data.classes.classe1 || 'NORMAL');
                     setClasse2(res.data.classes.classe2 || 'FURTO');
@@ -94,7 +107,6 @@ export default function AnotacaoPage() {
     useEffect(() => {
         if (inputPath) {
             loadVideos();
-            // localStorage.setItem('np_annotation_input', inputPath); // Desativado para não persistir
         }
     }, [inputPath]);
 
@@ -102,7 +114,8 @@ export default function AnotacaoPage() {
         setLoading(true);
         try {
             const res = await APIService.listAnnotationVideos(inputPath || undefined);
-            setVideos(res.data.videos || []);
+            const data = (res as any).data;
+            setVideos(data.videos || []);
         } catch (err) {
             console.error(err);
             setMessage("Erro ao carregar vídeos");
@@ -115,11 +128,13 @@ export default function AnotacaoPage() {
         setSelectedVideo(video);
         setVideoIds([]);
         setAnnotations({});
+        setIdIntervals({}); // Reset intervals
         setMessage('');
 
         try {
             const res = await APIService.getAnnotationDetails(video.video_id, inputPath);
-            const ids = res.data.ids || [];
+            const data = (res as any).data;
+            const ids = data.ids || [];
             setVideoIds(ids);
 
             // Por padrão todos são classe1 (NORMAL)
@@ -138,8 +153,55 @@ export default function AnotacaoPage() {
         setAnnotations(prev => ({ ...prev, [id]: classe }));
     };
 
+    const handleAddInterval = (id: string) => {
+        const start = parseInt(startInput);
+        const end = parseInt(endInput);
+
+        if (isNaN(start) || isNaN(end)) {
+            return;
+        }
+
+        if (start < 0 || end < start) {
+            alert("Intervalo inválido (Início deve ser menor que Fim)");
+            return;
+        }
+
+        setIdIntervals(prev => {
+            const existing = prev[id] || [];
+            return { ...prev, [id]: [...existing, [start, end]] };
+        });
+
+        setStartInput('');
+        setEndInput('');
+        setActiveIdForEdit(null);
+    };
+
+    const handleRemoveInterval = (id: string, index: number) => {
+        setIdIntervals(prev => {
+            const existing = prev[id] || [];
+            const updated = [...existing];
+            updated.splice(index, 1);
+            return { ...prev, [id]: updated };
+        });
+    };
+
     const handleSave = async () => {
         if (!selectedVideo || !inputPath) return;
+
+        // Validação Modo Temporal
+        if (temporalMode) {
+            // Verifica se tem furto marcado sem intervalo
+            const hasOpenFurto = Object.entries(annotations).some(([id, cls]) => {
+                const intervals = idIntervals[id] || [];
+                return cls === classe2 && intervals.length === 0;
+            });
+
+            if (hasOpenFurto) {
+                if (!confirm(`Existem IDs marcados como ${classe2} sem intervalos de tempo definidos. Eles serão salvos como "Vídeo Inteiro". Deseja continuar?`)) {
+                    return;
+                }
+            }
+        }
 
         // Abre modal e inicia estado de processamento
         setTerminalOpen(true);
@@ -149,13 +211,31 @@ export default function AnotacaoPage() {
         setMessage('');
 
         try {
-            // Limpa logs anteriores no backend
             await APIService.clearLogs('default');
+
+            // Constrói payload híbrido
+            let finalAnnotations: any = {};
+
+            Object.keys(annotations).forEach(id => {
+                const cls = annotations[id];
+                const intervals = idIntervals[id];
+
+                if (temporalMode && cls === classe2 && intervals && intervals.length > 0) {
+                    // Modo Complexo (Temporal)
+                    finalAnnotations[id] = {
+                        classe: cls,
+                        intervals: intervals
+                    };
+                } else {
+                    // Modo Simples (String)
+                    finalAnnotations[id] = cls;
+                }
+            });
 
             // Inicia salvamento
             await APIService.saveAnnotations({
                 video_stem: selectedVideo.video_id,
-                annotations: annotations,
+                annotations: finalAnnotations,
                 root_path: inputPath
             });
 
@@ -163,28 +243,27 @@ export default function AnotacaoPage() {
             const pollLogs = async () => {
                 try {
                     const res = await APIService.getLogs('default');
-                    if (res.data.logs && res.data.logs.length > 0) {
-                        setTerminalLogs(res.data.logs);
+                    const data = (res as any).data;
+
+                    if (data.logs && data.logs.length > 0) {
+                        setTerminalLogs(data.logs);
                     }
 
                     const health = await APIService.healthCheck();
-                    if (!health.data.processing) {
+                    const hData = (health as any).data;
+
+                    if (!hData.processing) {
                         setTerminalProcessing(false);
                         setSaving(false);
                         return; // Para polling
                     }
-
-                    // Continua polling
                     setTimeout(pollLogs, 500);
                 } catch (e) {
                     console.error(e);
                 }
             };
-
-            // Inicia polling
             pollLogs();
 
-            // Adiciona mensagem de sucesso aos logs (aparece após o processamento)
             setTerminalLogs(prev => [...prev, '[OK] Anotações salvas com sucesso!']);
             setTerminalProcessing(false);
             loadVideos();
@@ -223,14 +302,38 @@ export default function AnotacaoPage() {
         <div className="h-[calc(100vh-8rem)] flex flex-col space-y-6">
             <PageHeader
                 title="Anotação de Classes"
-                description={`Pagina para classificação via ID: ${classe1} ou ${classe2}`}
+                description={`Classificação (Simples ou Temporal) para: ${classe1} / ${classe2}`}
                 icon={Pencil}
             >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4">
+                    {/* Toggle Mode */}
+                    <div className="flex items-center gap-2 bg-muted/30 px-3 py-1.5 rounded-lg border border-border/50">
+                        <span className={`text-xs font-bold uppercase transition-colors ${temporalMode ? 'text-primary' : 'text-muted-foreground'}`}>
+                            {temporalMode ? 'Modo Temporal' : 'Modo Simples'}
+                        </span>
+                        <button
+                            onClick={() => setTemporalMode(!temporalMode)}
+                            className={`
+                                relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1
+                                ${temporalMode ? 'bg-primary' : 'bg-input'}
+                            `}
+                            title="Alternar entre anotação de vídeo inteiro (simples) ou intervalos de tempo (temporal)"
+                        >
+                            <span
+                                className={`
+                                    inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform
+                                    ${temporalMode ? 'translate-x-4' : 'translate-x-1'}
+                                `}
+                            />
+                        </button>
+                    </div>
+
+                    <div className="w-px h-6 bg-border mx-1"></div>
+
                     <PathSelector
                         value={inputPath}
                         onSelect={() => setExplorerOpen(true)}
-                        placeholder="Selecione o diretório para anotar..."
+                        placeholder="Selecione o diretório..."
                         icon={Tag}
                     />
                     <button
@@ -251,8 +354,6 @@ export default function AnotacaoPage() {
                             <h3 className="text-xs font-bold uppercase text-muted-foreground">Fila de Vídeos</h3>
                             <span className="text-[10px] text-muted-foreground font-mono">{displayVideos.length} / {videos.length}</span>
                         </div>
-
-                        {/* Filtros Dropdown */}
                         <FilterDropdown
                             options={filterOptions}
                             selected={filterStatus}
@@ -290,12 +391,16 @@ export default function AnotacaoPage() {
                         <div className="h-full min-h-[400px] border-2 border-dashed border-border rounded-xl flex flex-col items-center justify-center text-muted-foreground p-12 bg-muted/5">
                             <VideoIcon className="w-16 h-16 mb-4 opacity-20" />
                             <p className="text-lg font-medium">Selecione um vídeo para anotar</p>
-                            <p className="text-sm opacity-60">Os IDs persistentes serão listados abaixo do player.</p>
                         </div>
                     ) : (
                         <>
                             {/* Video Player */}
-                            <VideoPlayer key={selectedVideo.video_id} src={videoSrc} fps={30} />
+                            <VideoPlayer
+                                key={selectedVideo.video_id}
+                                src={videoSrc}
+                                fps={30}
+                                onFrameChange={setCurrentFrame} // Captura frame para temporal
+                            />
 
                             {/* Mensagem de feedback */}
                             <StatusMessage message={message} onClose={() => setMessage('')} autoCloseDelay={5000} className="mb-4" />
@@ -305,7 +410,7 @@ export default function AnotacaoPage() {
                                 <div className="px-6 py-4 border-b border-border flex items-center justify-between">
                                     <h3 className="font-bold flex items-center gap-2">
                                         <Tag className="w-5 h-5 text-primary" />
-                                        Classificação de Indivíduos - {selectedVideo.video_id}
+                                        Classificação {temporalMode && <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">TEMPORAL</span>}
                                     </h3>
                                     <button
                                         onClick={handleSave}
@@ -313,7 +418,7 @@ export default function AnotacaoPage() {
                                         className="px-6 py-2 bg-primary text-primary-foreground rounded-lg font-bold text-sm hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-primary/20"
                                     >
                                         <Save className="w-4 h-4" />
-                                        {saving ? 'Salvando...' : 'Salvar Anotações'}
+                                        {saving ? 'Salvando...' : 'Salvar'}
                                     </button>
                                 </div>
 
@@ -323,14 +428,33 @@ export default function AnotacaoPage() {
                                             <p>Carregando IDs do vídeo...</p>
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-2 gap-4">
                                             {videoIds.map((item) => (
-                                                <div key={item.id} className="p-4 border border-border rounded-xl bg-muted/10 hover:bg-muted/30 transition-colors flex flex-col gap-3">
+                                                <div key={item.id} className={`
+                                                    p-4 border rounded-xl transition-colors flex flex-col gap-3 relative
+                                                    ${annotations[String(item.id)] === classe2 ? 'border-red-500/30 bg-red-500/5' : 'border-border bg-muted/10'}
+                                                `}>
+                                                    {/* Header do Card */}
                                                     <div className="flex items-center justify-between">
-                                                        <span className="text-lg font-extrabold text-primary">ID {item.id}</span>
-                                                        <span className="text-[10px] bg-secondary px-2 py-0.5 rounded text-secondary-foreground font-mono">{item.frames} frames</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-lg font-extrabold text-primary">ID {item.id}</span>
+                                                            <span className="text-[10px] bg-secondary px-2 py-0.5 rounded text-secondary-foreground font-mono">{item.frames} frames</span>
+                                                        </div>
+
+                                                        {temporalMode && annotations[String(item.id)] === classe2 && (
+                                                            <div className="flex gap-1">
+                                                                <button
+                                                                    onClick={() => setActiveIdForEdit(activeIdForEdit === String(item.id) ? null : String(item.id))}
+                                                                    className={`p-1.5 rounded-md hover:bg-muted ${activeIdForEdit === String(item.id) ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                                                                    title="Adicionar Intervalo"
+                                                                >
+                                                                    <Plus className="w-4 h-4" />
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
 
+                                                    {/* Class Buttons */}
                                                     <div className="flex gap-2 p-1 bg-background border border-border rounded-lg">
                                                         <button
                                                             onClick={() => handleClassChange(String(item.id), classe1)}
@@ -345,6 +469,81 @@ export default function AnotacaoPage() {
                                                             {classe2}
                                                         </button>
                                                     </div>
+
+                                                    {/* Temporal Editor Area */}
+                                                    {temporalMode && annotations[String(item.id)] === classe2 && (
+                                                        <div className="mt-2 space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+
+                                                            {/* Lista de Intervalos */}
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {(idIntervals[String(item.id)] || []).map((interval, idx) => (
+                                                                    <div key={idx} className="flex items-center gap-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 px-2 py-1 rounded text-xs font-mono border border-red-200 dark:border-red-800">
+                                                                        <Clock className="w-3 h-3" />
+                                                                        {interval[0]} - {interval[1]}
+                                                                        <button
+                                                                            onClick={() => handleRemoveInterval(String(item.id), idx)}
+                                                                            className="ml-1 hover:text-red-900 dark:hover:text-red-100"
+                                                                        >
+                                                                            <Trash2 className="w-3 h-3" />
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                                {(idIntervals[String(item.id)] || []).length === 0 && (
+                                                                    <div className="flex items-center gap-2 text-xs text-yellow-600 dark:text-yellow-500 bg-yellow-500/10 px-2 py-1 rounded w-full">
+                                                                        <AlertTriangle className="w-3 h-3" />
+                                                                        Sem intervalos! (Será todo o vídeo)
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Form de Adição */}
+                                                            {activeIdForEdit === String(item.id) && (
+                                                                <div className="bg-muted/50 p-2 rounded-lg border border-border space-y-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="flex-1 relative">
+                                                                            <input
+                                                                                type="number"
+                                                                                placeholder="Início"
+                                                                                className="w-full h-8 text-xs px-2 rounded border border-border bg-background"
+                                                                                value={startInput}
+                                                                                onChange={e => setStartInput(e.target.value)}
+                                                                            />
+                                                                            <button
+                                                                                onClick={() => setStartInput(String(currentFrame))}
+                                                                                className="absolute right-1 top-1 p-0.5 text-muted-foreground hover:text-primary"
+                                                                                title="Capturar frame atual"
+                                                                            >
+                                                                                <Camera className="w-3 h-3" />
+                                                                            </button>
+                                                                        </div>
+                                                                        <span className="text-muted-foreground">-</span>
+                                                                        <div className="flex-1 relative">
+                                                                            <input
+                                                                                type="number"
+                                                                                placeholder="Fim"
+                                                                                className="w-full h-8 text-xs px-2 rounded border border-border bg-background"
+                                                                                value={endInput}
+                                                                                onChange={e => setEndInput(e.target.value)}
+                                                                            />
+                                                                            <button
+                                                                                onClick={() => setEndInput(String(currentFrame))}
+                                                                                className="absolute right-1 top-1 p-0.5 text-muted-foreground hover:text-primary"
+                                                                                title="Capturar frame atual"
+                                                                            >
+                                                                                <Camera className="w-3 h-3" />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => handleAddInterval(String(item.id))}
+                                                                        className="w-full py-1 bg-primary text-primary-foreground rounded text-xs font-bold hover:opacity-90"
+                                                                    >
+                                                                        Confirmar Intervalo
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
@@ -371,13 +570,10 @@ export default function AnotacaoPage() {
                     const normRoot = (roots.reidentificacoes || '').replace(/\\/g, '/').toLowerCase();
                     const normCurrent = (item.currentPath || '').replace(/\\/g, '/').toLowerCase();
 
-                    // Se estamos na raiz, mostrar apenas pastas (datasets)
                     if (normCurrent === normRoot || normCurrent === normRoot + '/') {
-                        // Mostrar datasets, ocultar arquivos soltos se houver
                         return item.is_dir;
                     }
 
-                    // Dentro do dataset: Mostrar 'predicoes' (conforme pedido)
                     const relative = normCurrent.replace(normRoot, '');
                     const depth = relative.split('/').filter(p => p).length;
 
