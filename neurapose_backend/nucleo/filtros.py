@@ -72,16 +72,29 @@ def filtrar_ids_validos_v6(registros, min_frames=cm.MIN_FRAMES_PER_ID, min_dist=
         # REGRA B: Imobilidade (Somente se passou na regra A)
         if not rejeitado:
             distancia = calcular_deslocamento(dados["inicio"], dados["fim"])
+            
+            # Se deslocou pouco, verifica se esta "vivo" (mexendo braços/pernas)
             if distancia < min_dist:
-                rejeitado = True
-                motivo = f"Estatico (Deslocamento {distancia:.1f}px < {min_dist}px)"
+                activity_score = _calcular_atividade_pose(dados["keypoints"])
                 
+                # Se alem de parado geograficamente, tambem esta estatico na pose -> REMOVE
+                if activity_score < cm.MIN_MEMBER_ACTIVITY:
+                    rejeitado = True
+                    motivo = f"Estatico (Desloc. {distancia:.1f}px < {min_dist} e Ativ. {activity_score:.1f} < {cm.MIN_MEMBER_ACTIVITY})"
+                else:
+                    # Salvou pelo gongo (Pose ativa)
+                    if verbose:
+                        print(Fore.CYAN + f"[NUCLEO] ID {pid} mantido por atividade de pose ({activity_score:.1f}) apesar de estatico ({distancia:.1f}px)")
+                        
         # REGRA C: Atividade de Pose (Evita manequins/estatuas)
         # Calcula a variância média das juntas em relação ao centro da pose.
         if not rejeitado:
+             # Ja calculado acima se entrou no if de distancia, senao calcula agora para validar manequins que se movem (ex: arrastados)
+             # Mas geralmente manequins sao estaticos. Essa regra C original era meio redundante se B for fraca.
+             # Vamos manter a C original apenas como sanity check muito baixo
             activity_score = _calcular_atividade_pose(dados["keypoints"])
             # Se a atividade for muito baixa, é provavel que seja um objeto estatico detectado
-            if activity_score < cm.MIN_POSE_ACTIVITY:
+            if activity_score < cm.MIN_POSE_ACTIVITY: # Esse eh bem baixo (0.8)
                 rejeitado = True
                 motivo = f"Inanimado (Atividade {activity_score:.2f} < {cm.MIN_POSE_ACTIVITY})"
 

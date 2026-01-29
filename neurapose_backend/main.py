@@ -457,15 +457,48 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
                 videos = sorted(input_p.glob("*.mp4"))
                 output_path.mkdir(parents=True, exist_ok=True)
                 print(Fore.CYAN + f"[INFO] ENCONTRADOS {len(videos)} VIDEOS")
+
+                # ==============================================================
+                # PRÉ-VERIFICAÇÃO DE JÁ PROCESSADOS
+                # ==============================================================
+                videos_to_process = []
+                processed_count = 0
                 
+                props_dir = output_path / "predicoes"
+                jsons_dir = output_path / "jsons"
+
+                for v in videos:
+                    is_processed = False
+                    # Verifica se ja existe na pasta predicoes
+                    if props_dir.exists() and any(props_dir.glob(f"{v.stem}*pose.mp4")):
+                        is_processed = True
+                    
+                    # Verifica se ja existe na pasta jsons
+                    if not is_processed and jsons_dir.exists():
+                        if any(jsons_dir.glob(f"{v.stem}*tracking.json")): is_processed = True
+                        if any(jsons_dir.glob(f"{v.stem}*_30fps.json")): is_processed = True
+                    
+                    if is_processed:
+                        processed_count += 1
+                    else:
+                        videos_to_process.append(v)
+
+                if processed_count > 0:
+                    print(Fore.YELLOW + f"[INFO] PASTA DE SAÍDA ENCONTRADA COM {processed_count} VIDEOS PROCESSADOS")
+                
+                print(Fore.CYAN + f"[INFO] PROCESSANDO OS {len(videos_to_process)} VIDEOS NÃO PROCESSADOS")
+
                 total_time_all = 0.0
                 total_processed = 0
 
-                for i, v in enumerate(videos, 1):
+                for i, v in enumerate(videos_to_process, 1):
                     if state.stop_requested:
                         print(Fore.YELLOW + "[INFO] PROCESSAMENTO INTERROMPIDO PELO USUARIO.")
                         break
-                    print(Fore.CYAN + f"[{i}/{len(videos)}] PROCESSANDO: {v.name}")
+                    
+                    print(Fore.CYAN + f"[{i}/{len(videos_to_process)}] PROCESSANDO: {v.name}")
+                    
+                    # O processar_video ja tem o skip de normalizacao interno
                     res = processar_video(v, output_path, show=show)
                     if res and 'total' in res:
                          total_time_all += res['total']
@@ -534,11 +567,41 @@ def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, 
             elif input_path.is_dir():
                 videos = sorted(input_path.glob("*.mp4"))
                 output_path.mkdir(parents=True, exist_ok=True)
-                # print(f"[INFO] Encontrados {len(videos)} vídeos em {input_path}")
                 print(f"[INFO] ENCONTRADOS {len(videos)} VIDEOS")
-                for i, v in enumerate(videos, 1):
+
+                # ==============================================================
+                # PRÉ-VERIFICAÇÃO DE JÁ PROCESSADOS
+                # ==============================================================
+                videos_to_process = []
+                processed_count = 0
+                
+                props_dir = output_path / "predicoes"
+                jsons_dir = output_path / "jsons"
+
+                for v in videos:
+                    is_processed = False
+                    # Verifica se ja existe na pasta predicoes
+                    if props_dir.exists() and any(props_dir.glob(f"{v.stem}*pose.mp4")):
+                        is_processed = True
+                    
+                    # Verifica se ja existe na pasta jsons
+                    if not is_processed and jsons_dir.exists():
+                        if any(jsons_dir.glob(f"{v.stem}*tracking.json")): is_processed = True
+                        if any(jsons_dir.glob(f"{v.stem}*_30fps.json")): is_processed = True
+                    
+                    if is_processed:
+                        processed_count += 1
+                    else:
+                        videos_to_process.append(v)
+
+                if processed_count > 0:
+                    print(Fore.YELLOW + f"[INFO] PASTA DE SAÍDA ENCONTRADA COM {processed_count} VIDEOS PROCESSADOS")
+                
+                print(Fore.CYAN + f"[INFO] PROCESSANDO OS {len(videos_to_process)} VIDEOS NÃO PROCESSADOS")
+
+                for i, v in enumerate(videos_to_process, 1):
                     if state.stop_requested: break
-                    print(f"\n[{i}/{len(videos)}] PROCESSANDO: {v.name}")
+                    print(f"\n[{i}/{len(videos_to_process)}] PROCESSANDO: {v.name}")
                     processar_video(v, output_path, show=show)
                     # Limpa frame entre vídeos para mostrar placeholder
                     state.current_frame = None

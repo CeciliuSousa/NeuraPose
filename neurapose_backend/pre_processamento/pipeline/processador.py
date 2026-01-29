@@ -61,8 +61,17 @@ def processar_video(video_path: Path, out_root: Path, show=False):
     # --------------------------------------------------------
     print(Fore.CYAN + f"[INFO] NORMALIZANDO VIDEOS PARA {cm.FPS_TARGET} FPS...")
     
-    # Chama o módulo central
-    norm_path, time_norm = normalizar_video(video_path, videos_dir, cm.FPS_TARGET)
+    # Verifica se ja existe video normalizado para economizar tempo
+    expected_norm_name = f"{video_path.stem}_{int(cm.FPS_TARGET)}fps.mp4"
+    expected_norm_path = videos_dir / expected_norm_name
+    
+    if expected_norm_path.exists():
+        print(Fore.YELLOW + f"[SKIP] Video normalizado encontrado: {expected_norm_path.name}")
+        norm_path = expected_norm_path
+        time_norm = 0.0
+    else:
+        # Chama o módulo central
+        norm_path, time_norm = normalizar_video(video_path, videos_dir, cm.FPS_TARGET)
     
     if not norm_path:
         print(Fore.RED + f"[SKIP] Falha na normalização de {video_path.name}")

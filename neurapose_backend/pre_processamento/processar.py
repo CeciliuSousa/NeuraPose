@@ -74,17 +74,37 @@ def main():
         
         # Output especifico por video (se for pasta)
         if args.input_video:
-            curr_out = out_root / v.stem if out_root == Path(args.output_root) else out_root
+            # Se entrada for video unico
+            curr_out = out_root / v.stem if out_root.resolve() == Path(args.output_root).resolve() else out_root
         else:
-            curr_out = out_root
+             # Se for modo pasta, cria pasta irma com sufixo -processado se o output for o default
+             # Verifica se out_root eh o default (resultados-processamentos)
+            if out_root.resolve() == Path(cm.PROCESSING_OUTPUT_DIR).resolve():
+                 parent_processed = out_root / f"{folder.name}-processado"
+                 parent_processed.mkdir(parents=True, exist_ok=True)
+                 curr_out = parent_processed
+            else:
+                 # Se o usuario especificou um output customizado, usa ele
+                 curr_out = out_root
 
         curr_out.mkdir(parents=True, exist_ok=True)
         preds_dir = curr_out / "predicoes"
         json_dir = curr_out / "jsons"
         
-        processed = any(preds_dir.glob(f"{v.stem}*pose.mp4")) or any(json_dir.glob(f"{v.stem}*tracking.json"))
+        # Verifica se existe output: Video de pose, JSON de tracking ou JSON final (30fps)
+        # Debug paths
+        # print(Fore.YELLOW + f"[DEBUG] Verificando processados em: {curr_out}")
+        # print(Fore.YELLOW + f"[DEBUG] Glob preds: {list(preds_dir.glob(f'{v.stem}*pose.mp4'))}")
+        # print(Fore.YELLOW + f"[DEBUG] Glob json final: {list(json_dir.glob(f'{v.stem}*_30fps.json'))}")
+
+        exists_pose = any(preds_dir.glob(f"{v.stem}*pose.mp4"))
+        exists_tracking = any(json_dir.glob(f"{v.stem}*tracking.json"))
+        exists_json_final = any(json_dir.glob(f"{v.stem}*_30fps.json"))
+        
+        processed = exists_pose or exists_tracking or exists_json_final
+        
         if processed:
-            print(Fore.MAGENTA + f"[SKIP]" + Fore.WHITE + f" Video já processado.")
+            print(Fore.MAGENTA + f"[SKIP]" + Fore.WHITE + f" Video já processado ({v.name}).")
             continue
 
         processar_video(v, curr_out, show=args.show)

@@ -58,6 +58,8 @@ CLASSE2 = "FURTO"
 CLASS_NAMES = [CLASSE1, CLASSE2]
 NUM_CLASSES = len(CLASS_NAMES)
 
+MIN_MEMBER_ACTIVITY = 5.0 # Pixels de variancia para considerar vivo mesmo se parado geograficamente
+
 CLASS_TO_ID = {name: idx for idx, name in enumerate(CLASS_NAMES)}
 ID_TO_CLASS = {idx: name for idx, name in enumerate(CLASS_NAMES)}
 
