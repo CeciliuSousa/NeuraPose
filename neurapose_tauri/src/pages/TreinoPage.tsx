@@ -102,6 +102,8 @@ export default function TreinoPage() {
 
     // Refs para controle de buffer e logs
     const bufferRef = useRef<string[]>([]);
+    // Ref para evitar race condition do WebSocket (Stop prematuro)
+    const processStartTimeRef = useRef<number>(0);
 
     // Logs via WebSocket
     useEffect(() => {
@@ -151,7 +153,12 @@ export default function TreinoPage() {
                 }, 100);
 
                 const handleStatus = (status: any) => {
+                    // GRACE PERIOD: Ignora "is_running: false" se o processo começou há menos de 3 seg
+                    const elapsed = Date.now() - processStartTimeRef.current;
+
                     if (!status.is_running && loading) {
+                        if (elapsed < 3000) return;
+
                         setLoading(false);
                         setMessage({ text: '✅ Treinamento concluído!', type: 'success' });
                         ws.disconnectLogs();
@@ -187,6 +194,8 @@ export default function TreinoPage() {
         setLogs([]);
         localStorage.removeItem('np_train_logs');
 
+        // Seta inicio para evitar race condition
+        processStartTimeRef.current = Date.now();
         setLoading(true);
         setMessage({ text: `⏳ Iniciando ${mode === 'treinar' ? 'treinamento' : 'retreinamento'}...`, type: 'processing' });
         // setLogs(prev => [...prev, `[INFO] Modo: ${mode.toUpperCase()}`]); // Removido para limpeza

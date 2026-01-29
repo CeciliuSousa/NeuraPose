@@ -24,7 +24,7 @@ except ImportError: pass
 
 # -- MODELOS --
 # YOLO (Detecção)
-YOLO_MODEL = "yolo11m.pt"
+YOLO_MODEL = "yolov8l.pt"
 YOLO_IMGSZ = 640
 YOLO_CONF_THRESHOLD = 0.35
 YOLO_CLASS_PERSON = 0

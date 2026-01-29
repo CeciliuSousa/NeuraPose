@@ -383,8 +383,24 @@ def api_reset_config():
 
 
 # ==============================================================
+# ==============================================================
 # HELPERS
 # ==============================================================
+def format_seconds_to_hms(seconds):
+    """Formata segundos para H:M:S ou apenas Segundos se < 60."""
+    if seconds < 60:
+        return f"{seconds:.2f} seg"
+    
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    
+    parts = []
+    if h > 0: parts.append(f"{int(h)}h")
+    if m > 0: parts.append(f"{int(m)}m")
+    parts.append(f"{s:.2f}s")
+    
+    return " ".join(parts)
+
 def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, device: str = "cuda"):
     """
     Executa o processamento de vídeos usando import direto (otimizado).
@@ -392,6 +408,12 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
     OTIMIZAÇÃO: Não usa mais subprocess, importa diretamente o módulo.
     Isso elimina o overhead de ~10-20s de criar processo e carregar modelos.
     """
+    state.reset()
+    state.is_running = True
+    state.current_process = 'process'
+    state.process_status = 'processing'
+    state.show_preview = show
+    
     import importlib
     import neurapose_backend.pre_processamento.pipeline.processador as processor_module
     import neurapose_backend.pre_processamento.utils.ferramentas as tools_module
@@ -402,12 +424,6 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
     
     from neurapose_backend.pre_processamento.pipeline.processador import processar_video
     from neurapose_backend.pre_processamento.utils.ferramentas import imprimir_banner
-    
-    state.reset()
-    state.is_running = True
-    state.current_process = 'process'
-    state.process_status = 'processing'
-    state.show_preview = show
     
     # Atualiza dispositivo no config_master
     cm.DEVICE = device if (device == "cpu" or torch.cuda.is_available()) else "cpu"
@@ -430,13 +446,23 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
                 output_path.mkdir(parents=True, exist_ok=True)
                 print(Fore.CYAN + f"[INFO] ENCONTRADOS {len(videos)} VIDEOS")
                 
+                total_time_all = 0.0
+                total_processed = 0
+
                 for i, v in enumerate(videos, 1):
                     if state.stop_requested:
                         print(Fore.YELLOW + "[INFO] PROCESSAMENTO INTERROMPIDO PELO USUARIO.")
                         break
                     print(Fore.CYAN + f"[{i}/{len(videos)}] PROCESSANDO: {v.name}")
-                    processar_video(v, output_path, show=show)
+                    res = processar_video(v, output_path, show=show)
+                    if res and 'total' in res:
+                         total_time_all += res['total']
+                    total_processed += 1
+
                     state.current_frame = None  # Limpa frame entre vídeos
+                
+                if total_processed > 0:
+                     print(Fore.CYAN + f"\n[INFO] TEMPO TOTAL DE PROCESSAMENTO DOS {total_processed} VIDEOS: {format_seconds_to_hms(total_time_all)}")
             
             if state.stop_requested:
                 state.process_status = 'idle'

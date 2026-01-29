@@ -8,6 +8,7 @@ wheels/
 *.egg-info
 *node_modules/
 
+.pt
 neurapose_backend_antigo
 neurapose_backend/**/*.pt
 neurapose_backend/**/*.pth

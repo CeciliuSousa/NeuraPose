@@ -25,6 +25,21 @@ def carregar_labels_videos(labels_path: Path):
     with open(labels_path, 'r', encoding='utf-8') as f: data = json.load(f)
     return data
 
+def format_seconds_to_hms(seconds):
+    """Formata segundos para H:M:S ou apenas Segundos se < 60."""
+    if seconds < 60:
+        return f"{seconds:.2f} seg"
+    
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    
+    parts = []
+    if h > 0: parts.append(f"{int(h)}h")
+    if m > 0: parts.append(f"{int(m)}m")
+    parts.append(f"{s:.2f}s")
+    
+    return " ".join(parts)
+
 def main():
     checks = verificar_recursos()
     imprimir_banner(checks)
@@ -86,18 +101,25 @@ def main():
 
     all_predictions = {}
     total_videos = len(video_list)
+    total_time_all = 0.0
     
     for i, video_path in enumerate(video_list):
         if state.stop_requested: break
         print(Fore.BLUE + f"[{i+1}/{total_videos}] PROCESSANDO: {video_path.name}")
         
         predictions = processar_video(video_path, lstm_model, norm_stats.get("mu"), norm_stats.get("sigma"), show_preview=args.show, output_dir=out_report_dir)
+        
+        if predictions and 'tempos' in predictions and 'total' in predictions['tempos']:
+            total_time_all += predictions['tempos']['total']
+
         all_predictions[video_path.stem] = predictions
         
         print(Fore.BLUE + f"[INFO] SALVANDO O PROCESSAMENTO: {video_path.name}...") 
         print(Fore.GREEN + f"[OK]" + Fore.WHITE + f" SALVAMENTO CONCLUIDO!!")
 
     if state.stop_requested: return
+
+    print(Fore.CYAN + f"\n[INFO] TEMPO TOTAL DE TESTE DOS {len(video_list)} VIDEOS: {format_seconds_to_hms(total_time_all)}")
     
     print(Fore.BLUE + "[INFO] SALVANDO RELATÓRIO COMPLETO DE TESTE DO MODELO...")
 

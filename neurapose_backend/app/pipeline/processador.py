@@ -137,6 +137,28 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
     tempos["temporal_total"] = t1_temp - t0_temp
     
     print(Fore.GREEN + "[OK]" + Fore.WHITE + " CLASSIFICAÇÃO CONCLUIDA!")
+    
+    # 4.1 RELATÓRIO DE TEMPOS (Teste de Modelo)
+    # ============================================================
+    # Tempo Temporal Model Name
+    model_disp_name = "Temporal Fusion Transformer" if cm.TEMPORAL_MODEL == "tft" else "LSTM / BiLSTM"
+    
+    # Calculo Total Simples (Soma) - Exclui renderização
+    calculated_total = tempos["normalizacao"] + tempos["detector_total"] + tempos["rtmpose_total"] + tempos["temporal_total"]
+    
+    print(Fore.WHITE + "="*60)
+    print(Fore.WHITE + f"TEMPO DE TESTE DE MODELO - {video_path.name}")
+    print(Fore.WHITE + "="*60)
+    print(Fore.WHITE + f"{f'Normalização video {int(cm.FPS_TARGET)} FPS':<45} {tempos['normalizacao']:>10.2f} seg")
+    print(Fore.WHITE + f"{'YOLO + BoTSORT-Custom + OSNet':<45} {tempos['detector_total']:>10.2f} seg")
+    print(Fore.WHITE + f"{'RTMPose':<45} {tempos['rtmpose_total']:>10.2f} seg")
+    print(Fore.WHITE + f"{model_disp_name:<45} {tempos['temporal_total']:>10.2f} seg")
+    print(Fore.WHITE + "-"*60)
+    print(Fore.WHITE + f"{'TOTAL':<45} {calculated_total:>10.2f} seg")
+    print(Fore.WHITE + "="*60 + "\n")
+    
+    # Atualiza 'total' no dicionario de retorno para ser a soma correta
+    tempos["total"] = calculated_total
 
     # Enriquece registros com classificação
     for r in records:
@@ -176,6 +198,7 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
     
     # Vídeo Final (Usa módulo nucleo/visualizacao)
     # IMPORTANTE: Usar o vídeo normalizado para garantir sincronia de frames
+    print(Fore.CYAN + f"[INFO] RENDERIZANDO VÍDEO: {pred_video_path.name}...")
     gerar_video_predicao(
         video_path=norm_path,
         registros=records,
@@ -193,21 +216,9 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
     tempos["rtmpose"] = tempos["rtmpose_total"]
     tempos["total"] = tempos["video_total"]
 
-    # Tempo Temporal Model Name
-    model_disp_name = "Temporal Fusion Transformer" if cm.TEMPORAL_MODEL == "tft" else "LSTM / BiLSTM"
-
-    # Imprime Tabela
-    print(Fore.WHITE + "="*60)
-    print(Fore.WHITE + f"TEMPOS DE PROCESSAMENTO - {video_path.name}")
-    print(Fore.WHITE + "="*60)
-    print(Fore.WHITE + f"{f'Normalização video {int(cm.FPS_TARGET)} FPS':<45} {tempos['normalizacao']:>10.2f} seg")
-    print(Fore.WHITE + f"{'Pipeline Paralelo (YOLO // RTMPose)':<45} {tempos['total']:>10.2f} seg")
-    print(Fore.WHITE + f"{'  - Detector Trigger (YOLO)':<45} {tempos['yolo']:>10.2f} seg (paralelo)")
-    print(Fore.WHITE + f"{'  - Pose Estimation (RTMPose)':<45} {tempos['rtmpose']:>10.2f} seg (paralelo)")
-    print(Fore.WHITE + f"{model_disp_name:<45} {tempos['temporal_total']:>10.2f} seg")
-    print(Fore.WHITE + "-"*60)
-    print(Fore.WHITE + f"{'TOTAL':<45} {tempos['video_total']:>10.2f} seg")
-    print(Fore.WHITE + "="*60)
+    # Imprime Tabela (REMOVIDO - JÁ IMPRESSO ACIMA)
+    # Mantendo apenas calculo final de video_total real para debug interno se necessario
+    pass
 
     # Retorno final para main.py
     video_pred = 1 if any(v == 1 for v in id_preds.values()) else 0

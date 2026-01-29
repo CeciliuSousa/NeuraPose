@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PageHeader } from '../components/ui/PageHeader';
 import {
     Binary,
@@ -22,6 +22,9 @@ export default function TestesPage() {
     const [loading, setLoading] = useState(false);
     const [logs, setLogs] = useState<string[]>([]);
     const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' | 'processing' } | null>(null);
+
+    // Ref para evitar race condition (Grace Period)
+    const processStartTimeRef = useRef<number>(0);
 
     const [config, setConfig] = useState({
         modelPath: '',
@@ -108,7 +111,12 @@ export default function TestesPage() {
             };
 
             const handleStatus = (status: any) => {
+                // GRACE PERIOD: Ignora "is_running: false" se o processo começou há menos de 3 seg
+                const elapsed = Date.now() - processStartTimeRef.current;
+
                 if (!status.is_running && loading) {
+                    if (elapsed < 3000) return;
+
                     setLoading(false);
                     setMessage({ text: '✅ Teste concluído! Verifique os resultados.', type: 'success' });
                     setPageStatus('test', 'success');
@@ -143,6 +151,7 @@ export default function TestesPage() {
         // LIMPEZA DE ESTADO ANTES DE INICIAR (CRÍTICO)
         setLogs([]);
         localStorage.removeItem('np_test_logs');
+        processStartTimeRef.current = Date.now();
 
         setLoading(true);
         setMessage({ text: '⏳ Executando testes de validação...', type: 'processing' });

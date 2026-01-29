@@ -88,6 +88,20 @@ def processar_video(video_path: Path, out_root: Path, show=False):
         return {"yolo": time_yolo, "rtmpose": time_rtmpose, "total": 0}
     
 
+    # 7. RELATÓRIO FINAL (MOVIDO PARA ANTES DA RENDERIZAÇÃO)
+    # --------------------------------------------------------
+    time_total = time_yolo + time_rtmpose + time_norm
+    
+    print(Fore.WHITE + "="*60)
+    print(Fore.WHITE + f"TEMPO DE PROCESSAMENTO - {video_path.name}")
+    print(Fore.WHITE + "="*60)
+    print(Fore.WHITE + f"{f'Normalização video {int(cm.FPS_TARGET)} FPS':<45} {time_norm:>10.2f} seg")
+    print(Fore.WHITE + f"{'YOLO + BoTSORT-Custom + OSNet':<45} {time_yolo:>10.2f} seg")
+    print(Fore.WHITE + f"{'RTMPose':<45} {time_rtmpose:>10.2f} seg")
+    print(Fore.WHITE + "-"*60)
+    print(Fore.WHITE + f"{'TOTAL':<45} {time_total:>10.2f} seg")
+    print(Fore.WHITE + "="*60 + "\n")
+
     # 5. EXPORTAÇÃO (JSON + VIDEO)
     # --------------------------------------------------------
     json_path = json_dir / f"{video_path.stem}_{int(cm.FPS_TARGET)}fps.json"
@@ -102,6 +116,7 @@ def processar_video(video_path: Path, out_root: Path, show=False):
     
     if registros:
         # print(Fore.CYAN + f"[INFO] Gerando vídeo visualização...")
+        print(Fore.CYAN + f"[INFO] RENDERIZANDO VÍDEO: {out_video_path.name}...")
         gerar_video_predicao(
             video_path=norm_path,
             registros=registros,
@@ -113,27 +128,5 @@ def processar_video(video_path: Path, out_root: Path, show=False):
     tracking_path = json_dir / f"{video_path.stem}_{int(cm.FPS_TARGET)}fps_tracking.json"
     
     gerar_relatorio_tracking(
-        registros=registros,
-        id_map=id_map,
-        ids_validos=ids_validos,
-        total_frames=frame_idx - 1,
-        video_name=video_path.name,
-        output_path=tracking_path
-    )
-
-
-    # 7. RELATÓRIO FINAL
-    # --------------------------------------------------------
-    time_total = time_yolo + time_rtmpose + time_norm
-    
-    print(Fore.WHITE + "="*60)
-    print(Fore.WHITE + f"TEMPOS DE PROCESSAMENTO - {video_path.name}")
-    print(Fore.WHITE + "="*60)
-    print(Fore.WHITE + f"{f'Normalização video {int(cm.FPS_TARGET)} FPS':<45} {time_norm:>10.2f} seg")
-    print(Fore.WHITE + f"{'YOLO + BoTSORT-Custom + OSNet':<45} {time_yolo:>10.2f} seg")
-    print(Fore.WHITE + f"{'RTMPose':<45} {time_rtmpose:>10.2f} seg")
-    print(Fore.WHITE + "-"*60)
-    print(Fore.WHITE + f"{'TOTAL':<45} {time_total:>10.2f} seg")
-    print(Fore.WHITE + "="*60 + "\n")
     
     return {"yolo": time_yolo, "rtmpose": time_rtmpose, "total": time_total}
