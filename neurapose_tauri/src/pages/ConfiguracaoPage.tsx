@@ -139,7 +139,7 @@ export default function ConfiguracaoPage() {
                 { key: "POSE_CONF_MIN", label: "Confiança Mínima Keypoint", type: "number", step: 0.01 },
                 { key: "EMA_ALPHA", label: "Suavização EMA (Alpha)", type: "number", step: 0.01 },
                 { key: "EMA_MIN_CONF", label: "Conf. Mínima para EMA", type: "number", step: 0.01 },
-                { key: "RTMPOSE_BATCH_SIZE", label: "Batch Pose (GPU)", type: "number" },
+                { key: "RTMPOSE_MAX_BATCH_SIZE", label: "Batch Pose (GPU)", type: "number" },
             ]
         },
         {
