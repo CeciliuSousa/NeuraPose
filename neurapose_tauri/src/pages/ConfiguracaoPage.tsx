@@ -130,6 +130,7 @@ export default function ConfiguracaoPage() {
                 { key: "DETECTION_CONF", label: "Confiança YOLO (0-1)", type: "number", step: 0.01 },
                 { key: "YOLO_IMGSZ", label: "Resolução de Entrada", type: "select", options: ["640", "1280", "1920"] },
                 { key: "YOLO_BATCH_SIZE", label: "Batch Size (GPU)", type: "number" },
+                { key: "YOLO_SKIP_FRAME_INTERVAL", label: "Intervalo Skip-Frame (1-10)", type: "range", min: 1, max: 10, step: 1, tooltip: "1=Preciso, 3=Equilibrado, 10=Rápido" },
             ]
         },
         {
@@ -289,6 +290,20 @@ export default function ConfiguracaoPage() {
                                             <option value="true">ATIVADO</option>
                                             <option value="false">DESATIVADO</option>
                                         </select>
+                                    ) : item.type === 'range' ? (
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="range"
+                                                min={(item as any).min}
+                                                max={(item as any).max}
+                                                step={(item as any).step}
+                                                value={config[item.key]}
+                                                onChange={(e) => setConfig({ ...config, [item.key]: parseInt(e.target.value) })}
+                                                className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                                                title={(item as any).tooltip}
+                                            />
+                                            <span className="font-bold text-sm w-8 text-center">{config[item.key]}</span>
+                                        </div>
                                     ) : (
                                         <input
                                             type={item.type}

@@ -156,69 +156,88 @@ class YoloStreamDetector:
                     black_frame = np.zeros((h, w, c), dtype=np.uint8)
                     padded_frames = frames_batch + [black_frame] * padding_needed
 
-                # Inference
-                batch_results = self.model.track(
-                    source=padded_frames,
-                    imgsz=cm.YOLO_IMGSZ,
-                    conf=cm.DETECTION_CONF,
-                    device=cm.DEVICE,
-                    persist=True,
-                    tracker=str(tracker_yaml_path),
-                    classes=[cm.YOLO_CLASS_PERSON],
-                    verbose=False,
-                    half=True,
-                    stream=False
-                )
-                
-                # Remove padding results se necessário
-                if cm.USE_TENSORRT and actual_batch_size < batch_size:
-                    batch_results = batch_results[:actual_batch_size]
-                
-                # Processamento leve para extrair features e montar track_data
+                # Skip-Frame Logic (Simulated Batch)
                 processed_batch_results = []
                 
-                for i, r in enumerate(batch_results):
+                # Prepara buffer de tracks para o batch
+                for i, frame in enumerate(frames_batch):
                     current_frame_idx = frame_idx_global + i
-                    boxes_data = None
                     
-                    if r.boxes is not None and len(r.boxes) > 0:
-                        boxes_data = r.boxes.data.cpu().numpy()
-                        ids = boxes_data[:, 4] if boxes_data.shape[1] > 4 else None
+                    # 1. Decide: YOLO ou Kalman?
+                    skip_val = getattr(cm, 'YOLO_SKIP_FRAME_INTERVAL', 1)
+                    do_yolo = (skip_val <= 1) or (current_frame_idx % skip_val == 0)
+                    
+                    tracks = np.empty((0, 7)) # formato padrao botsort
+                    
+                    try:
+                        if do_yolo:
+                             # YOLO Predict (GPU)
+                             res = self.model.predict(
+                                source=frame,
+                                imgsz=cm.YOLO_IMGSZ,
+                                conf=cm.DETECTION_CONF,
+                                device=cm.DEVICE,
+                                classes=[cm.YOLO_CLASS_PERSON],
+                                verbose=False,
+                                stream=False
+                             )
+                             # Converte boxes para formato (N, 6) -> xyxy, conf, cls
+                             if len(res) > 0 and len(res[0].boxes) > 0:
+                                 dets = res[0].boxes.data.cpu().numpy()
+                             else:
+                                 dets = np.empty((0, 6))
+                        else:
+                             # Skip YOLO (Sem deteção)
+                             dets = np.empty((0, 6))
+                        
+                        # 2. Atualiza Tracker (CPU)
+                        # Se dets vazio, o tracker vai apenas predizer (Kalman) e incrementar 'time_since_update'
+                        tracks = tracker.update(dets, frame)
+                        
+                    except Exception as e:
+                        print(Fore.RED + f"[ERRO] Falha no tracking frame {current_frame_idx}: {e}")
+                        continue
+
+                    # 3. Processa Resultados para Compatibilidade
+                    boxes_data = None
+                    if len(tracks) > 0:
+                        # BoTSORT retorna [x1, y1, x2, y2, id, conf, cls]
+                        boxes_data = tracks
+                        
+                    # Extração de Features e Track Data
+                    if boxes_data is not None:
+                        ids = boxes_data[:, 4]
                         current_time = current_frame_idx / fps
                         
-                        if ids is not None:
-                            for tid_raw in ids:
-                                if tid_raw is None or tid_raw < 0: continue
-                                tid = int(tid_raw)
-                                
-                                # Feature extraction seguro
-                                try:
-                                    trk = tracker.tracks[tid]
-                                    f = trk.feat.copy() if hasattr(trk, 'feat') else np.zeros(512)
-                                except:
-                                    f = np.zeros(512, dtype=np.float32)
-                                
-                                if tid not in track_data:
-                                    track_data[tid] = {
-                                        "start": current_time,
-                                        "end": current_time,
-                                        "features": [f],
-                                        "frames": {current_frame_idx},
-                                    }
-                                else:
-                                    track_data[tid]["end"] = current_time
-                                    track_data[tid]["frames"].add(current_frame_idx)
-                                    if len(track_data[tid]["features"]) < 20:
-                                        track_data[tid]["features"].append(f)
-                    
+                        for idx_in_batch, row in enumerate(boxes_data):
+                            tid = int(row[4])
+                            if tid < 0: continue
+                            
+                            # Feature extraction seguro
+                            try:
+                                trk = tracker.tracks[tid]
+                                f = trk.feat.copy() if hasattr(trk, 'feat') else np.zeros(512)
+                            except:
+                                f = np.zeros(512, dtype=np.float32)
+                            
+                            if tid not in track_data:
+                                track_data[tid] = {
+                                    "start": current_time,
+                                    "end": current_time,
+                                    "features": [f],
+                                    "frames": {current_frame_idx},
+                                }
+                            else:
+                                track_data[tid]["end"] = current_time
+                                track_data[tid]["frames"].add(current_frame_idx)
+                                if len(track_data[tid]["features"]) < 20:
+                                    track_data[tid]["features"].append(f)
+
                     # Armazena apenas o necessário para o consumidor (RTMPose)
-                    # O 'r' original segura tensores na GPU, idealmente liberamos ou enviamos clones?
-                    # O YOLO result 'r' tem .orig_img e outros metadados.
-                    # Vamos passar 'boxes_data' limpo para evitar overhead de memória
                     processed_batch_results.append({
                         "boxes": boxes_data,
                         # Passamos o frame original para o RTMPose usar
-                        "frame": frames_batch[i] 
+                        "frame": frame 
                     })
 
                 # Yield Batch

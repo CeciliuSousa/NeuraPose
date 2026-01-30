@@ -16,6 +16,7 @@ USE_TENSORRT = False                 # Habilitar aceleração TensorRT (.engine)
 USE_FP16 = True                     # Half Precision (2x speed em RTX)
 USE_PREFETCH = True                 # Pre-fetch frames
 PREFETCH_BUFFER_SIZE = 32
+YOLO_SKIP_FRAME_INTERVAL = 3        # Intervalo de frames para inferencia YOLO (1=sem skip)
 
 try:
     import onnxruntime as ort
