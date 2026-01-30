@@ -207,6 +207,10 @@ class ExtratorPoseRTMPose:
             coords_orig = transform_preds(coords_crop, meta["center"], meta["scale"], (cm.SIMCC_W, cm.SIMCC_H))
             
             # Montagem 
+            # --- CORREÇÃO DE SHAPE: Garante (K, 1) ---
+            if kp_conf.ndim == 1:
+                kp_conf = kp_conf[:, None]
+
             kps_final = np.concatenate([coords_orig, kp_conf], axis=1) # (K, 3)
 
             # Suavização

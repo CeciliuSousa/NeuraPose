@@ -70,6 +70,9 @@ class UserConfigManager:
             "USE_NVENC": getattr(cm, "USE_NVENC", True),
             "NVENC_PRESET": getattr(cm, "NVENC_PRESET", "p4"),
             "USE_PREFETCH": getattr(cm, "USE_PREFETCH", True),
+            "USE_ASYNC_LOADER": getattr(cm, "USE_ASYNC_LOADER", True),
+            "ASYNC_BUFFER_SIZE": getattr(cm, "ASYNC_BUFFER_SIZE", 64),
+            "USE_TENSORRT": getattr(cm, "USE_TENSORRT", False),
 
             # Classes de Detecção
             "CLASSE1": cm.CLASSE1,
@@ -80,12 +83,14 @@ class UserConfigManager:
             "DETECTION_CONF": cm.DETECTION_CONF,
             "YOLO_IMGSZ": getattr(cm, "YOLO_IMGSZ", "640"),
             "YOLO_BATCH_SIZE": getattr(cm, "YOLO_BATCH_SIZE", 64),
+            "YOLO_SKIP_FRAME_INTERVAL": getattr(cm, "YOLO_SKIP_FRAME_INTERVAL", 3),
             
             # Configurações de Pose
             "POSE_CONF_MIN": cm.POSE_CONF_MIN,
             "EMA_ALPHA": cm.EMA_ALPHA,
             "EMA_MIN_CONF": getattr(cm, "EMA_MIN_CONF", 0.3),
-            "RTMPOSE_BATCH_SIZE": getattr(cm, "RTMPOSE_BATCH_SIZE", 64),
+            # O frontend espera RTMPOSE_MAX_BATCH_SIZE
+            "RTMPOSE_MAX_BATCH_SIZE": getattr(cm, "RTMPOSE_BATCH_SIZE", getattr(cm, "RTMPOSE_MAX_BATCH_SIZE", 64)),
             
             # BoTSORT - Configurações Completas
             "track_high_thresh": cm.BOT_SORT_CONFIG.get("track_high_thresh", 0.5),
@@ -95,7 +100,7 @@ class UserConfigManager:
             "track_buffer": cm.BOT_SORT_CONFIG.get("track_buffer", 30),
             "proximity_thresh": cm.BOT_SORT_CONFIG.get("proximity_thresh", 0.5),
             "appearance_thresh": cm.BOT_SORT_CONFIG.get("appearance_thresh", 0.25),
-            "gmc_method": cm.BOT_SORT_CONFIG.get("gmc_method", "orb"),
+            "gmc_method": cm.BOT_SORT_CONFIG.get("gmc_method", "none"),
             "fuse_score": cm.BOT_SORT_CONFIG.get("fuse_score", True),
             "with_reid": cm.BOT_SORT_CONFIG.get("with_reid", True),
             

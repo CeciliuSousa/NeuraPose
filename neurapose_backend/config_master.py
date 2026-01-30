@@ -11,14 +11,16 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # -- OTIMIZAÇÕES --
 USE_NVENC = True                    # Usar encoder GPU NVIDIA (h264_nvenc)
 NVENC_PRESET = "p4"                 # Preset NVENC (p1=fast, p7=quality)
-USE_TENSORRT = True                 # Habilitar aceleração TensorRT (.engine)
+USE_TENSORRT = False                # Habilitar aceleração TensorRT (.engine)
 
 USE_FP16 = True                     # Half Precision (2x speed em RTX)
 USE_ASYNC_LOADER = True             # Pre-fetch frames (Threaded)
-ASYNC_BUFFER_SIZE = 128             # Tamanho do buffer de leitura
+ASYNC_BUFFER_SIZE = 64              # Tamanho do buffer de leitura
 USE_PREFETCH = False                # Legacy flag (substituido por USE_ASYNC_LOADER)
 PREFETCH_BUFFER_SIZE = 32           # Legacy param
 YOLO_SKIP_FRAME_INTERVAL = 3        # Intervalo de frames para inferencia YOLO (1=sem skip)
+YOLO_BATCH_SIZE = 128
+RTMPOSE_BATCH_SIZE = 128
 
 try:
     import onnxruntime as ort
@@ -52,8 +54,6 @@ EMA_MIN_CONF = 0.0
 # Filtros Pós-Processamento
 MIN_POSDETECTION_CONF = 0.6
 YOLO_CLASS_PERSON = 0
-YOLO_BATCH_SIZE = 128
-RTMPOSE_BATCH_SIZE = 128
 MIN_POSE_ACTIVITY = 0.8
 
 # -- CONFIG TRACKING (BoTSORT / ReID) --
@@ -169,14 +169,14 @@ BOTSORT_YAML_PATH = ROOT / "tracker" / "configuracao" / "botsort_custom.yaml"
 
 BOT_SORT_CONFIG = {
     "tracker_type": "botsort",
-    "track_high_thresh": 0.5,
-    "track_low_thresh": 0.1,
-    "new_track_thresh": 0.5,
-    "track_buffer": 300,
-    "match_thresh": 0.60,       # V5: mais tolerante
-    "appearance_thresh": 0.25,  # V5: menos estrito visualmente
-    "proximity_thresh": 0.5,    # V5: mais proximidade espacial
-    "gmc_method": "orb",
+    "track_high_thresh": 0.5,   # Confiança mínima para iniciar rastro (Manter)
+    "track_low_thresh": 0.1,    # Confiança para manter rastro oculto (Manter baixo)
+    "new_track_thresh": 0.7,    # AUMENTAR! Só cria ID novo (ex: 85) se confiança for muito alta. Evita fantasmas.
+    "track_buffer": 120,        # AUMENTAR! Lembra do ID por 4 segundos (120 frames) se ele sumir.
+    "match_thresh": 0.80,       # AUMENTAR! Mais tolerante na geometria (IoU). Aceita "pulos" maiores do skip-frame.
+    "appearance_thresh": 0.45,  # AUMENTAR! (0.25 -> 0.45). Aceita 45% de diferença visual (roupa, ângulo) antes de trocar ID.
+    "proximity_thresh": 0.5,
+    "gmc_method": "none",       # Desligado para camera fixa (economiza CPU) -> Usando "none" string para compatibilidade
     "fuse_score": True,
     "with_reid": True,
     "model": str(OSNET_PATH),

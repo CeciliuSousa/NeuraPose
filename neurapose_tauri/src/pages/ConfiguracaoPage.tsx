@@ -154,7 +154,7 @@ export default function ConfiguracaoPage() {
                 { key: "track_buffer", label: "Track Buffer (Frames)", type: "number" },
                 { key: "proximity_thresh", label: "Proximity Thresh", type: "number", step: 0.05 },
                 { key: "appearance_thresh", label: "Appearance Thresh", type: "number", step: 0.05 },
-                { key: "gmc_method", label: "GMC Method", type: "select", options: ["orb", "sift", "sparseOptFlow"] },
+                { key: "gmc_method", label: "GMC Method", type: "select", options: ["none", "orb", "sift", "sparseOptFlow"] },
                 { key: "fuse_score", label: "Fuse Score (Fusão)", type: "boolean" },
                 { key: "with_reid", label: "Ativar ReID (Visual)", type: "boolean" },
             ]

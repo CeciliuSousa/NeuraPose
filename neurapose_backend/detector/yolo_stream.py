@@ -110,7 +110,7 @@ class YoloStreamDetector:
                 if pt_path.exists(): os.remove(pt_path)
                 raise FileNotFoundError(f"Erro ao baixar {cm.YOLO_PATH}: {e}")
 
-        self.engine_path = pt_path.with_name(f"{pt_path.stem}_b{cm.YOLO_BATCH_SIZE}.engine")
+        self.engine_path = pt_path.with_name(f"{pt_path.stem}-batch{cm.YOLO_BATCH_SIZE}.engine")
         
         if cm.USE_TENSORRT:
             if not self.engine_path.exists():
@@ -133,9 +133,9 @@ class YoloStreamDetector:
                         workspace=4         # Aumenta workspace para otimização (GB)
                     )
                     
-                    # Renomeia Engine e ONNX para incluir o batch size
+                    # Renomeia Engine e ONNX para o padrão: modelo-batchN.engine/onnx
                     # Ultralytics gera: yolov8l.engine e yolov8l.onnx
-                    # Queremos: yolov8l_b32.engine e yolov8l_b32.onnx
+                    # Queremos: yolov8l-batch32.engine e yolov8l-batch32.onnx
                     
                     default_engine = pt_path.with_suffix('.engine')
                     default_onnx = pt_path.with_suffix('.onnx')
@@ -146,11 +146,13 @@ class YoloStreamDetector:
                     if default_engine.exists() and default_engine != self.engine_path:
                         if self.engine_path.exists(): self.engine_path.unlink()
                         default_engine.rename(self.engine_path)
+                        print(Fore.GREEN + f"[TRT] Engine salvo: {self.engine_path.name}")
                         
                     # Renomeia ONNX force-overwrite
                     if default_onnx.exists() and default_onnx != target_onnx:
                         if target_onnx.exists(): target_onnx.unlink()
                         default_onnx.rename(target_onnx)
+                        print(Fore.GREEN + f"[TRT] ONNX salvo: {target_onnx.name}")
                         
                     print(Fore.GREEN + "[SUCESSO] Modelo TensorRT gerado e versionado!")
                 except Exception as e:
@@ -231,46 +233,136 @@ class YoloStreamDetector:
                     black_frame = np.zeros((h, w, c), dtype=np.uint8)
                     padded_frames = frames_batch + [black_frame] * padding_needed
 
-                # Skip-Frame Logic (Simulated Batch)
+                # Skip-Frame Logic
                 processed_batch_results = []
+                skip_val = getattr(cm, 'YOLO_SKIP_FRAME_INTERVAL', 1)
                 
-                # Prepara buffer de tracks para o batch
+                # ============================================================
+                # BATCH INFERENCE LOGIC (TensorRT vs PyTorch)
+                # ============================================================
+                # TensorRT: Batch fixo obrigatório. Coletamos frames, fazemos padding, inferência única.
+                # PyTorch: Batch dinâmico. Podemos processar frame a frame.
+                
+                # Pré-computa quais frames precisam de YOLO
+                yolo_frame_indices = []
+                yolo_frames = []
                 for i, frame in enumerate(frames_batch):
                     current_frame_idx = frame_idx_global + i
-                    
-                    # 1. Decide: YOLO ou Kalman?
-                    skip_val = getattr(cm, 'YOLO_SKIP_FRAME_INTERVAL', 1)
                     do_yolo = (skip_val <= 1) or (current_frame_idx % skip_val == 0)
-                    
-                    tracks = np.empty((0, 7)) # formato padrao botsort
-                    
+                    if do_yolo:
+                        yolo_frame_indices.append(i)
+                        yolo_frames.append(frame)
+                
+                # Mapa de detecções: índice local -> dets
+                detections_map = {}
+                
+                if yolo_frames:
                     try:
-                        if do_yolo:
-                             # YOLO Predict (GPU)
-                             res = self.model.predict(
-                                source=frame,
+                        if cm.USE_TENSORRT:
+                            # TensorRT: Batch fixo obrigatório
+                            # Padding para completar o batch size do engine
+                            trt_batch_size = batch_size  # Engine foi compilado com este valor
+                            num_yolo_frames = len(yolo_frames)
+                            
+                            if num_yolo_frames < trt_batch_size:
+                                # Padding com frames pretos
+                                h, w, c = yolo_frames[0].shape
+                                black_frame = np.zeros((h, w, c), dtype=np.uint8)
+                                padded_frames = yolo_frames + [black_frame] * (trt_batch_size - num_yolo_frames)
+                            else:
+                                padded_frames = yolo_frames[:trt_batch_size]
+                            
+                            # Inferência em batch único
+                            res_batch = self.model.predict(
+                                source=padded_frames,
                                 imgsz=cm.YOLO_IMGSZ,
                                 conf=cm.DETECTION_CONF,
                                 device=cm.DEVICE,
                                 classes=[cm.YOLO_CLASS_PERSON],
                                 verbose=False,
                                 stream=False
-                             )
-                             # Converte boxes para formato (N, 6) -> xyxy, conf, cls
-                             if len(res) > 0 and len(res[0].boxes) > 0:
-                                 dets = res[0].boxes.data.cpu().numpy()
-                             else:
-                                 dets = np.empty((0, 6))
+                            )
+                            
+                            # Extrai detecções apenas dos frames reais (não padding)
+                            for idx, local_i in enumerate(yolo_frame_indices):
+                                if idx < len(res_batch) and len(res_batch[idx].boxes) > 0:
+                                    raw_data = res_batch[idx].boxes.data.cpu().numpy()
+                                    # Normaliza para 6 colunas se necessário
+                                    if raw_data.shape[1] == 4:
+                                        rows = raw_data.shape[0]
+                                        confs = np.full((rows, 1), 0.85, dtype=np.float32)
+                                        clss = np.zeros((rows, 1), dtype=np.float32)
+                                        raw_data = np.hstack((raw_data, confs, clss))
+                                    elif raw_data.shape[1] == 5:
+                                        rows = raw_data.shape[0]
+                                        clss = np.zeros((rows, 1), dtype=np.float32)
+                                        raw_data = np.hstack((raw_data, clss))
+                                    detections_map[local_i] = raw_data
+                                else:
+                                    detections_map[local_i] = np.empty((0, 6))
                         else:
-                             # Skip YOLO (Sem deteção)
-                             dets = np.empty((0, 6))
+                            # PyTorch: Processa frame a frame (dinâmico)
+                            for idx, local_i in enumerate(yolo_frame_indices):
+                                frame = yolo_frames[idx]
+                                res = self.model.predict(
+                                    source=frame,
+                                    imgsz=cm.YOLO_IMGSZ,
+                                    conf=cm.DETECTION_CONF,
+                                    device=cm.DEVICE,
+                                    classes=[cm.YOLO_CLASS_PERSON],
+                                    verbose=False,
+                                    stream=False
+                                )
+                                if len(res) > 0 and len(res[0].boxes) > 0:
+                                    detections_map[local_i] = res[0].boxes.data.cpu().numpy()
+                                else:
+                                    detections_map[local_i] = np.empty((0, 6))
+                    except Exception as e:
+                        print(Fore.RED + f"[ERRO] Falha na inferência YOLO batch: {e}")
+                        # Fallback: todos os frames sem detecção
+                        for local_i in yolo_frame_indices:
+                            detections_map[local_i] = np.empty((0, 6))
+                
+                # ============================================================
+                # TRACKING LOOP (Sequencial por frame para manter consistência temporal)
+                # ============================================================
+                for i, frame in enumerate(frames_batch):
+                    current_frame_idx = frame_idx_global + i
+                    tracks = np.empty((0, 7))
+                    
+                    try:
+                        # Obtém detecções (do batch ou vazio se foi skip)
+                        dets = detections_map.get(i, np.empty((0, 6)))
                         
-                        # 2. Atualiza Tracker (CPU)
-                        # Se dets vazio, o tracker vai apenas predizer (Kalman) e incrementar 'time_since_update'
+                        # ============================================================
+                        # NORMALIZAÇÃO DE COLUNAS (TensorRT retorna 4, Tracker exige 6)
+                        # ============================================================
+                        if isinstance(dets, np.ndarray) and len(dets) > 0:
+                            ncols = dets.shape[1]
+                            
+                            # Se o array tiver formato (N, 4) -> [x1, y1, x2, y2]
+                            if ncols == 4:
+                                rows = dets.shape[0]
+                                # Criar coluna de Confiança (0.85 padrão para TensorRT filtrado)
+                                confs = np.full((rows, 1), 0.85, dtype=np.float32)
+                                # Criar coluna de Classe (0 -> Pessoa)
+                                clss = np.zeros((rows, 1), dtype=np.float32)
+                                # Juntar: Agora temos (N, 6)
+                                dets = np.hstack((dets, confs, clss))
+                                
+                            # Se o array tiver formato (N, 5) -> falta classe
+                            elif ncols == 5:
+                                rows = dets.shape[0]
+                                clss = np.zeros((rows, 1), dtype=np.float32)
+                                dets = np.hstack((dets, clss))
+                        
+                        # Atualiza Tracker (CPU)
                         tracks = tracker.update(dets, frame)
                         
                     except Exception as e:
                         print(Fore.RED + f"[ERRO] Falha no tracking frame {current_frame_idx}: {e}")
+                        import traceback
+                        traceback.print_exc()
                         continue
 
                     # 3. Processa Resultados para Compatibilidade
