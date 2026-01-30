@@ -22,6 +22,65 @@ from ultralytics.trackers import bot_sort
 bot_sort.BOTSORT = CustomBoTSORT
 bot_sort.ReID = CustomReID
 
+import threading
+import queue
+import time
+
+class ThreadedVideoLoader:
+    def __init__(self, path, buffer_size=128):
+        self.cap = cv2.VideoCapture(str(path))
+        self.q = queue.Queue(maxsize=buffer_size)
+        self.stopped = False
+        self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30.0
+        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        
+        # Start reading thread
+        self.t = threading.Thread(target=self.update, args=())
+        self.t.daemon = True
+        self.t.start()
+
+    def update(self):
+        while True:
+            if self.stopped:
+                break
+            if not self.q.full():
+                ret, frame = self.cap.read()
+                if not ret:
+                    self.stopped = True
+                    # Push None to signal end
+                    self.q.put(None) 
+                    break
+                self.q.put(frame)
+            else:
+                time.sleep(0.005) # avoid busy wait
+        self.cap.release()
+
+    def read(self):
+        # returns ret, frame like cv2
+        if self.q.empty() and self.stopped:
+            return False, None
+        
+        try:
+            # wait with timeout to allow checking stopped status
+            frame = self.q.get(timeout=1.0) 
+        except queue.Empty:
+            return False, None
+
+        if frame is None:
+            return False, None
+            
+        return True, frame
+
+    def release(self):
+        self.stopped = True
+        if self.t.is_alive():
+            self.t.join()
+        if self.cap.isOpened():
+            self.cap.release()
+
+
 class YoloStreamDetector:
     def __init__(self):
         self.ensure_model()
@@ -113,9 +172,25 @@ class YoloStreamDetector:
         if batch_size is None:
             batch_size = cm.YOLO_BATCH_SIZE
 
-        cap = cv2.VideoCapture(str(video_path))
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        # Escolha do Loader (Assíncrono vs Síncrono)
+        buffer_size = getattr(cm, 'ASYNC_BUFFER_SIZE', 128)
+        use_async = getattr(cm, 'USE_ASYNC_LOADER', True)
+        
+        if use_async:
+            print(Fore.CYAN + f"[INFO] Iniciando Leitura Assíncrona (Buffer={buffer_size})...")
+            loader = ThreadedVideoLoader(str(video_path), buffer_size=buffer_size)
+            fps = loader.fps
+            total_frames = loader.total_frames
+            # Mantemos interface 'read' compatível
+            cap_read = loader.read 
+            cap_release = loader.release
+        else:
+            print(Fore.YELLOW + f"[INFO] Iniciando Leitura Síncrona (OpenCV)...")
+            cap = cv2.VideoCapture(str(video_path))
+            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            cap_read = cap.read
+            cap_release = cap.release
         
         # Init Tracker
         tracker = CustomBoTSORT(frame_rate=int(fps))
@@ -136,7 +211,7 @@ class YoloStreamDetector:
                     
                 frames_batch = []
                 for _ in range(batch_size):
-                    ret, frame = cap.read()
+                    ret, frame = cap_read()
                     if not ret: break
                     frames_batch.append(frame)
                     
@@ -254,7 +329,7 @@ class YoloStreamDetector:
                     last_progress = prog
                     
         finally:
-            cap.release()
+            cap_release()
             del self.model.tracker
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()

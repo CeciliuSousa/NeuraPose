@@ -186,12 +186,18 @@ export default function ConfiguracaoPage() {
             title: "Hardware & Performance",
             description: "Otimizações de GPU e CPU para acelerar o processamento.",
             items: [
-                { key: "USE_TENSORRT", label: "Aceleração TensorRT (NVIDIA)", type: "boolean" },
-                { key: "USE_FP16", label: "Precisão FP16 (RTX 20/30/40)", type: "boolean" },
+                { key: "USE_ASYNC_LOADER", label: "Leitura Assíncrona (Threaded)", type: "boolean" },
+                { key: "USE_TENSORRT", label: "Aceleração TensorRT (.engine)", type: "boolean" },
                 { key: "USE_NVENC", label: "NVENC (Decodificação GPU)", type: "boolean" },
-                { key: "NVENC_PRESET", label: "Preset NVENC (Velocidade/Qualidade)", type: "select", options: ["p1", "p2", "p3", "p4", "p5", "p6", "p7"] },
-                { key: "USE_PREFETCH", label: "Leitura Assíncrona (Prefetch)", type: "boolean" },
+                { key: "NVENC_PRESET", label: "Preset NVENC", type: "select", options: ["p1", "p4", "p7"] },
+                { key: "USE_FP16", label: "Precisão FP16", type: "boolean" },
             ]
+        },
+        // Aviso extra fora da estrutura (hack visual simples) ou na description
+        {
+            title: "Notas de Performance",
+            description: "⚠️ TensorRT requer exportação prévia do modelo. Leitura Assíncrona consome mais RAM para o buffer.",
+            items: []
         }
     ];
 
