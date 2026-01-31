@@ -97,6 +97,9 @@ class CustomBoTSORT(BOTSORT_ORIGINAL):
 
         # Custom ReID
         self.encoder = CustomReID(args.model)
+        
+        # Histórico para suavização EMA (Anti-Jitter)
+        self.box_history = {}
 
     def get_kalmanfilter(self):
         return KalmanFilterXYWH()
@@ -233,7 +236,39 @@ class CustomBoTSORT(BOTSORT_ORIGINAL):
         self.removed_stracks.extend(removed_stracks)
         self.tracked_stracks, self.lost_stracks = self.remove_duplicate_stracks(self.tracked_stracks, self.lost_stracks)
         
-        return self._format_output(self.tracked_stracks)
+        self.tracked_stracks, self.lost_stracks = self.remove_duplicate_stracks(self.tracked_stracks, self.lost_stracks)
+        
+        # --- POST-PROCESS: EMA SMOOTHING (ANTI-JITTER) ---
+        raw_tracks = self._format_output(self.tracked_stracks)
+        
+        if len(raw_tracks) > 0:
+            BOX_ALPHA = 0.6  # 60% Nova Posição, 40% Inércia
+            current_ids = set()
+            
+            # Itera sobre o array numpy (que é mutável)
+            for i in range(len(raw_tracks)):
+                track = raw_tracks[i]
+                t_id = int(track[4])
+                coords = track[:4] # x1, y1, x2, y2
+                current_ids.add(t_id)
+
+                if t_id in self.box_history:
+                    # Aplica EMA: Suave = Atual * Alpha + Anterior * (1 - Alpha)
+                    prev_coords = self.box_history[t_id]
+                    smooth_coords = coords * BOX_ALPHA + prev_coords * (1.0 - BOX_ALPHA)
+                else:
+                    smooth_coords = coords
+                
+                # Atualiza histórico e o track atual
+                self.box_history[t_id] = smooth_coords
+                raw_tracks[i, :4] = smooth_coords # Sobrescreve coordenadas brutas
+            
+            # Limpeza de memória (IDs que sumiram)
+            # Remove do self.box_history IDs que não estão em current_ids
+            # (Nota: Fazer isso a cada frame pode ser custoso se houver muitos IDs, mas ok para < 100)
+            self.box_history = {k:v for k,v in self.box_history.items() if k in current_ids}
+            
+        return raw_tracks
 
     def init_track(self, results, img=None):
         if len(results) == 0:
