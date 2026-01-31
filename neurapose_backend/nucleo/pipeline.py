@@ -167,7 +167,7 @@ def executar_pipeline_extracao(
         return [], {}, [], total_frames, tempos
 
     if verbose:
-        print(Fore.GREEN + "[OK]" + Fore.WHITE + f" EXTRAÇÃO PARALELA CONCLUÍDA em {t_total_extracao:.2f}s!")
+        print(Fore.GREEN + "\n[OK]" + Fore.WHITE + f" EXTRAÇÃO PARALELA CONCLUÍDA em {t_total_extracao:.2f}s!")
         print(Fore.CYAN + f"[INFO] CONSOLIDANDO IDs (Merge Tracks)...")
 
     # --------------------------------------------------------

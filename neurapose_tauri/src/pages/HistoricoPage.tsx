@@ -34,15 +34,16 @@ export default function HistoricoPage() {
         setLoading(true);
         try {
             const configRes = await APIService.getConfig();
-            if (configRes.data.status !== 'success') throw new Error('Falha ao carregar config');
+            const configData = configRes.data as any;
+            if (configData.status !== 'success') throw new Error('Falha ao carregar config');
 
-            const paths = configRes.data.paths;
+            const paths = configData.paths;
             const allItems: HistoryItem[] = [];
 
-            // 1. Processamentos (Vídeos com Pose)
             try {
                 const res = await APIService.browse(paths.videos_com_pose);
-                res.data.items.forEach(item => {
+                const data = res.data as any;
+                data.items.forEach((item: any) => {
                     if (!item.is_dir && item.name.endsWith('.mp4')) {
                         allItems.push({
                             id: `proc_${item.name}`,
@@ -54,10 +55,10 @@ export default function HistoricoPage() {
                 });
             } catch (e) { console.error('Erro ao ler processamentos', e); }
 
-            // 2. Re-identificações (resultados-reidentificacoes)
             try {
                 const res = await APIService.browse(paths.reidentificacoes);
-                res.data.items.forEach(item => {
+                const data = res.data as any;
+                data.items.forEach((item: any) => {
                     if (item.is_dir) {
                         allItems.push({
                             id: `reid_${item.name}`,
@@ -69,10 +70,10 @@ export default function HistoricoPage() {
                 });
             } catch (e) { console.error('Erro ao ler reidentificacoes', e); }
 
-            // 3. Anotações (resultados-anotacoes)
             try {
                 const res = await APIService.browse(paths.anotacoes);
-                res.data.items.forEach(item => {
+                const data = res.data as any;
+                data.items.forEach((item: any) => {
                     if (!item.is_dir && item.name.endsWith('.json')) {
                         allItems.push({
                             id: `annot_${item.name}`,
@@ -84,10 +85,10 @@ export default function HistoricoPage() {
                 });
             } catch (e) { console.error('Erro ao ler anotações', e); }
 
-            // 4. Modelos (modelos-lstm-treinados)
             try {
                 const res = await APIService.browse(paths.modelos);
-                res.data.items.forEach(item => {
+                const data = res.data as any;
+                data.items.forEach((item: any) => {
                     if (!item.is_dir && (item.name.endsWith('.pt') || item.name.endsWith('.pth'))) {
                         allItems.push({
                             id: `model_${item.name}`,

@@ -36,8 +36,9 @@ export default function RelatoriosPage() {
     // Carregar caminhos do backend
     useEffect(() => {
         APIService.getConfig().then(res => {
-            if (res.data.status === 'success') {
-                setRoots(res.data.paths);
+            const data = res.data as any;
+            if (data.status === 'success') {
+                setRoots(data.paths);
             }
         });
     }, []);

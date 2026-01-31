@@ -41,8 +41,9 @@ export default function TestesPage() {
     useEffect(() => {
         // Restaurar estado se houver teste em andamento
         APIService.healthCheck().then(res => {
+            const healthData = res.data as any;
             // Só mostra mensagem se for ESTE processo (test)
-            if (res.data.processing && res.data.current_process === 'test') {
+            if (healthData.processing && healthData.current_process === 'test') {
                 setLoading(true);
                 setMessage({ text: '⏳ Teste em andamento...', type: 'processing' });
                 setPageStatus('test', 'processing');

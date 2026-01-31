@@ -22,8 +22,9 @@ export default function ReidPage() {
 
     useEffect(() => {
         APIService.getConfig().then(res => {
-            if (res.data.status === 'success') {
-                setRoots(res.data.paths);
+            const data = res.data as any;
+            if (data.status === 'success') {
+                setRoots(data.paths);
             }
         });
     }, []);
@@ -288,7 +289,8 @@ export default function ReidPage() {
 
         try {
             const res = await APIService.saveToReidAgenda(inputPath, videoEntry);
-            if (res.data.status === 'success') {
+            const data = res.data as any;
+            if (data.status === 'success') {
                 // Atualiza estado local também
                 saveToBatch(selectedVideo.id);
                 setMessage(`✅ Vídeo "${selectedVideo.id}" agendado com sucesso!`);
@@ -331,12 +333,14 @@ export default function ReidPage() {
             const pollLogs = async () => {
                 try {
                     const res = await APIService.getLogs('process');
-                    if (res.data.logs && res.data.logs.length > 0) {
-                        setTerminalLogs(res.data.logs);
+                    const logsData = res.data as any;
+                    if (logsData.logs && logsData.logs.length > 0) {
+                        setTerminalLogs(logsData.logs);
                     }
 
                     const health = await APIService.healthCheck();
-                    if (!health.data.processing) {
+                    const healthData = health.data as any;
+                    if (!healthData.processing) {
                         setTerminalProcessing(false);
                         setLoading(false);
                         return; // Para polling

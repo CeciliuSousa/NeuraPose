@@ -11,7 +11,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # -- OTIMIZAÇÕES --
 USE_NVENC = True                    # Usar encoder GPU NVIDIA (h264_nvenc)
 NVENC_PRESET = "p4"                 # Preset NVENC (p1=fast, p7=quality)
-USE_TENSORRT = True                # Habilitar aceleração TensorRT (.engine)
+USE_TENSORRT = False                # Habilitar aceleração TensorRT (.engine)
 
 USE_FP16 = True                     # Half Precision (2x speed em RTX)
 USE_ASYNC_LOADER = True             # Pre-fetch frames (Threaded)
@@ -19,8 +19,8 @@ ASYNC_BUFFER_SIZE = 64              # Tamanho do buffer de leitura
 USE_PREFETCH = False                # Legacy flag (substituido por USE_ASYNC_LOADER)
 PREFETCH_BUFFER_SIZE = 32           # Legacy param
 YOLO_SKIP_FRAME_INTERVAL = 1        # Intervalo de frames para inferencia YOLO (1=sem skip)
-YOLO_BATCH_SIZE = 32
-RTMPOSE_BATCH_SIZE = 128
+YOLO_BATCH_SIZE = 256
+RTMPOSE_BATCH_SIZE = 256
 
 try:
     import onnxruntime as ort

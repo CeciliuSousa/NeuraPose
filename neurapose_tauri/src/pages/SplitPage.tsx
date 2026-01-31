@@ -40,15 +40,17 @@ export default function SplitPage() {
 
         // Restaurar estado se houver split em andamento
         APIService.healthCheck().then(res => {
+            const data = res.data as any;
             // Só mostra estado de loading se for ESTE processo (split)
-            if (res.data.processing && res.data.current_process === 'split') {
+            if (data.processing && data.current_process === 'split') {
                 setLoading(true);
             }
         }).catch(() => { });
 
         APIService.getConfig().then(res => {
-            if (res.data.status === 'success') {
-                setRoots(res.data.paths);
+            const data = res.data as any;
+            if (data.status === 'success') {
+                setRoots(data.paths);
                 setInputDir(''); // Força vazio para mostrar placeholder
                 if (savedPercent) setTrainPercent(parseInt(savedPercent));
             }
@@ -72,11 +74,13 @@ export default function SplitPage() {
             interval = setInterval(async () => {
                 try {
                     const res = await APIService.getLogs('split');
-                    setLogs(res.data.logs);
-                    localStorage.setItem('np_split_logs', JSON.stringify(res.data.logs));
+                    const data = res.data as any;
+                    setLogs(data.logs);
+                    localStorage.setItem('np_split_logs', JSON.stringify(data.logs));
 
                     const health = await APIService.healthCheck();
-                    if (!health.data.processing) {
+                    const healthData = health.data as any;
+                    if (!healthData.processing) {
                         setLoading(false);
                         setMessage({ text: '✅ Split concluído com sucesso!', type: 'success' });
                     }

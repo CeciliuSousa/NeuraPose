@@ -75,8 +75,9 @@ export default function TreinoPage() {
 
         // Restaurar estado se houver treino em andamento
         APIService.healthCheck().then(res => {
+            const healthData = res.data as any;
             // Só mostra mensagem se for ESTE processo (train)
-            if (res.data.processing && res.data.current_process === 'train') {
+            if (healthData.processing && healthData.current_process === 'train') {
                 setLoading(true);
                 setMessage({ text: '⏳ Treinamento em andamento...', type: 'processing' });
                 // Se está rodando, recuperamos logs

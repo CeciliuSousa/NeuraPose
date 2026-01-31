@@ -35,16 +35,18 @@ export default function ConverterPage() {
     useEffect(() => {
         // Restaurar estado se houver conversão em andamento
         APIService.healthCheck().then(res => {
+            const data = res.data as any;
             // Só mostra mensagem se for ESTE processo (convert)
-            if (res.data.processing && res.data.current_process === 'convert') {
+            if (data.processing && data.current_process === 'convert') {
                 setLoading(true);
                 setMessage({ text: '⏳ Conversão em andamento...', type: 'processing' });
             }
         }).catch(() => { });
 
-        APIService.getConfig().then((res: any) => {
-            if (res.data.status === 'success') {
-                setRoots((res as any).data.paths);
+        APIService.getConfig().then(res => {
+            const data = res.data as any;
+            if (data.status === 'success') {
+                setRoots(data.paths);
             }
         });
 
@@ -60,11 +62,13 @@ export default function ConverterPage() {
             interval = setInterval(async () => {
                 try {
                     const res = await APIService.getLogs('convert');
-                    setLogs(res.data.logs);
-                    localStorage.setItem('np_convert_logs', JSON.stringify(res.data.logs));
+                    const data = res.data as any;
+                    setLogs(data.logs);
+                    localStorage.setItem('np_convert_logs', JSON.stringify(data.logs));
 
                     const health = await APIService.healthCheck();
-                    if (!health.data.processing) {
+                    const healthData = health.data as any;
+                    if (!healthData.processing) {
                         setLoading(false);
                         setMessage({ text: '✅ Conversão concluída! Dataset pronto para treinamento.', type: 'success' });
                     }

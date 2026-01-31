@@ -6,13 +6,15 @@ interface VideoPlayerProps {
     fps?: number;
     onFrameChange?: (frame: number) => void;
     children?: ReactNode; // Para overlay customizado (canvas, etc)
+    playbackRate?: number; // Velocidade de reprodução (controlado externamente)
+    onPlaybackRateChange?: (rate: number) => void; // Callback quando velocidade muda
 }
 
 /**
  * Componente de player de vídeo reutilizável com controles de frame.
  * Usado em ReID e Anotações.
  */
-export function VideoPlayer({ src, fps = 30, onFrameChange, children }: VideoPlayerProps) {
+export function VideoPlayer({ src, fps = 30, onFrameChange, children, playbackRate = 0.25 }: VideoPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [isPlaying, setIsPlaying] = useState(false);
     const [currentTime, setCurrentTime] = useState(0);
@@ -27,7 +29,7 @@ export function VideoPlayer({ src, fps = 30, onFrameChange, children }: VideoPla
         if (!v) return;
 
         const handleLoadedMetadata = () => {
-            v.playbackRate = 0.25;
+            v.playbackRate = playbackRate;
         };
 
         const handleTimeUpdate = () => {
@@ -49,7 +51,14 @@ export function VideoPlayer({ src, fps = 30, onFrameChange, children }: VideoPla
             v.removeEventListener('play', handlePlay);
             v.removeEventListener('pause', handlePause);
         };
-    }, [src, fps, onFrameChange]);
+    }, [src, fps, onFrameChange, playbackRate]);
+
+    // Atualiza playbackRate quando a prop muda
+    useEffect(() => {
+        if (videoRef.current) {
+            videoRef.current.playbackRate = playbackRate;
+        }
+    }, [playbackRate]);
 
     const goToFrame = (frame: number) => {
         if (videoRef.current) {

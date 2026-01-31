@@ -10,7 +10,8 @@ import {
     Plus,
     Trash2,
     Camera,
-    AlertTriangle
+    AlertTriangle,
+    Gauge
 } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { APIService } from '../services/api';
@@ -30,6 +31,9 @@ interface VideoItem {
     creation_time: number;
 }
 
+// Opções de velocidade estilo YouTube
+const SPEED_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+
 export default function AnotacaoPage() {
     // Vídeos e seleção
     const [videos, setVideos] = useState<VideoItem[]>([]);
@@ -46,6 +50,9 @@ export default function AnotacaoPage() {
     const [temporalMode, setTemporalMode] = useState(false);
     const [currentFrame, setCurrentFrame] = useState(0);
     const [idIntervals, setIdIntervals] = useState<Record<string, Array<[number, number]>>>({});
+
+    // Speed Control
+    const [playbackRate, setPlaybackRate] = useState(0.5);
 
     // Editor State (para input manual)
     const [startInput, setStartInput] = useState<string>('');
@@ -90,14 +97,15 @@ export default function AnotacaoPage() {
 
     // Load inicial
     useEffect(() => {
-        APIService.getConfig().then((res: any) => {
-            if (res.data.status === 'success') {
-                setRoots(res.data.paths);
+        APIService.getConfig().then((res) => {
+            const data = res.data as any;
+            if (data.status === 'success') {
+                setRoots(data.paths);
                 setInputPath(''); // Inicia vazio
 
-                if (res.data.classes) {
-                    setClasse1(res.data.classes.classe1 || 'NORMAL');
-                    setClasse2(res.data.classes.classe2 || 'FURTO');
+                if (data.classes) {
+                    setClasse1(data.classes.classe1 || 'NORMAL');
+                    setClasse2(data.classes.classe2 || 'FURTO');
                 }
             }
         });
@@ -399,8 +407,33 @@ export default function AnotacaoPage() {
                                 key={selectedVideo.video_id}
                                 src={videoSrc}
                                 fps={30}
+                                playbackRate={playbackRate}
                                 onFrameChange={setCurrentFrame} // Captura frame para temporal
                             />
+
+                            {/* Speed Control */}
+                            <div className="flex items-center justify-center gap-2 py-2">
+                                <Gauge className="w-4 h-4 text-muted-foreground" />
+                                <span className="text-xs text-muted-foreground font-medium">Velocidade:</span>
+                                <div className="flex gap-1 bg-muted/30 p-1 rounded-lg border border-border/50">
+                                    {SPEED_OPTIONS.map((speed) => (
+                                        <button
+                                            key={speed}
+                                            onClick={() => setPlaybackRate(speed)}
+                                            className={`
+                                                px-2 py-1 text-xs font-bold rounded-md transition-all
+                                                ${playbackRate === speed
+                                                    ? 'bg-primary text-primary-foreground shadow-sm'
+                                                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                                                }
+                                            `}
+                                            title={`Velocidade ${speed}x`}
+                                        >
+                                            {speed}x
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
 
                             {/* Mensagem de feedback */}
                             <StatusMessage message={message} onClose={() => setMessage('')} autoCloseDelay={5000} className="mb-4" />

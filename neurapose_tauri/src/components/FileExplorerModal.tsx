@@ -41,7 +41,8 @@ export function FileExplorerModal({
                 loadPath(rootPath);
             } else if (!currentPath) {
                 APIService.getConfig().then(res => {
-                    const defaultPath = res.data.paths?.videos || 'C:\\';
+                    const data = res.data as any;
+                    const defaultPath = data.paths?.videos || 'C:\\';
                     loadPath(defaultPath);
                 }).catch(() => loadPath('C:\\'));
             } else {
