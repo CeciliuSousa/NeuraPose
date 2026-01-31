@@ -241,7 +241,7 @@ class CustomBoTSORT(BOTSORT_ORIGINAL):
         raw_tracks = self._format_output(self.tracked_stracks)
         
         # Configurações
-        BOX_ALPHA = 0.15      # (15% Atual / 85% Histórico) - Suavização Pesada
+        BOX_ALPHA = 0.35      # (Equilibrio para 30FPS) - Responsivo mas suave
         HISTORY_TTL = 60      # Mantém memória por 60 frames (2s) mesmo se o ID sumir
 
         smoothed_tracks = []
@@ -316,6 +316,58 @@ class CustomBoTSORT(BOTSORT_ORIGINAL):
         else:
             return np.empty((0, 7))
         # --- FIM SUAVIZAÇÃO EMA ---
+
+    def predict_only(self):
+        """
+        Executa APENAS a predição do Kalman Filter (sem update).
+        Usado para gerar caixas interpoladas em frames onde o YOLO não roda (Skip-Frame).
+        
+        Returns:
+            np.ndarray: Array de tracks preditos [x1, y1, x2, y2, id, conf, cls]
+        """
+        # Avança o Kalman Filter para TODOS os tracks ativos
+        for track in self.tracked_stracks:
+            track.predict()
+        
+        # Formata saída usando as posições preditas
+        raw_tracks = self._format_output(self.tracked_stracks)
+        
+        # Aplica EMA de suavização (mesma lógica do update)
+        if len(raw_tracks) == 0:
+            return np.empty((0, 7))
+        
+        BOX_ALPHA = 0.35
+        smoothed_tracks = []
+        current_ids_in_frame = set()
+        
+        for i in range(len(raw_tracks)):
+            track = raw_tracks[i].copy()
+            try:
+                t_id = int(track[4])
+                coords = track[:4]
+            except:
+                smoothed_tracks.append(track)
+                continue
+            
+            current_ids_in_frame.add(t_id)
+            
+            if t_id in self.box_history:
+                history_data = self.box_history[t_id]
+                if isinstance(history_data, dict) and 'coords' in history_data:
+                    prev_coords = history_data['coords']
+                else:
+                    prev_coords = history_data
+                smooth_coords = coords * BOX_ALPHA + prev_coords * (1.0 - BOX_ALPHA)
+                self.box_history[t_id] = {'coords': smooth_coords, 'missed_frames': 0}
+                track[:4] = smooth_coords
+            else:
+                self.box_history[t_id] = {'coords': coords, 'missed_frames': 0}
+            
+            smoothed_tracks.append(track)
+        
+        if len(smoothed_tracks) > 0:
+            return np.array(smoothed_tracks)
+        return np.empty((0, 7))
 
     def init_track(self, results, img=None):
         if len(results) == 0:

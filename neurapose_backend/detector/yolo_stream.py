@@ -356,8 +356,20 @@ class YoloStreamDetector:
                                 clss = np.zeros((rows, 1), dtype=np.float32)
                                 dets = np.hstack((dets, clss))
                         
-                        # Atualiza Tracker (CPU)
-                        tracks = tracker.update(dets, frame)
+                        # ============================================================
+                        # SMARTSKIP: Usa Kalman Prediction em frames pulados
+                        # ============================================================
+                        is_yolo_frame = i in detections_map and len(detections_map.get(i, [])) > 0
+                        
+                        if is_yolo_frame:
+                            # Frame com detecção YOLO: Update completo
+                            tracks = tracker.update(dets, frame)
+                        elif len(dets) == 0 and hasattr(tracker, 'predict_only'):
+                            # Frame PULADO: Usa Kalman Predict (Interpolação Suave)
+                            tracks = tracker.predict_only()
+                        else:
+                            # Fallback: Update com dets vazio
+                            tracks = tracker.update(dets, frame)
                         
                     except Exception as e:
                         print(Fore.RED + f"[ERRO] Falha no tracking frame {current_frame_idx}: {e}")

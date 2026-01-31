@@ -29,7 +29,7 @@ except ImportError: pass
 
 # -- MODELOS --
 # YOLO (Detecção)
-YOLO_MODEL = "yolov8l.pt"
+YOLO_MODEL = "yolo11m.pt"
 YOLO_IMGSZ = 640
 YOLO_CONF_THRESHOLD = 0.35
 YOLO_CLASS_PERSON = 0
@@ -169,18 +169,19 @@ BOTSORT_YAML_PATH = ROOT / "tracker" / "configuracao" / "botsort_custom.yaml"
 
 BOT_SORT_CONFIG = {
     "tracker_type": "botsort",
-    "track_high_thresh": 0.5,   # (Padrão 0.5) Só rastreia se o YOLO tiver certeza média. Limpa lixo.
+    "track_high_thresh": 0.6,
     "track_low_thresh": 0.1,
-    "new_track_thresh": 0.6,    # (Padrão 0.6) Permite criar IDs novos se necessário (evita misturar pessoas).
-    "track_buffer": 60,         # (CORREÇÃO: 60 frames = 2 segundos). O suficiente para passar atrás de alguém, mas curto para matar fantasmas.
-    "match_thresh": 0.80,       # (Padrão)
-    "appearance_thresh": 0.25,  # (Padrão BoT-SORT) Confia mais na geometria, usa aparência só para desempate.
-    "proximity_thresh": 0.5,
-    "gmc_method": "none", # Tenta reativar o GMC (se disponível) ou use None se der erro.
+    "new_track_thresh": 0.60,
+    "track_buffer": 300,
+    "match_thresh": 0.90,
+    "appearance_thresh": 0.25,
+    "proximity_thresh": 0.75,
+    "gmc_method": "none",
     "fuse_score": True,
     "with_reid": True,
     "model": str(OSNET_PATH),
 }
+
 # Legacy
 DATASETS_ROOT = TEST_DATASETS_ROOT
 TRAIN_DIR = TEST_DATASETS_ROOT / TRAIN_SPLIT / "videos"
