@@ -144,7 +144,7 @@ class CustomBoTSORT(BOTSORT_ORIGINAL):
             return self._format_output(self.tracked_stracks)
         
         # GMC (Global Motion Compensation)
-        if self.args.gmc_method != "none" and img is not None:
+        if self.args.gmc_method is not None and self.args.gmc_method != "none" and img is not None:
             try:
                 # print("DEBUG: Applying GMC...")
                 H = self.gmc.apply(img, dets[:, :4])
@@ -234,41 +234,88 @@ class CustomBoTSORT(BOTSORT_ORIGINAL):
         self.lost_stracks.extend(lost_stracks)
         self.lost_stracks = self.sub_stracks(self.lost_stracks, removed_stracks)
         self.removed_stracks.extend(removed_stracks)
+        # Remove duplicatas
         self.tracked_stracks, self.lost_stracks = self.remove_duplicate_stracks(self.tracked_stracks, self.lost_stracks)
         
-        self.tracked_stracks, self.lost_stracks = self.remove_duplicate_stracks(self.tracked_stracks, self.lost_stracks)
-        
-        # --- POST-PROCESS: EMA SMOOTHING (ANTI-JITTER) ---
+        # --- POST-PROCESS: EMA SMOOTHING (COM PERSISTÊNCIA TTL) ---
         raw_tracks = self._format_output(self.tracked_stracks)
         
+        # Configurações
+        BOX_ALPHA = 0.15      # (15% Atual / 85% Histórico) - Suavização Pesada
+        HISTORY_TTL = 60      # Mantém memória por 60 frames (2s) mesmo se o ID sumir
+
+        smoothed_tracks = []
+        current_ids_in_frame = set()
+
+        # 1. Atualizar Tracks Atuais
         if len(raw_tracks) > 0:
-            BOX_ALPHA = 0.6  # 60% Nova Posição, 40% Inércia
-            current_ids = set()
-            
-            # Itera sobre o array numpy (que é mutável)
             for i in range(len(raw_tracks)):
-                track = raw_tracks[i]
-                t_id = int(track[4])
-                coords = track[:4] # x1, y1, x2, y2
-                current_ids.add(t_id)
+                track = raw_tracks[i].copy() # Trabalha em cópia
+                
+                # Tenta extrair ID e Coordenadas
+                try:
+                    t_id = int(track[4])
+                    coords = track[:4]
+                except:
+                    smoothed_tracks.append(track)
+                    continue
+
+                current_ids_in_frame.add(t_id)
 
                 if t_id in self.box_history:
-                    # Aplica EMA: Suave = Atual * Alpha + Anterior * (1 - Alpha)
-                    prev_coords = self.box_history[t_id]
+                    # ID existe na memória: Recupera dados antigos
+                    history_data = self.box_history[t_id]
+                    
+                    # Verifica compatibilidade (dict vs ndarray)
+                    if isinstance(history_data, dict) and 'coords' in history_data:
+                        prev_coords = history_data['coords']
+                    else:
+                        prev_coords = history_data # Fallback
+
+                    # Aplica Fórmula EMA
                     smooth_coords = coords * BOX_ALPHA + prev_coords * (1.0 - BOX_ALPHA)
+                    
+                    # Atualiza memória e reseta contador de "sumiço"
+                    self.box_history[t_id] = {'coords': smooth_coords, 'missed_frames': 0}
+                    
+                    # Aplica coordenadas suaves na saída
+                    track[:4] = smooth_coords
                 else:
-                    smooth_coords = coords
+                    # ID Novo: Inicializa sem suavizar (evita lag de entrada)
+                    self.box_history[t_id] = {'coords': coords, 'missed_frames': 0}
                 
-                # Atualiza histórico e o track atual
-                self.box_history[t_id] = smooth_coords
-                raw_tracks[i, :4] = smooth_coords # Sobrescreve coordenadas brutas
-            
-            # Limpeza de memória (IDs que sumiram)
-            # Remove do self.box_history IDs que não estão em current_ids
-            # (Nota: Fazer isso a cada frame pode ser custoso se houver muitos IDs, mas ok para < 100)
-            self.box_history = {k:v for k,v in self.box_history.items() if k in current_ids}
-            
-        return raw_tracks
+                smoothed_tracks.append(track)
+        else:
+             smoothed_tracks = []
+
+        # 2. Garbage Collection Inteligente (Remove apenas expirados)
+        keys_to_remove = []
+        # Itera sobre CÓPIA das chaves
+        for t_id in list(self.box_history.keys()):
+            if t_id not in current_ids_in_frame:
+                # Recupera ou inicializa estrutura
+                data = self.box_history[t_id]
+                if not isinstance(data, dict): 
+                    data = {'coords': data, 'missed_frames': 0}
+                
+                # Incrementa contador de frames perdidos
+                data['missed_frames'] += 1
+                self.box_history[t_id] = data
+                
+                # Se passou do limite (TTL), marca para remoção definitiva
+                if data['missed_frames'] > HISTORY_TTL:
+                    keys_to_remove.append(t_id)
+        
+        # Remove IDs mortos
+        for k in keys_to_remove:
+            del self.box_history[k]
+
+        # Retorna Np Array (compatibilidade com yolo_stream)
+        if len(smoothed_tracks) > 0:
+            return np.array(smoothed_tracks)
+        else:
+            return np.empty((0, 7))
+        # --- FIM SUAVIZAÇÃO EMA ---
 
     def init_track(self, results, img=None):
         if len(results) == 0:

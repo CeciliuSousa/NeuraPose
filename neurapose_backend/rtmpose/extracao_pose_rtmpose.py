@@ -221,7 +221,7 @@ class ExtratorPoseRTMPose:
                 "frame": frame_idx,
                 "botsort_id": meta["raw_tid"],
                 "id_persistente": meta["pid"],
-                "bbox": meta["box"],
+                "bbox": meta["box"], # <--- [AUDIT] GARANTIDO: USANDO BOX SUAVIZADA DO TRACKER (NÃO RECALCULAR)
                 "confidence": meta["conf"],
                 "keypoints": kps_suavizados.tolist()
             })

@@ -198,7 +198,7 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
     
     # Vídeo Final (Usa módulo nucleo/visualizacao)
     # IMPORTANTE: Usar o vídeo normalizado para garantir sincronia de frames
-    print(Fore.CYAN + f"[INFO] RENDERIZANDO VÍDEO: {pred_video_path.name}...")
+    # print(Fore.CYAN + f"[INFO] RENDERIZANDO VÍDEO: {pred_video_path.name}...")
     gerar_video_predicao(
         video_path=norm_path,
         registros=records,

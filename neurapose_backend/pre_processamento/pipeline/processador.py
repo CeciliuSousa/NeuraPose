@@ -125,7 +125,7 @@ def processar_video(video_path: Path, out_root: Path, show=False):
     
     if registros:
         # print(Fore.CYAN + f"[INFO] Gerando vídeo visualização...")
-        print(Fore.CYAN + f"[INFO] RENDERIZANDO VÍDEO: {out_video_path.name}...")
+        # print(Fore.CYAN + f"[INFO] RENDERIZANDO VÍDEO: {out_video_path.name}...")
         gerar_video_predicao(
             video_path=norm_path,
             registros=registros,

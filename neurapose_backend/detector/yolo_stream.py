@@ -87,7 +87,7 @@ class YoloStreamDetector:
         
         # Seleciona o modelo correto (Engine ou PT)
         if cm.USE_TENSORRT and self.engine_path.exists():
-            print(Fore.GREEN + f"[INFO] Usando Modelo Otimizado (TensorRT): {self.engine_path.name}")
+            print(Fore.GREEN + f"[INFO] MODELO OTIMIZADO (TensorRT): {self.engine_path.name}")
             # TensorRT deve ser carregado diretamente para a task 'track' ou 'predict'
             # Ultralytics carrega .engine automaticamente via YOLO('model.engine')
             self.model = YOLO(str(self.engine_path), task="detect")
@@ -179,7 +179,7 @@ class YoloStreamDetector:
         use_async = getattr(cm, 'USE_ASYNC_LOADER', True)
         
         if use_async:
-            print(Fore.CYAN + f"[INFO] Iniciando Leitura Assíncrona (Buffer={buffer_size})...")
+            print(Fore.CYAN + f"[INFO] INICIANDO LEITURA ASSÍNCRONA (Buffer={buffer_size})...")
             loader = ThreadedVideoLoader(str(video_path), buffer_size=buffer_size)
             fps = loader.fps
             total_frames = loader.total_frames

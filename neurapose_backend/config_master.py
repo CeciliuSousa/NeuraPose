@@ -18,7 +18,7 @@ USE_ASYNC_LOADER = True             # Pre-fetch frames (Threaded)
 ASYNC_BUFFER_SIZE = 64              # Tamanho do buffer de leitura
 USE_PREFETCH = False                # Legacy flag (substituido por USE_ASYNC_LOADER)
 PREFETCH_BUFFER_SIZE = 32           # Legacy param
-YOLO_SKIP_FRAME_INTERVAL = 3        # Intervalo de frames para inferencia YOLO (1=sem skip)
+YOLO_SKIP_FRAME_INTERVAL = 1        # Intervalo de frames para inferencia YOLO (1=sem skip)
 YOLO_BATCH_SIZE = 32
 RTMPOSE_BATCH_SIZE = 128
 
@@ -133,7 +133,7 @@ REID_MANUAL_LABELS_FILENAME = "labels_reid.json"
 RTMPOSE_PREPROCESSING_PATH = RTMPOSE_PATH
 
 # Parâmetros sequência
-MAX_FRAMES_PER_SEQUENCE = 30
+MAX_FRAMES_PER_SEQUENCE = 9000
 FPS_TARGET = 30.0
 FRAME_DISPLAY_W = 1280
 FRAME_DISPLAY_H = 720
@@ -169,14 +169,14 @@ BOTSORT_YAML_PATH = ROOT / "tracker" / "configuracao" / "botsort_custom.yaml"
 
 BOT_SORT_CONFIG = {
     "tracker_type": "botsort",
-    "track_high_thresh": 0.5,   # Confiança mínima para iniciar rastro (Manter)
-    "track_low_thresh": 0.1,    # Confiança para manter rastro oculto (Manter baixo)
-    "new_track_thresh": 0.7,    # AUMENTAR! Só cria ID novo (ex: 85) se confiança for muito alta. Evita fantasmas.
-    "track_buffer": 120,        # AUMENTAR! Lembra do ID por 4 segundos (120 frames) se ele sumir.
-    "match_thresh": 0.80,       # AUMENTAR! Mais tolerante na geometria (IoU). Aceita "pulos" maiores do skip-frame.
-    "appearance_thresh": 0.45,  # AUMENTAR! (0.25 -> 0.45). Aceita 45% de diferença visual (roupa, ângulo) antes de trocar ID.
+    "track_high_thresh": 0.5,   # (Padrão 0.5) Só rastreia se o YOLO tiver certeza média. Limpa lixo.
+    "track_low_thresh": 0.1,
+    "new_track_thresh": 0.6,    # (Padrão 0.6) Permite criar IDs novos se necessário (evita misturar pessoas).
+    "track_buffer": 60,         # (CORREÇÃO: 60 frames = 2 segundos). O suficiente para passar atrás de alguém, mas curto para matar fantasmas.
+    "match_thresh": 0.80,       # (Padrão)
+    "appearance_thresh": 0.25,  # (Padrão BoT-SORT) Confia mais na geometria, usa aparência só para desempate.
     "proximity_thresh": 0.5,
-    "gmc_method": "none",       # Desligado para camera fixa (economiza CPU) -> Usando "none" string para compatibilidade
+    "gmc_method": "none", # Tenta reativar o GMC (se disponível) ou use None se der erro.
     "fuse_score": True,
     "with_reid": True,
     "model": str(OSNET_PATH),
