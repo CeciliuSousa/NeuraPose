@@ -26,11 +26,11 @@ from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
 from neurapose_backend.nucleo.pipeline import executar_pipeline_extracao
 
 # Módulo de Inferência LSTM (Específico do APP)
-from neurapose_backend.app.modulos.inferencia_lstm import rodar_lstm_uma_sequencia, rodar_lstm_batch
+from neurapose_backend.app.modulos.inferencia_lstm import rodar_lstm_batch
 
 
 from neurapose_backend.nucleo.video_utils import normalizar_video
-from neurapose_backend.nucleo.sanatizer import sanitizar_dados
+# from neurapose_backend.nucleo.sanatizer import sanitizar_dados
 
 def processar_video(video_path: Path, model, mu, sigma, show_preview=False, output_dir: Path = None):
     """
@@ -172,8 +172,8 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
         r[f"score_{cm.CLASSE2}_id"] = score
 
     # [SANITIZAÇÃO] Anti-Teleporte (Velocity Gating)
-    print(Fore.CYAN + "[INFO] APLICANDO SANITIZAÇÃO NO JSON...")
-    records = sanitizar_dados(records, threshold=150.0)
+    # print(Fore.CYAN + "[INFO] APLICANDO SANITIZAÇÃO NO JSON...")
+    # records = sanitizar_dados(records, threshold=150.0)
 
     # Salva JSON Final
     with open(json_path, "w", encoding="utf-8") as f:

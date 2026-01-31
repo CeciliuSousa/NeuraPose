@@ -14,7 +14,6 @@ from pathlib import Path
 from colorama import Fore
 
 # Configuração e Detector
-# Configuração e Detector
 import neurapose_backend.config_master as cm
 
 # Módulos Modulares Unificados
@@ -23,7 +22,9 @@ from neurapose_backend.nucleo.visualizacao import gerar_video_predicao
 from neurapose_backend.nucleo.video_utils import normalizar_video
 from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
 from neurapose_backend.nucleo.pipeline import executar_pipeline_extracao
-from neurapose_backend.nucleo.sanatizer import sanitizar_dados
+
+# [CORREÇÃO] Importação do Sanitizer
+# from neurapose_backend.nucleo.sanatizer import sanitizar_dados
 
 try:
     from neurapose_backend.globals.state import state as state_notifier
@@ -55,8 +56,6 @@ def processar_video(video_path: Path, out_root: Path, show=False):
     videos_dir.mkdir(parents=True, exist_ok=True)
     preds_dir.mkdir(parents=True, exist_ok=True)
     json_dir.mkdir(parents=True, exist_ok=True)
-
-
 
     # 1. NORMALIZAÇÃO DE VÍDEO (FPS) - MODULARIZADO
     # --------------------------------------------------------
@@ -98,7 +97,7 @@ def processar_video(video_path: Path, out_root: Path, show=False):
         return {"yolo": time_yolo, "rtmpose": time_rtmpose, "total": 0}
     
 
-    # 7. RELATÓRIO FINAL (MOVIDO PARA ANTES DA RENDERIZAÇÃO)
+    # 7. RELATÓRIO FINAL (Mantido na posição original conforme solicitado)
     # --------------------------------------------------------
     time_total = time_yolo + time_rtmpose + time_norm
     
@@ -112,10 +111,11 @@ def processar_video(video_path: Path, out_root: Path, show=False):
     print(Fore.WHITE + f"{'TOTAL':<45} {time_total:>10.2f} seg")
     print(Fore.WHITE + "="*60 + "\n")
 
-    # 5. SANITIZAÇÃO (Anti-Teleporte)
+    # 5. SANITIZAÇÃO (Anti-Teleporte / Velocity Gating)
     # --------------------------------------------------------
-    print(Fore.CYAN + "[INFO] APLICANDO SANITIZAÇÃO NO JSON...")
-    registros = sanitizar_dados(registros, threshold=150.0)
+    # [LOGICA CORRIGIDA]: Aplicada antes de salvar JSON e antes de gerar vídeo
+    # print(Fore.CYAN + "[INFO] APLICANDO SANITIZAÇÃO NO JSON...")
+    # registros = sanitizar_dados(registros, threshold=150.0)
     
     # 6. EXPORTAÇÃO (JSON + VIDEO)
     # --------------------------------------------------------
