@@ -23,6 +23,7 @@ from neurapose_backend.nucleo.visualizacao import gerar_video_predicao
 from neurapose_backend.nucleo.video_utils import normalizar_video
 from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
 from neurapose_backend.nucleo.pipeline import executar_pipeline_extracao
+from neurapose_backend.nucleo.sanatizer import sanitizar_dados
 
 try:
     from neurapose_backend.globals.state import state as state_notifier
@@ -111,7 +112,12 @@ def processar_video(video_path: Path, out_root: Path, show=False):
     print(Fore.WHITE + f"{'TOTAL':<45} {time_total:>10.2f} seg")
     print(Fore.WHITE + "="*60 + "\n")
 
-    # 5. EXPORTAÇÃO (JSON + VIDEO)
+    # 5. SANITIZAÇÃO (Anti-Teleporte)
+    # --------------------------------------------------------
+    print(Fore.CYAN + "[INFO] APLICANDO SANITIZAÇÃO NO JSON...")
+    registros = sanitizar_dados(registros, threshold=150.0)
+    
+    # 6. EXPORTAÇÃO (JSON + VIDEO)
     # --------------------------------------------------------
     json_path = json_dir / f"{video_path.stem}_{int(cm.FPS_TARGET)}fps.json"
     

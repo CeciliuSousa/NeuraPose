@@ -28,6 +28,7 @@ neurapose_backend/resultados-reidentificacoes/
 neurapose_backend/videos/*
 neurapose_backend/modelos-lstm-treinados/
 neurapose_backend/relatorios-testes/
+neurapose_backend/scripts/
 
 neurapose_backend/data/
 neurapose_backend/logs/
