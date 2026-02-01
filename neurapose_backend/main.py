@@ -2038,7 +2038,7 @@ async def split_dataset(req: SplitRequest, background_tasks: BackgroundTasks):
         
     def run_split_task():
         state.is_running = True
-        with CaptureOutput():
+        with CaptureOutput('split'):
             try:
                 run_split(
                     root_path=input_path,
@@ -2046,7 +2046,8 @@ async def split_dataset(req: SplitRequest, background_tasks: BackgroundTasks):
                     output_root=output_root,
                     train_split=req.train_split,
                     test_split=req.test_split,
-                    train_ratio=req.train_ratio
+                    train_ratio=req.train_ratio,
+                    logger=logger
                 )
             except Exception as e:
                 logger.error(f"Erro no split de dataset: {e}")

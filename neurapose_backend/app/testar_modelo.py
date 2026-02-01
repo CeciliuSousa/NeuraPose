@@ -107,7 +107,7 @@ def main():
         if state.stop_requested: break
         print(Fore.BLUE + f"[{i+1}/{total_videos}] PROCESSANDO: {video_path.name}")
         
-        predictions = processar_video(video_path, lstm_model, norm_stats.get("mu"), norm_stats.get("sigma"), show_preview=args.show, output_dir=out_report_dir)
+        predictions = processar_video(video_path, lstm_model, norm_stats.get("mu"), norm_stats.get("sigma"), show_preview=args.show, output_dir=out_report_dir, labels_path=labels_gt_path)
         
         if predictions and 'tempos' in predictions and 'total' in predictions['tempos']:
             total_time_all += predictions['tempos']['total']

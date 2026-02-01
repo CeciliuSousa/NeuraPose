@@ -32,7 +32,7 @@ from neurapose_backend.app.modulos.inferencia_lstm import rodar_lstm_batch
 from neurapose_backend.nucleo.video_utils import normalizar_video
 # from neurapose_backend.nucleo.sanatizer import sanitizar_dados
 
-def processar_video(video_path: Path, model, mu, sigma, show_preview=False, output_dir: Path = None):
+def processar_video(video_path: Path, model, mu, sigma, show_preview=False, output_dir: Path = None, labels_path: Path = None):
     """
     Processa um único vídeo do início ao fim usando a arquitetura modularizada.
     
@@ -40,6 +40,9 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
         video_path: Caminho do vídeo.
         model: Modelo LSTM carregado.
         mu, sigma: Estatísticas de normalização do LSTM.
+        show_preview: Se deve mostrar preview do vídeo.
+        output_dir: Diretório de saída.
+        labels_path: Caminho para o labels.json (opcional, para comparação de classes reais).
     """
     
     # Inicializa Extrator RTMPose
@@ -128,16 +131,71 @@ def processar_video(video_path: Path, model, mu, sigma, show_preview=False, outp
             
             id_preds[gid] = classe_id
             id_scores[gid] = score
-            
-            print(Fore.YELLOW + "[PREDIÇÃO]" + Fore.WHITE + f" ID: {gid}: {cm.CLASSE2 if classe_id == 1 else cm.CLASSE1} ({score:.2f})")
     
-    # Logs para IDs sem sequencia válida (Ex: poucos frames) ficam como 0
-
+    # 4. Carrega labels.json para comparação com classes reais
+    # Usa labels_path se fornecido, senão tenta buscar em output_dir
+    effective_labels_path = labels_path if labels_path else (output_dir / "anotacoes" / "labels.json" if output_dir else None)
+    real_labels = {}
+    video_stem = video_path.stem
+    
+    if effective_labels_path and effective_labels_path.exists():
+        try:
+            with open(effective_labels_path, "r", encoding="utf-8") as f:
+                all_labels = json.load(f)
+            # Busca labels para este vídeo (pode ter sufixo diferente)
+            for key in all_labels:
+                if key in video_stem or video_stem in key:
+                    video_labels = all_labels[key]
+                    for pid, cls in video_labels.items():
+                        # Suporta formato simples ("FURTO") ou complexo ({"classe": "FURTO"})
+                        if isinstance(cls, dict):
+                            real_labels[int(pid)] = cls.get("classe", cm.CLASSE1).upper()
+                        else:
+                            real_labels[int(pid)] = str(cls).upper()
+                    break
+        except Exception as e:
+            print(Fore.YELLOW + f"[AVISO] Não foi possível carregar labels.json: {e}")
+    
+    # 5. Imprime Tabela de Resultados (Markdown-like)
+    print("")
+    print("| ID  | Real   | Predito | Conf.  | OK? |")
+    print("|-----|--------|---------|--------|-----|")
+    
+    correct = 0
+    total = 0
+    
+    for gid in sorted(ids_validos):
+        classe_id = id_preds.get(gid, 0)
+        score = id_scores.get(gid, 0.0)
+        pred_class = cm.CLASSE2 if classe_id == 1 else cm.CLASSE1
+        
+        # Classe real (se disponível)
+        real_class = real_labels.get(gid, "?")
+        
+        # Calcula se está correto
+        if real_class != "?":
+            is_correct = real_class.upper() == pred_class.upper()
+            status = "✓" if is_correct else "✗"
+            if is_correct:
+                correct += 1
+            total += 1
+        else:
+            status = "-"
+        
+        # Formata linha da tabela
+        print(f"| {gid:>3} | {real_class[:6]:<6} | {pred_class[:7]:<7} | {score*100:>5.1f}% | {status:^3} |")
+    
+    # Resultado final
+    if total > 0:
+        accuracy = (correct / total) * 100
+        print(f"\nResultado: {correct}/{total} ({accuracy:.1f}%)")
+    else:
+        print(f"\nResultado: Sem labels de referência disponíveis")
 
     t1_temp = time.time()
     tempos["temporal_total"] = t1_temp - t0_temp
     
-    print(Fore.GREEN + "[OK]" + Fore.WHITE + " CLASSIFICAÇÃO CONCLUIDA!")
+    print(Fore.GREEN + "\n[OK]" + Fore.WHITE + " CLASSIFICAÇÃO CONCLUIDA!")
     
     # 4.1 RELATÓRIO DE TEMPOS (Teste de Modelo)
     # ============================================================
