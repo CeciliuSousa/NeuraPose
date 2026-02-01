@@ -44,7 +44,7 @@ OUT_PT.parent.mkdir(parents=True, exist_ok=True)
 
 # Dimensoes da pose
 C, V = cm.NUM_CHANNELS, cm.NUM_JOINTS  # C=2 (x,y), V=17 keypoints
-max_frames = cm.MAX_FRAMES_PER_SEQUENCE
+max_frames = cm.TRAIN_SEQUENCE_LENGTH  # T=30 para modelo LSTM/TFT
 min_frames_validos = cm.MIN_FRAMES_PER_ID
 np.random.seed(42)
 

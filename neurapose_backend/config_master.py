@@ -133,7 +133,8 @@ REID_MANUAL_LABELS_FILENAME = "labels_reid.json"
 RTMPOSE_PREPROCESSING_PATH = RTMPOSE_PATH
 
 # Parâmetros sequência
-MAX_FRAMES_PER_SEQUENCE = 9000
+MAX_FRAMES_PER_SEQUENCE = 9000  # Para streaming de vídeo (inferência)
+TRAIN_SEQUENCE_LENGTH = 30      # Para treinamento/conversão de dataset (modelo espera T=30)
 FPS_TARGET = 30.0
 FRAME_DISPLAY_W = 1280
 FRAME_DISPLAY_H = 720

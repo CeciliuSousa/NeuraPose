@@ -9,8 +9,8 @@ from datetime import datetime
 
 init(autoreset=True)
 
-BASE_DIR = "meus-modelos-treinados"
-OUT_PATH = os.path.join(BASE_DIR, "Ranking_Modelos.txt")
+BASE_DIR = "neurapose_backend/modelos-lstm-treinados"
+OUT_PATH = "neurapose_backend/modelos-lstm-treinados/Ranking_Modelos.txt"
 
 # -----------------------------------------------------------
 # Extração das métricas principais do relatório
@@ -25,7 +25,8 @@ def extract_metrics_from_txt(file_path):
         f1_match = re.search(r"F1(?: Macro)?[^:\d]*[: ]+([\d\.]+)", text)
         acc_match = re.search(r"Acc[^:\d]*[: ]+([\d\.]+)", text)
         loss_match = re.search(r"Loss[^:\d]*[: ]+([\d\.]+)", text)
-
+        epoch_match = re.search(r"Melhor epoca: (\d+)", text)
+        
         # tenta extrair matriz de confusão (formato textual)
         matrix_match = re.search(
             r"Matriz de Confusão.*?normal.*?(\d+).*?(\d+).*?furto.*?(\d+).*?(\d+)",
@@ -44,6 +45,26 @@ def extract_metrics_from_txt(file_path):
                 "normal": [int(matrix_match.group(1)), int(matrix_match.group(2))],
                 "furto": [int(matrix_match.group(3)), int(matrix_match.group(4))]
             }
+
+        # Se Loss for None, tenta buscar no JSON de histórico usando a melhor época
+        if metrics["Loss"] is None and epoch_match:
+            best_epoch = int(epoch_match.group(1))
+            json_path = file_path.replace("relatorio_", "historico_").replace(".txt", ".json")
+            
+            if os.path.exists(json_path):
+                try:
+                    import json
+                    with open(json_path, "r", encoding="utf-8") as jf:
+                        history = json.load(jf)
+                        # Busca a entrada correspondente à melhor época
+                        for entry in history:
+                            if entry.get("epoch") == best_epoch:
+                                val_loss = entry.get("val_loss")
+                                if val_loss is not None:
+                                    metrics["Loss"] = float(val_loss)
+                                break
+                except Exception as json_err:
+                    print(Fore.YELLOW + f"Aviso: erro ao ler json {json_path}: {json_err}")
 
     except Exception as e:
         print(Fore.RED + f"Erro ao ler {file_path}: {e}")
@@ -66,7 +87,7 @@ def colorize_metric(value, is_loss=False):
 
 def find_report_files(model_dir):
     for fname in os.listdir(model_dir):
-        if fname.startswith("relatorio_treino_validacao") and fname.endswith(".txt"):
+        if fname.startswith("relatorio_") and fname.endswith(".txt"):
             return os.path.join(model_dir, fname)
     return None
 
