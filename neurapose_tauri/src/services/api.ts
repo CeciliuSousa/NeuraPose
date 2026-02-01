@@ -182,6 +182,7 @@ export const APIService = {
     listAnnotationVideos: (rootPath?: string) => api.get<{ videos: any[] }>('/annotate/list', { params: { root_path: rootPath } }),
     getAnnotationDetails: (videoId: string, rootPath?: string) => api.get<any>(`/annotate/${videoId}/details`, { params: { root_path: rootPath } }),
     saveAnnotations: (data: AnnotationRequest) => api.post('/annotate/save', data),
+    saveAllPendingAnnotations: (rootPath: string, defaultClass: string) => api.post('/annotate/save-all-pending', { root_path: rootPath, default_class: defaultClass }),
 
     splitDataset: (data: SplitRequest) => api.post('/dataset/split', data),
 

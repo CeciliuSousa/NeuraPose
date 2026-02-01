@@ -17,7 +17,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { APIService } from '../services/api';
 
 import { FileExplorerModal } from '../components/FileExplorerModal';
-import { VideoPlayer } from '../components/ui/VideoPlayer';
+import { AnnotationPlayer } from '../components/AnnotationPlayer';
 import { FilterDropdown, FilterOption } from '../components/ui/FilterDropdown';
 import { StatusMessage } from '../components/ui/StatusMessage';
 import { TerminalModal } from '../components/ui/TerminalModal';
@@ -45,6 +45,7 @@ export default function AnotacaoPage() {
     // Dados do vídeo selecionado
     const [videoIds, setVideoIds] = useState<{ id: number; frames: number }[]>([]);
     const [annotations, setAnnotations] = useState<Record<string, string>>({});
+    const [frameData, setFrameData] = useState<any>(null); // Dados de frame para overlay
 
     // Temporal Mode State
     const [temporalMode, setTemporalMode] = useState(false);
@@ -137,6 +138,7 @@ export default function AnotacaoPage() {
         setVideoIds([]);
         setAnnotations({});
         setIdIntervals({}); // Reset intervals
+        setFrameData(null); // Reset frame data
         setMessage('');
 
         try {
@@ -145,12 +147,28 @@ export default function AnotacaoPage() {
             const ids = data.ids || [];
             setVideoIds(ids);
 
-            // Por padrão todos são classe1 (NORMAL)
+            // Usa labels retornados pela API, ou classe1 (NORMAL) como fallback
             const initial: Record<string, string> = {};
             ids.forEach((item: any) => {
-                initial[String(item.id)] = classe1;
+                // Se a API retornou um label salvo diferente de "desconhecido", usa ele
+                if (item.label && item.label !== 'desconhecido') {
+                    initial[String(item.id)] = item.label;
+                } else {
+                    initial[String(item.id)] = classe1;
+                }
             });
             setAnnotations(initial);
+
+            // Carrega dados de frame para overlay de bboxes coloridas
+            try {
+                const frameRes = await APIService.getReIDData(video.video_id, inputPath);
+                const frameDataResponse = (frameRes as any).data;
+                if (frameDataResponse) {
+                    setFrameData(frameDataResponse);
+                }
+            } catch (frameErr) {
+                console.warn('Não foi possível carregar dados de frame para overlay:', frameErr);
+            }
         } catch (err) {
             console.error(err);
             setMessage("Erro ao carregar dados do vídeo");
@@ -191,6 +209,35 @@ export default function AnotacaoPage() {
             updated.splice(index, 1);
             return { ...prev, [id]: updated };
         });
+    };
+
+    // Salvar todos os vídeos pendentes com classe1 (modo não temporal)
+    const handleSaveAllPending = async () => {
+        if (!inputPath) return;
+
+        const confirmMsg = `Isso irá salvar ${stats.pending} vídeos pendentes com todos os IDs como "${classe1}". Deseja continuar?`;
+        if (!confirm(confirmMsg)) return;
+
+        setTerminalOpen(true);
+        setTerminalProcessing(true);
+        setTerminalLogs(['[INFO] Iniciando salvamento em lote de vídeos pendentes...']);
+        setSaving(true);
+
+        try {
+            await APIService.clearLogs('default');
+            const res = await APIService.saveAllPendingAnnotations(inputPath, classe1);
+            const data = (res as any).data;
+
+            setTerminalLogs(prev => [...prev, `[OK] ${data.message}`]);
+            setTerminalProcessing(false);
+            setSaving(false);
+            loadVideos(); // Recarrega lista para atualizar status
+        } catch (err: any) {
+            console.error(err);
+            setTerminalLogs(prev => [...prev, `[ERRO] Falha ao salvar em lote: ${err.message || err}`]);
+            setTerminalProcessing(false);
+            setSaving(false);
+        }
     };
 
     const handleSave = async () => {
@@ -356,8 +403,9 @@ export default function AnotacaoPage() {
 
             <div className="grid grid-cols-12 gap-6 flex-1 overflow-hidden">
                 {/* Lista de Vídeos */}
-                <div className="col-span-3 border-r border-border pr-4 overflow-y-auto space-y-4">
-                    <div className="flex flex-col gap-2">
+                <div className="col-span-3 border-r border-border pr-4 flex flex-col overflow-hidden">
+                    {/* Header e Filtro - Fixos */}
+                    <div className="flex flex-col gap-2 pb-3 border-b border-border/50 shrink-0">
                         <div className="flex items-center justify-between">
                             <h3 className="text-xs font-bold uppercase text-muted-foreground">Fila de Vídeos</h3>
                             <span className="text-[10px] text-muted-foreground font-mono">{displayVideos.length} / {videos.length}</span>
@@ -369,7 +417,8 @@ export default function AnotacaoPage() {
                         />
                     </div>
 
-                    <div className="space-y-2">
+                    {/* Lista de Vídeos - Com Scroll */}
+                    <div className="flex-1 overflow-y-auto space-y-2 py-3">
                         {displayVideos.map(v => (
                             <div
                                 key={v.video_id}
@@ -391,6 +440,23 @@ export default function AnotacaoPage() {
                             </div>
                         ))}
                     </div>
+
+                    {/* Botão Salvar Todos Pendentes - Fixo no rodapé */}
+                    {!temporalMode && stats.pending > 0 && (
+                        <div className="pt-3 border-t border-border/50 shrink-0 space-y-2">
+                            <button
+                                onClick={handleSaveAllPending}
+                                disabled={saving || !inputPath}
+                                className="w-full px-3 py-2.5 bg-gradient-to-r from-amber-600 to-orange-600 text-white rounded-lg font-semibold text-sm hover:brightness-110 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                            >
+                                <Save className="w-4 h-4" />
+                                Salvar Pendentes ({stats.pending})
+                            </button>
+                            <p className="text-[10px] text-muted-foreground text-center leading-relaxed">
+                                Salva todos os vídeos pendentes como <span className="font-bold text-primary">{classe1}</span>
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Player e Anotações */}
@@ -402,10 +468,14 @@ export default function AnotacaoPage() {
                         </div>
                     ) : (
                         <>
-                            {/* Video Player */}
-                            <VideoPlayer
+                            {/* Video Player with Colored BBoxes */}
+                            <AnnotationPlayer
                                 key={selectedVideo.video_id}
                                 src={videoSrc}
+                                frameData={frameData}
+                                annotations={annotations}
+                                classe1={classe1}
+                                classe2={classe2}
                                 fps={30}
                                 playbackRate={playbackRate}
                                 onFrameChange={setCurrentFrame} // Captura frame para temporal

@@ -415,8 +415,9 @@ export default function ReidPage() {
 
             <div className="grid grid-cols-12 gap-6 flex-1 overflow-hidden">
                 {/* LISTA DE VÍDEOS (Sidebar) */}
-                <div className="col-span-3 border-r border-border pr-4 overflow-y-auto space-y-4">
-                    <div className="flex flex-col gap-2">
+                <div className="col-span-3 border-r border-border pr-4 flex flex-col overflow-hidden">
+                    {/* Header e Filtro - Fixos */}
+                    <div className="flex flex-col gap-2 pb-3 border-b border-border/50 shrink-0">
                         <div className="flex items-center justify-between">
                             <h3 className="text-xs font-bold uppercase text-muted-foreground">Fila de Vídeos</h3>
                             <span className="text-[10px] text-muted-foreground font-mono">{displayVideos.length} / {videos.length}</span>
@@ -430,7 +431,8 @@ export default function ReidPage() {
                         />
                     </div>
 
-                    <div className="space-y-2">
+                    {/* Lista de Vídeos - Com Scroll */}
+                    <div className="flex-1 overflow-y-auto space-y-2 py-3">
                         {displayVideos.map(v => (
                             <div
                                 key={v.id}

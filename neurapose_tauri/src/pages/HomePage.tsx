@@ -153,7 +153,7 @@ export default function HomePage() {
                         />
                         <ActionCard
                             href="/anotacao"
-                            title="Anotação Semiautística"
+                            title="Anotação"
                             description="Classificar poses para treinamento de rede"
                             icon={PenTool}
                             gradient="from-cyan-600/20 to-cyan-400/10 hover:border-cyan-500/30"

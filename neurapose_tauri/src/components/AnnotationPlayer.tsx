@@ -1,19 +1,30 @@
-
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Play, Pause } from 'lucide-react';
 
-interface ReidPlayerProps {
+interface AnnotationPlayerProps {
     src: string;
-    reidData: any;
-    swaps: { src: number; tgt: number; start: number; end: number }[];
-    deletions: { id: number; start: number; end: number }[];
-    cuts: { start: number; end: number }[];
+    frameData: any;
+    annotations: Record<string, string>;
+    classe1?: string;
+    classe2?: string;
     fps?: number;
+    playbackRate?: number;
+    onFrameChange?: (frame: number) => void;
 }
 
-export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: ReidPlayerProps) {
+export function AnnotationPlayer({
+    src,
+    frameData,
+    annotations,
+    classe1 = 'NORMAL',
+    classe2 = 'FURTO',
+    fps = 30,
+    playbackRate = 0.5,
+    onFrameChange
+}: AnnotationPlayerProps) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     const [isPlaying, setIsPlaying] = useState(false);
     const [displayFrame, setDisplayFrame] = useState(0);
@@ -23,8 +34,8 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
     const frameDuration = 1 / fps;
 
     const framesLookup = useMemo(() => {
-        return reidData?.frames || null;
-    }, [reidData]);
+        return frameData?.frames || null;
+    }, [frameData]);
 
     const syncSize = () => {
         if (videoRef.current && canvasRef.current) {
@@ -35,6 +46,7 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
 
     /**
      * Calcula os parâmetros de escala considerando letterboxing (object-contain)
+     * Retorna: { scaleX, scaleY, offsetX, offsetY }
      */
     const getScalingParams = (v: HTMLVideoElement, c: HTMLCanvasElement) => {
         const vidW = v.videoWidth;
@@ -46,6 +58,7 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
             return null;
         }
 
+        // Aspect ratios
         const videoAspect = vidW / vidH;
         const canvasAspect = canvasW / canvasH;
 
@@ -55,10 +68,12 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
         let offsetY = 0;
 
         if (videoAspect > canvasAspect) {
+            // Video is wider - letterbox on top/bottom
             displayWidth = canvasW;
             displayHeight = canvasW / videoAspect;
             offsetY = (canvasH - displayHeight) / 2;
         } else {
+            // Video is taller - letterbox on left/right
             displayHeight = canvasH;
             displayWidth = canvasH * videoAspect;
             offsetX = (canvasW - displayWidth) / 2;
@@ -80,11 +95,13 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
 
         const currentFrame = Math.round(v.currentTime * fps);
         setDisplayFrame(currentFrame);
+        onFrameChange?.(currentFrame);
 
-        const canvasW = c.width;
-        const canvasH = c.height;
+        ctx.clearRect(0, 0, c.width, c.height);
 
-        ctx.clearRect(0, 0, canvasW, canvasH);
+        if (!framesLookup) return;
+        const detections = framesLookup[String(currentFrame)];
+        if (!detections || !Array.isArray(detections)) return;
 
         // Get scaling with letterbox offset
         const params = getScalingParams(v, c);
@@ -92,80 +109,58 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
 
         const { scaleX, scaleY, offsetX, offsetY } = params;
 
-        // Draw CUT overlay
-        const inCut = cuts.some(cut => currentFrame >= cut.start && currentFrame <= cut.end);
-        if (inCut) {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-            ctx.fillRect(0, 0, canvasW, canvasH);
-            ctx.fillStyle = '#ff6b6b';
-            ctx.font = 'bold 20px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(`⚠ TRECHO CORTADO (Frame ${currentFrame})`, canvasW / 2, 35);
-            ctx.textAlign = 'left';
-        }
+        for (let i = 0; i < detections.length; i++) {
+            const item = detections[i];
+            if (!item) continue;
 
-        // Draw BBoxes
-        if (framesLookup) {
-            const frameData = framesLookup[String(currentFrame)];
-            if (frameData && Array.isArray(frameData)) {
-                for (let i = 0; i < frameData.length; i++) {
-                    const item = frameData[i];
-                    if (!item) continue;
+            const pid = item.id_persistente ?? item.botsort_id ?? item.id;
+            if (pid === undefined || pid === null) continue;
 
-                    const pid = item.id_persistente ?? item.botsort_id ?? item.id;
-                    if (pid === undefined || pid === null) continue;
-
-                    let x1: number, y1: number, x2: number, y2: number;
-                    if (Array.isArray(item.bbox) && item.bbox.length >= 4) {
-                        [x1, y1, x2, y2] = item.bbox;
-                    } else if (item.bbox && typeof item.bbox === 'object') {
-                        x1 = item.bbox.x1; y1 = item.bbox.y1; x2 = item.bbox.x2; y2 = item.bbox.y2;
-                    } else {
-                        continue;
-                    }
-
-                    const itemIsDeleted = deletions.some(d => d.id === pid && currentFrame >= d.start && currentFrame <= d.end);
-                    const swapRule = swaps.find(s => s.src === pid && currentFrame >= s.start && currentFrame <= s.end);
-
-                    let strokeColor: string | null = null;
-                    let bgColor: string | null = null;
-                    let textColor = 'white';
-                    let label: string | null = null;
-
-                    if (itemIsDeleted) {
-                        strokeColor = '#ef4444';
-                        bgColor = 'rgba(239, 68, 68, 0.9)';
-                        label = `❌ ID ${pid}`;
-                    } else if (swapRule) {
-                        strokeColor = '#fbbf24';
-                        bgColor = 'rgba(251, 191, 36, 0.9)';
-                        textColor = 'black';
-                        label = `${pid} → ${swapRule.tgt}`;
-                    }
-
-                    if (strokeColor && label && bgColor) {
-                        // Apply scaling WITH offset for letterboxing
-                        const sx1 = x1 * scaleX + offsetX;
-                        const sy1 = y1 * scaleY + offsetY;
-                        const w = (x2 - x1) * scaleX;
-                        const h = (y2 - y1) * scaleY;
-
-                        ctx.strokeStyle = strokeColor;
-                        ctx.lineWidth = 3;
-                        ctx.strokeRect(sx1, sy1, w, h);
-
-                        ctx.font = 'bold 12px sans-serif';
-                        const textWidth = ctx.measureText(label).width + 12;
-                        const labelHeight = 22;
-
-                        ctx.fillStyle = bgColor;
-                        ctx.fillRect(sx1, sy1 - labelHeight, textWidth, labelHeight);
-
-                        ctx.fillStyle = textColor;
-                        ctx.fillText(label, sx1 + 6, sy1 - 6);
-                    }
-                }
+            let x1: number, y1: number, x2: number, y2: number;
+            if (Array.isArray(item.bbox) && item.bbox.length >= 4) {
+                [x1, y1, x2, y2] = item.bbox;
+            } else if (item.bbox && typeof item.bbox === 'object') {
+                x1 = item.bbox.x1;
+                y1 = item.bbox.y1;
+                x2 = item.bbox.x2;
+                y2 = item.bbox.y2;
+            } else {
+                continue;
             }
+
+            const classe = annotations[String(pid)] || classe1;
+
+            let strokeColor: string;
+            let bgColor: string;
+
+            if (classe === classe2) {
+                strokeColor = '#ef4444';
+                bgColor = 'rgba(239, 68, 68, 0.85)';
+            } else {
+                strokeColor = '#22c55e';
+                bgColor = 'rgba(34, 197, 94, 0.85)';
+            }
+
+            // Apply scaling WITH offset for letterboxing
+            const sx1 = x1 * scaleX + offsetX;
+            const sy1 = y1 * scaleY + offsetY;
+            const w = (x2 - x1) * scaleX;
+            const h = (y2 - y1) * scaleY;
+
+            ctx.strokeStyle = strokeColor;
+            ctx.lineWidth = 3;
+            ctx.strokeRect(sx1, sy1, w, h);
+
+            const label = `ID ${pid}`;
+            ctx.font = 'bold 12px sans-serif';
+            const textWidth = ctx.measureText(label).width + 12;
+            const labelHeight = 22;
+
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(sx1, sy1 - labelHeight, textWidth, labelHeight);
+
+            ctx.fillStyle = 'white';
+            ctx.fillText(label, sx1 + 6, sy1 - 6);
         }
     };
 
@@ -185,14 +180,14 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
             isActive = false;
             cancelAnimationFrame(animationId);
         };
-    }, [framesLookup, swaps, deletions, cuts, fps]);
+    }, [framesLookup, annotations, classe1, classe2, fps, onFrameChange]);
 
     useEffect(() => {
         const v = videoRef.current;
         if (!v) return;
 
         const handleLoadedMetadata = () => {
-            v.playbackRate = 0.25;
+            v.playbackRate = playbackRate;
             syncSize();
         };
 
@@ -204,7 +199,9 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
         v.addEventListener('pause', handlePause);
         window.addEventListener('resize', syncSize);
 
-        if (v.readyState >= 1) handleLoadedMetadata();
+        if (v.readyState >= 1) {
+            handleLoadedMetadata();
+        }
 
         return () => {
             v.removeEventListener('loadedmetadata', handleLoadedMetadata);
@@ -212,7 +209,13 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
             v.removeEventListener('pause', handlePause);
             window.removeEventListener('resize', syncSize);
         };
-    }, [src]);
+    }, [src, playbackRate]);
+
+    useEffect(() => {
+        if (videoRef.current) {
+            videoRef.current.playbackRate = playbackRate;
+        }
+    }, [playbackRate]);
 
     const goToFrame = (frame: number) => {
         if (videoRef.current) {
@@ -220,7 +223,10 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
         }
     };
 
-    const stepFrame = (delta: number) => goToFrame(displayFrame + delta);
+    const stepFrame = (delta: number) => {
+        goToFrame(displayFrame + delta);
+    };
+
     const resetVideo = () => goToFrame(0);
 
     const togglePlay = () => {
@@ -233,7 +239,9 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
     const handleFrameInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter' || e.key === 'Escape') {
             const frame = parseInt(frameInputValue);
-            if (e.key === 'Enter' && !isNaN(frame) && frame >= 0) goToFrame(frame);
+            if (e.key === 'Enter' && !isNaN(frame) && frame >= 0) {
+                goToFrame(frame);
+            }
             setEditingFrame(false);
             setFrameInputValue('');
         }
@@ -246,9 +254,16 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
 
     return (
         <div className="flex flex-col space-y-3 select-none">
-            <div className="relative rounded-lg overflow-hidden bg-black aspect-video border border-border group">
-                <video ref={videoRef} src={src} className="w-full h-full object-contain" />
-                <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none" />
+            <div ref={containerRef} className="relative rounded-lg overflow-hidden bg-black aspect-video border border-border group">
+                <video
+                    ref={videoRef}
+                    src={src}
+                    className="w-full h-full object-contain"
+                />
+                <canvas
+                    ref={canvasRef}
+                    className="absolute inset-0 pointer-events-none"
+                />
             </div>
 
             <div className="relative h-16 flex items-center justify-center p-3 bg-gradient-to-r from-secondary/40 via-secondary/20 to-secondary/40 rounded-xl border border-border/50 backdrop-blur-sm">
@@ -290,16 +305,12 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
 
             <div className="flex items-center justify-center gap-6 text-xs text-muted-foreground">
                 <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-sm bg-green-500"></div>
+                    <span>{classe1}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
                     <div className="w-3 h-3 rounded-sm bg-red-500"></div>
-                    <span>ID Excluído</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-sm bg-amber-400"></div>
-                    <span>ID Trocado</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                    <div className="w-3 h-3 rounded-sm bg-black/60 border border-border/50"></div>
-                    <span>Trecho Cortado</span>
+                    <span>{classe2}</span>
                 </div>
             </div>
         </div>

@@ -1835,6 +1835,25 @@ def get_annotation_details(video_id: str, root_path: Optional[str] = None):
     if not json_path.exists():
         logger.error(f"[ANNOTATE] JSON não encontrado para: {video_id}")
         raise HTTPException(status_code=404, detail=f"JSON não encontrado: {video_id}")
+    
+    # Carrega labels existentes para este vídeo
+    labels_path = root / "anotacoes" / "labels.json"
+    saved_labels = {}
+    video_stem = video_id.replace("_pose", "").replace("_30fps", "_30fps")  # Mantém sufixo _30fps se existir
+    
+    if labels_path.exists():
+        try:
+            with open(labels_path, "r", encoding="utf-8") as f:
+                all_labels = json.load(f) or {}
+                # Busca anotações para este vídeo específico
+                saved_labels = all_labels.get(video_stem, {})
+                if not saved_labels:
+                    # Tenta também sem _30fps caso não encontre
+                    alt_stem = video_stem.replace("_30fps", "")
+                    saved_labels = all_labels.get(alt_stem, {})
+                logger.info(f"[ANNOTATE] Labels carregados para {video_stem}: {saved_labels}")
+        except Exception as e:
+            logger.warning(f"[ANNOTATE] Erro ao carregar labels.json: {e}")
         
     records = carregar_pose_records(json_path)
     frames_index, id_counter = indexar_por_frame(records)
@@ -1843,10 +1862,21 @@ def get_annotation_details(video_id: str, root_path: Optional[str] = None):
     ids_info = []
     for gid, count in id_counter.items():
         if count >= cm.MIN_FRAMES_PER_ID:
+            # Busca label salvo para este ID (pode ser string simples ou objeto complexo)
+            saved_label = saved_labels.get(str(gid), None)
+            
+            # Se for objeto complexo (modo temporal), extrai a classe principal
+            if isinstance(saved_label, dict):
+                label = saved_label.get("classe", "desconhecido")
+            elif saved_label:
+                label = saved_label
+            else:
+                label = "desconhecido"
+            
             ids_info.append({
                 "id": gid,
                 "frames": count,
-                "label": "desconhecido"
+                "label": label
             })
             
     return {
@@ -1899,6 +1929,97 @@ def save_annotations(req: AnnotationRequest):
         return {
             "status": "success", 
             "message": f"Anotações salvas para {req.video_stem}",
+            "labels_path": str(labels_path)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar: {e}")
+
+
+class BatchAnnotationRequest(BaseModel):
+    """Request para salvar todos vídeos pendentes com classe default."""
+    root_path: str
+    default_class: str = "NORMAL"
+
+
+@app.post("/annotate/save-all-pending")
+def save_all_pending(req: BatchAnnotationRequest):
+    """Salva todos os vídeos pendentes com a classe default.
+    
+    Útil para datasets com muitos vídeos normais: anota-se apenas os de furto,
+    depois usa este endpoint para salvar todos os restantes como NORMAL.
+    """
+    root = Path(req.root_path).resolve()
+    
+    # Ajusta se usuário selecionou subpasta
+    if root.name in ["predicoes", "jsons", "videos", "reid", "anotacoes"]:
+        root = root.parent
+    
+    jsons_path = root / "jsons"
+    if not jsons_path.exists():
+        raise HTTPException(status_code=404, detail=f"Pasta jsons não encontrada: {jsons_path}")
+    
+    # Carrega labels existentes
+    labels_dir = root / "anotacoes"
+    labels_path = labels_dir / "labels.json"
+    labels_dir.mkdir(parents=True, exist_ok=True)
+    
+    todas_labels = {}
+    if labels_path.exists():
+        try:
+            with open(labels_path, "r", encoding="utf-8") as f:
+                todas_labels = json.load(f) or {}
+        except:
+            pass
+    
+    # Lista todos os JSONs de pose disponíveis (exclui _tracking.json)
+    all_json_files = list(jsons_path.glob("*.json"))
+    json_files = [f for f in all_json_files if not f.name.endswith("_tracking.json")]
+    
+    saved_count = 0
+    for jf in json_files:
+        # video_stem é o nome do arquivo sem extensão (ex: cena-normal-00000_30fps)
+        video_stem = jf.stem
+        
+        # Pula se já foi anotado
+        if video_stem in todas_labels:
+            continue
+        
+        # Carrega o JSON e conta IDs (lógica inline)
+        try:
+            with open(jf, "r", encoding="utf-8") as f:
+                records = json.load(f)
+            
+            # Conta ocorrências de cada ID persistente
+            from collections import Counter
+            id_counter = Counter()
+            for r in records:
+                gid = r.get("id_persistente", -1)
+                if gid is not None and gid >= 0:
+                    id_counter[int(gid)] += 1
+            
+            # Cria anotações com classe default para IDs com frames suficientes
+            annotations = {}
+            for gid, count in id_counter.items():
+                if count >= cm.MIN_FRAMES_PER_ID:
+                    annotations[str(gid)] = req.default_class
+            
+            if annotations:
+                todas_labels[video_stem] = annotations
+                saved_count += 1
+                logger.info(f"[BATCH ANNOTATE] Salvando {video_stem} com {len(annotations)} IDs como {req.default_class}")
+        except Exception as e:
+            logger.warning(f"[BATCH ANNOTATE] Erro ao processar {video_stem}: {e}")
+            continue
+    
+    # Salva o arquivo labels.json atualizado
+    try:
+        with open(labels_path, "w", encoding="utf-8") as f:
+            json.dump(todas_labels, f, indent=4, ensure_ascii=False)
+        
+        return {
+            "status": "success",
+            "message": f"Salvos {saved_count} vídeos pendentes como {req.default_class}",
+            "saved_count": saved_count,
             "labels_path": str(labels_path)
         }
     except Exception as e:

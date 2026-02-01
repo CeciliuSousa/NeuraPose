@@ -79,6 +79,19 @@ export function TerminalModal({
         }
     }, [isOpen]);
 
+    // ESC key to close modal (only when not processing)
+    useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isOpen && !isProcessing) {
+                onClose();
+            }
+        };
+        if (isOpen) {
+            document.addEventListener('keydown', handleEscape);
+        }
+        return () => document.removeEventListener('keydown', handleEscape);
+    }, [isOpen, isProcessing, onClose]);
+
     // Determina classes de cor para cada log
     const getLogClasses = (log: string): string => {
         const isError = log.includes('[ERRO]') || log.includes('[ERROR]');

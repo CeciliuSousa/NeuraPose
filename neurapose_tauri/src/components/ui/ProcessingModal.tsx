@@ -51,6 +51,19 @@ export function ProcessingModal({
         }
     }, [isProcessing, isOpen, onClose, autoCloseOnComplete, autoCloseDelay]);
 
+    // ESC key to close modal (only when not processing)
+    useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isOpen && !isProcessing && onClose) {
+                onClose();
+            }
+        };
+        if (isOpen) {
+            document.addEventListener('keydown', handleEscape);
+        }
+        return () => document.removeEventListener('keydown', handleEscape);
+    }, [isOpen, isProcessing, onClose]);
+
     if (!isOpen) return null;
 
     return (
