@@ -86,7 +86,7 @@ def processar_video(video_path: Path, out_root: Path, show=False):
         video_path_norm=norm_path,
         pose_extractor=pose_extractor,
         batch_size=cm.YOLO_BATCH_SIZE,
-        verbose=True
+        verbose=False
     )
     
     time_yolo = tempos["yolo"]

@@ -1,5 +1,6 @@
 import sys
 import os
+import psutil
 # Silencia logs verbosos do OpenCV/FFmpeg
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 

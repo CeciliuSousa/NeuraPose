@@ -56,6 +56,9 @@ fn request_python(options: RequestOptions) -> Result<ApiResponse, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // [OPTIMIZATION] Disable WebView2 GPU to free up RTX 4060 for backend
+    std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", "--disable-gpu --disable-d3d11");
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![request_python])
