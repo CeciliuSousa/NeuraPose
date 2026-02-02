@@ -95,151 +95,227 @@ def run_split(root_path: Path, dataset_name: str, output_root: Path,
     class2 = cm.CLASSE2.lower()  # furto
 
     # ============================================================
-    # PASSO 1: Flatten - Lista de todos os IDs
+    # PASSO 1: Agrupar IDs por Vídeo
     # ============================================================
-    _log("[1/6] Extraindo IDs de todos os vídeos...")
-    all_ids, class1_ids, class2_ids = flatten_labels(labels, class1, class2)
+    _log("[1/6] Agrupando IDs por vídeo...")
     
-    total_ids = len(all_ids)
-    total_class1 = len(class1_ids)
-    total_class2 = len(class2_ids)
+    # Estrutura: {video_stem: {"class1": [id...], "class2": [id...]}}
+    videos_map = {}
     
-    _log(f"[INFO] Total IDs: {total_ids}")
-    _log(f"[INFO] {class1.upper()}: {total_class1}")
-    _log(f"[INFO] {class2.upper()}: {total_class2}")
+    for video_stem, id_map in labels.items():
+        if video_stem not in videos_map:
+            videos_map[video_stem] = {"class1": [], "class2": []}
+            
+        for pid, label_info in id_map.items():
+            classe = extract_class_from_label(label_info)
+            if classe == class1:
+                videos_map[video_stem]["class1"].append(str(pid))
+            elif classe == class2:
+                videos_map[video_stem]["class2"].append(str(pid))
+
+    # Métricas globais
+    total_class1_global = sum(len(v["class1"]) for v in videos_map.values())
+    total_class2_global = sum(len(v["class2"]) for v in videos_map.values())
+    
+    _log(f"[INFO] Total Global: {total_class1_global} {class1.upper()} | {total_class2_global} {class2.upper()}")
 
     # ============================================================
-    # PASSO 2: Balanceamento 1:1
+    # PASSO 2: Seleção de VÍDEOS para Treino
     # ============================================================
-    _log("[2/6] Calculando split balanceado...")
+    _log("[2/6] Selecionando VÍDEOS para treino (Alvo: ~85% Furto)...")
     
-    min_class = min(total_class1, total_class2)
-    train_per_class = max(1, int(min_class * train_ratio))
+    # Alvo de IDs de Furto no treino
+    target_train_class2 = int(total_class2_global * train_ratio)
     
-    # Garante que sobra pelo menos 1 para teste
-    if min_class > 1 and train_per_class >= min_class:
-        train_per_class = min_class - 1
+    # Separa vídeos que tem furto dos que só tem normal
+    videos_with_class2 = [v for v, dados in videos_map.items() if len(dados["class2"]) > 0]
+    videos_only_class1 = [v for v, dados in videos_map.items() if len(dados["class2"]) == 0]
     
-    _log(f"[SPLIT] Treino por classe: {train_per_class}")
-
-    # ============================================================
-    # PASSO 3: Seleção aleatória (seed fixo)
-    # ============================================================
-    _log("[3/6] Selecionando IDs para treino/teste...")
-    
+    # Embaralha para aleatoriedade
     np.random.seed(42)
-    np.random.shuffle(class1_ids)
-    np.random.shuffle(class2_ids)
+    np.random.shuffle(videos_with_class2)
+    np.random.shuffle(videos_only_class1)
     
-    train_class1 = class1_ids[:train_per_class]
-    train_class2 = class2_ids[:train_per_class]
-    test_class1 = class1_ids[train_per_class:]
-    test_class2 = class2_ids[train_per_class:]
+    train_videos = []
+    current_train_class2 = 0
     
-    train_ids = train_class1 + train_class2
-    test_ids = test_class1 + test_class2
+    # Greedy: Adiciona vídeos com furto até atingir meta
+    for v in videos_with_class2:
+        if current_train_class2 < target_train_class2:
+            train_videos.append(v)
+            current_train_class2 += len(videos_map[v]["class2"])
+        else:
+            # Sim, vamos garantir separação por vídeo.
+            pass
+            
+    # [FIX 353 vs 261] Supplementation Strategy
+    # Se os vídeos de furto não tiverem normais suficientes para 1:1,
+    # precisamos pegar vídeos EXCLUSIVAMENTE normais para completar.
     
-    _log(f"[SPLIT] Treino: {len(train_class1)} {class1.upper()} + {len(train_class2)} {class2.upper()} = {len(train_ids)}")
-    _log(f"[SPLIT] Teste: {len(test_class1)} {class1.upper()} + {len(test_class2)} {class2.upper()} = {len(test_ids)}")
+    # Recalcula quantas classes temos nos vídeos selecionados
+    current_train_class1 = sum(len(videos_map[v]["class1"]) for v in train_videos)
+    
+    # Se faltar Normals para atingir a quantidade de Furtos (1:1)
+    if current_train_class1 < current_train_class2:
+        needed = current_train_class2 - current_train_class1
+        _log(f"[BALANCE] Faltam {needed} IDs Normais para parear. Buscando em vídeos sem furto...")
+        
+        for v in videos_only_class1:
+            if current_train_class1 >= current_train_class2:
+                break
+            
+            # Adiciona vídeo
+            train_videos.append(v)
+            current_train_class1 += len(videos_map[v]["class1"])
+    
+    # Agora sim temos videos suficientes.
+    train_videos_set = set(train_videos)
+    test_videos = [v for v in videos_map.keys() if v not in train_videos_set]
+    
+    _log(f"[SPLIT] Vídeos Treino: {len(train_videos)}")
+    _log(f"[SPLIT] Vídeos Teste: {len(test_videos)}")
+    _log(f"[SPLIT] IDs Furto no Treino: {current_train_class2}/{total_class2_global} ({current_train_class2/total_class2_global*100:.1f}%)")
 
     # ============================================================
-    # PASSO 4: Gerar labels filtrados por ID
+    # PASSO 3: Balanceamento 1:1 INTERNO no Treino
+    # ============================================================
+    _log("[3/6] Aplicando balanceamento 1:1 nos IDs de Treino...")
+    
+    # Coleta todos os IDs disponíveis nos vídeos de treino
+    train_pool_class1 = [] # [(video, id), ...]
+    train_pool_class2 = [] # [(video, id), ...]
+    
+    for v in train_videos:
+        for pid in videos_map[v]["class1"]:
+            train_pool_class1.append((v, pid))
+        for pid in videos_map[v]["class2"]:
+            train_pool_class2.append((v, pid))
+            
+    # O numero de furtos no treino é o limitante
+    limit = len(train_pool_class2)
+    
+    # Seleciona Normals randomicamente para igualar Furtos
+    if len(train_pool_class1) > limit:
+        np.random.shuffle(train_pool_class1)
+        selected_train_class1 = train_pool_class1[:limit]
+    else:
+        selected_train_class1 = train_pool_class1
+        
+    # IDs finais de treino (Tuple: video, id, classe)
+    final_train_ids = []
+    for v, pid in train_pool_class2:
+        final_train_ids.append((v, pid, class2))
+    for v, pid in selected_train_class1:
+        final_train_ids.append((v, pid, class1))
+        
+    _log(f"[BALANCE] Treino Final: {len(train_pool_class2)} {class2.upper()} + {len(selected_train_class1)} {class1.upper()}")
+
+    # ============================================================
+    # PASSO 4: Gerar Labels
     # ============================================================
     def build_filtered_labels(id_list, orig_labels):
-        """Cria labels.json apenas com IDs selecionados."""
+        """Cria labels.json filtrado para treino."""
         filtered = {}
-        for video_stem, pid, classe in id_list:
-            if video_stem not in filtered:
-                filtered[video_stem] = {}
-            # Pega label original para manter formato complexo se existir
+        for video_stem, pid, _ in id_list:
+            if video_stem not in filtered: filtered[video_stem] = {}
             filtered[video_stem][pid] = orig_labels[video_stem][pid]
         return filtered
+        
+    # Treino: Apenas IDs selecionados (balanceados)
+    train_labels = build_filtered_labels(final_train_ids, labels)
     
-    train_labels = build_filtered_labels(train_ids, labels)
-    test_labels = build_filtered_labels(test_ids, labels)
+    # Teste: TODOS os labels dos vídeos de teste (Consistência total)
+    test_labels = {k: v for k, v in labels.items() if k in test_videos}
 
     # ============================================================
-    # PASSO 5: Copiar arquivos
+    # PASSO 5: Copiar Arquivos
     # ============================================================
-    _log("[4/6] Copiando JSONs para treino...")
-    train_videos_set = set(x[0] for x in train_ids)
+    
+    # A) TREINO (JSONs filtrados)
+    _log("[4/6] Gerando dados de Treino...")
     copied_train = 0
-    for video_stem in train_videos_set:
+    
+    # Agrupa IDs de treino por vídeo para facilitar filtro
+    train_ids_by_video = {}
+    for v, pid, _ in final_train_ids:
+        if v not in train_ids_by_video: train_ids_by_video[v] = set()
+        train_ids_by_video[v].add(pid)
+        
+    for video_stem, allowed_ids in train_ids_by_video.items():
+        # Busca JSON original
         json_path = find_file(jsons_dir, video_stem, [".json"])
         if not json_path:
             json_path = find_file(cm.PROCESSING_JSONS_DIR, video_stem, [".json"])
+            
         if json_path and json_path.exists():
-            shutil.copy(json_path, train_dados / f"{video_stem}.json")
-            copied_train += 1
-    _log(f"[OK] {copied_train}/{len(train_videos_set)} JSONs copiados para treino")
+            # Carrega, filtra e salva
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            # Filtra registros (apenas IDs balanceados)
+            filtered_data = [r for r in data if str(r.get("id_persistente", r.get("id"))) in allowed_ids]
+            
+            if filtered_data:
+                with open(train_dados / f"{video_stem}.json", "w", encoding="utf-8") as f:
+                    json.dump(filtered_data, f, indent=2)
+                copied_train += 1
+                
+    _log(f"[OK] {copied_train} JSONs de treino gerados (filtrados).")
 
-    _log("[5/6] Copiando vídeos para teste...")
-    test_videos_set = set(x[0] for x in test_ids)
+    # B) TESTE (Vídeos Brutos)
+    _log("[5/6] Copiando vídeos de Teste...")
     copied_test = 0
-    for video_stem in test_videos_set:
+    for video_stem in test_videos:
         vid_path = find_file(videos_dir, video_stem, [".mp4", ".m4v"])
         if not vid_path:
             vid_path = find_file(cm.PROCESSING_VIDEOS_DIR, video_stem, [".mp4", ".m4v"])
         if vid_path and vid_path.exists():
             shutil.copy(vid_path, test_videos_dir / f"{video_stem}{vid_path.suffix}")
             copied_test += 1
-    _log(f"[OK] {copied_test}/{len(test_videos_set)} vídeos copiados para teste")
+    _log(f"[OK] {copied_test} vídeos de teste copiados.")
 
-    # Salvar labels filtrados
+    # Salvar Labels
     with open(train_anotacoes / "labels.json", "w", encoding="utf-8") as f:
         json.dump(train_labels, f, indent=4, ensure_ascii=False)
-    
     with open(test_anotacoes / "labels.json", "w", encoding="utf-8") as f:
         json.dump(test_labels, f, indent=4, ensure_ascii=False)
 
-    # Referência de balanceamento
+    # Reference
     balance_ref = {
-        "train_ids": [(v, p, c) for v, p, c in train_ids],
-        "total_train": len(train_ids),
-        "class1_train": len(train_class1),
-        "class2_train": len(train_class2),
+        "strategy": "video_split_balanced_ids",
+        "train_videos": train_videos,
+        "test_videos": test_videos,
+        "train_stats": {
+            "class1": len(selected_train_class1),
+            "class2": len(train_pool_class2)
+        }
     }
     with open(train_anotacoes / "balance_reference.json", "w", encoding="utf-8") as f:
         json.dump(balance_ref, f, indent=4, ensure_ascii=False)
 
     # ============================================================
-    # PASSO 6: Validação de consistência
+    # PASSO 6: Validação
     # ============================================================
-    _log("[6/6] Validando consistência...")
-    
-    # Verifica sem duplicação
-    train_set = set((v, p) for v, p, c in train_ids)
-    test_set = set((v, p) for v, p, c in test_ids)
-    overlap = train_set & test_set
-    
-    if overlap:
-        _log(f"[ERRO] IDs duplicados entre treino e teste: {len(overlap)}")
+    # Verifica Interseção de Vídeos
+    overlap_videos = set(train_videos) & set(test_videos)
+    if overlap_videos:
+        _log(f"[ERRO] CRÍTICO: Vídeos duplicados entre treino e teste: {overlap_videos}")
     else:
-        _log("[CHECK] Sem duplicação entre treino/teste ✓")
-    
-    # Verifica sem perda
-    total_split = len(train_ids) + len(test_ids)
-    if total_split == total_ids:
-        _log(f"[CHECK] Todos IDs preservados: {len(train_ids)} + {len(test_ids)} = {total_ids} ✓")
+        _log("[CHECK] Separação de Vídeos: OK (Disjuntos) ✓")
+        
+    # Verifica Balanceamento Treino
+    if len(selected_train_class1) == len(train_pool_class2):
+         _log("[CHECK] Balanceamento Treino ID 1:1: OK ✓")
     else:
-        _log(f"[ERRO] Perda de IDs: {total_ids} originais, {total_split} após split")
-    
-    # Verifica balanceamento
-    if len(train_class1) == len(train_class2):
-        _log(f"[CHECK] Treino balanceado 1:1 ({len(train_class1)} cada) ✓")
-    else:
-        _log(f"[WARN] Treino desbalanceado: {len(train_class1)} vs {len(train_class2)}")
+         _log(f"[WARN] Balanceamento imperfeito: {len(selected_train_class1)} vs {len(train_pool_class2)}")
 
     # Summary
     summary_path = output_base / "summary.txt"
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write(f"Dataset: {dataset_name}\n")
-        f.write(f"Split por IDs (balanceado 1:1)\n")
-        f.write(f"Total IDs originais: {total_ids}\n")
-        f.write(f"Treino: {len(train_ids)} IDs ({len(train_class1)} {class1}, {len(train_class2)} {class2})\n")
-        f.write(f"Teste: {len(test_ids)} IDs ({len(test_class1)} {class1}, {len(test_class2)} {class2})\n")
-        f.write(f"Vídeos treino: {len(train_videos_set)}\n")
-        f.write(f"Vídeos teste: {len(test_videos_set)}\n")
+        f.write(f"Split Strategy: Video-Level Split + ID Balancing\n")
+        f.write(f"Treino: {len(train_videos)} Videos -> {len(final_train_ids)} IDs Balanceados (1:1)\n")
+        f.write(f"Teste: {len(test_videos)} Videos -> Full Labels preserved\n")
 
     # _log(f"[OK] Resumo salvo: {summary_path}")
     # _log(f"[OK] Split concluído! Saída: {output_base}")

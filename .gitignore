@@ -35,9 +35,5 @@ neurapose_backend/data/
 neurapose_backend/logs/
 neurapose_backend/.env
 
-agent.md
-agente.md
-exit
-Makefile
+prompts
 tests
-relatorio.md
