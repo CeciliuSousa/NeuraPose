@@ -255,8 +255,8 @@ export default function SplitPage() {
                     setInputDir(path);
                     setExplorerOpen(false);
                 }}
-                initialPath={inputDir || roots.reidentificacoes}
-                rootPath={roots.reidentificacoes}
+                initialPath={inputDir || roots.anotados}
+                rootPath={roots.anotados}
                 title="Selecionar Diretório de Dados Reidentificados"
             />
         </div>

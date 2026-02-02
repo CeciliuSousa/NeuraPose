@@ -666,11 +666,11 @@ export default function AnotacaoPage() {
                     setInputPath(path);
                     setExplorerOpen(false);
                 }}
-                initialPath={roots.reidentificacoes}
-                rootPath={roots.reidentificacoes}
+                initialPath={roots.reidentificados}
+                rootPath={roots.reidentificados}
                 title="Selecionar Diretório de ReID"
                 filterFn={(item) => {
-                    const normRoot = (roots.reidentificacoes || '').replace(/\\/g, '/').toLowerCase();
+                    const normRoot = (roots.reidentificados || '').replace(/\\/g, '/').toLowerCase();
                     const normCurrent = (item.currentPath || '').replace(/\\/g, '/').toLowerCase();
 
                     if (normCurrent === normRoot || normCurrent === normRoot + '/') {

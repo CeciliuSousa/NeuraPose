@@ -81,8 +81,35 @@ def run_split(root_path: Path, dataset_name: str, output_root: Path,
     with open(labels_path, "r", encoding="utf-8") as f:
         labels = json.load(f)
 
+    # Detectar se é temporal (baseado na estrutura dos labels)
+    # Temporal = Contém intervalos de tempo definidos (frames de inicio/fim)
+    # Estrutura esperada: Video -> ID -> { "classe": "...", "intervals": [[start, end]] }
+    is_temporal = False
+    
+    try:
+        if labels and isinstance(labels, dict):
+            # Procura profundidade para achar chaves de intervalo
+            for vid, id_map in labels.items():
+                if isinstance(id_map, dict):
+                    for pid, data in id_map.items():
+                        if isinstance(data, dict) and "intervals" in data:
+                            is_temporal = True
+                            break
+                    if is_temporal: break
+    except Exception as e:
+         _log(f"[WARN] Erro ao verificar temporalidade: {e}")
+
+    # Ajusta nome do dataset de saída
+    final_dataset_name = dataset_name
+    if is_temporal:
+        if not final_dataset_name.endswith("-temporal"):
+            final_dataset_name = f"{final_dataset_name}-temporal"
+            _log(f"[INFO] Anotações com INTERVALOS detectadas. Dataset marcado como TEMPORAL: {final_dataset_name}")
+    else:
+        _log(f"[INFO] Anotações SIMPLES (sem intervalos) detectadas. Dataset mantido como: {final_dataset_name}")
+
     # Paths de saída
-    output_base = Path(output_root) / dataset_name
+    output_base = Path(output_root) / final_dataset_name
     train_dados = output_base / train_split / "dados"
     train_anotacoes = output_base / train_split / "anotacoes"
     test_videos_dir = output_base / test_split / "videos"

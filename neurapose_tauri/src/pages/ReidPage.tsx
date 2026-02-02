@@ -671,11 +671,11 @@ export default function ReidPage() {
                 isOpen={explorerOpen}
                 onClose={() => setExplorerOpen(false)}
                 onSelect={(path) => { setInputPath(path); setExplorerOpen(false); }}
-                initialPath={roots.processamentos}
-                rootPath={roots.processamentos}
+                initialPath={roots.processados}
+                rootPath={roots.processados}
                 title="Selecionar Diretório de Vídeos/Predições"
                 filterFn={(item) => {
-                    const normRoot = (roots.processamentos || '').replace(/\\/g, '/').toLowerCase();
+                    const normRoot = (roots.processados || '').replace(/\\/g, '/').toLowerCase();
                     const normCurrent = (item.currentPath || '').replace(/\\/g, '/').toLowerCase();
 
                     // Root: apenas datasets (pastas)

@@ -124,7 +124,7 @@ PROCESSING_VIDEOS_DIR = PROCESSING_OUTPUT_DIR / "videos"
 PROCESSING_PREDS_DIR = PROCESSING_OUTPUT_DIR / "predicoes"
 PROCESSING_JSONS_DIR = PROCESSING_OUTPUT_DIR / "jsons"
 PROCESSING_ANNOTATIONS_DIR = PROCESSING_OUTPUT_DIR / "anotacoes"
-ANNOTATIONS_OUTPUT_DIR = ROOT / "resultados-anotacoes"
+ANNOTATIONS_OUTPUT_DIR = ROOT / "resultados-reidentificacoes" # User: Anotações input/output is same as Reid
 
 # ReID Manual
 REID_OUTPUT_DIR = ROOT / "resultados-reidentificacoes"
@@ -141,12 +141,13 @@ FRAME_DISPLAY_H = 720
 
 # Treinamento
 TRAINING_INPUT_DIR = PROCESSING_OUTPUT_DIR
-TRAINED_MODELS_DIR = ROOT / "modelos-lstm-treinados"
+TRAINED_MODELS_DIR = ROOT / "modelos-temporais" # User: Modelos temporais
 TRAINED_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_SAVE_DIR = TRAINED_MODELS_DIR / f"{TEMPORAL_MODEL}-{TRAINED_MODEL_NAME}"
 
 # Teste
-TEST_DATASETS_ROOT = ROOT / "datasets" / TEST_DATASET
+DATASETS_ROOT = ROOT / "datasets" # User: Root of all datasets
+TEST_DATASETS_ROOT = DATASETS_ROOT / TEST_DATASET
 TEST_DIR = TEST_DATASETS_ROOT / TEST_SPLIT / "videos"
 TEST_LABELS_JSON = TEST_DATASETS_ROOT / TEST_SPLIT / "anotacoes" / "labels.json"
 TEST_MODEL_DIR = MODEL_SAVE_DIR
@@ -156,8 +157,8 @@ TEST_REPORTS_DIR = ROOT / "relatorios-testes"
 TEST_REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Dados de treino
-TRAINING_DATA_PATH = ROOT / "datasets" / PROCESSING_DATASET / "treino" / "data" / "data.pt"
-TRAINING_LABELS_PATH = ROOT / "datasets" / PROCESSING_DATASET / "treino" / "labels.json"
+TRAINING_DATA_PATH = DATASETS_ROOT / PROCESSING_DATASET / "treino" / "data" / "data.pt"
+TRAINING_LABELS_PATH = DATASETS_ROOT / PROCESSING_DATASET / "treino" / "labels.json"
 RETRAIN_MODELS_DIR = ROOT / "retreinamentos"
 
 # Saída
@@ -184,7 +185,7 @@ BOT_SORT_CONFIG = {
 }
 
 # Legacy
-DATASETS_ROOT = TEST_DATASETS_ROOT
+# DATASETS_ROOT = TEST_DATASETS_ROOT # REMOVED: conflicting definition
 TRAIN_DIR = TEST_DATASETS_ROOT / TRAIN_SPLIT / "videos"
 VAL_DIR = TEST_DATASETS_ROOT / VAL_SPLIT / "videos"
 PREPROCESSING_OUTPUT = ROOT / "resultado_processamento"

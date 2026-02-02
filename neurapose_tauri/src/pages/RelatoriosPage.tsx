@@ -276,6 +276,8 @@ export default function RelatoriosPage() {
                     setTestReportPath(path);
                     setExplorerOpen(null);
                 }}
+                // User requested: \neurapose_backend\relatorios-testes
+                // Backend key: relatorios_testes (mapped to TEST_REPORTS_DIR)
                 initialPath={testReportPath || roots.relatorios_testes}
                 rootPath={roots.relatorios_testes}
                 title="Selecionar Relatório de Teste"

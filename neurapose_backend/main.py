@@ -377,11 +377,26 @@ def update_cm_runtime(updates: Dict[str, Any], persist: bool = True):
 
 @app.get("/config")
 def api_get_config():
-    """Retorna todas as configurações atuais (paths, params, etc)."""
+    """Retorna todas as configurações atuais e caminhos do sistema."""
+    
+    # Monta dicionário de caminhos dinamicamente do config_master
+    system_paths = {
+        "root": str(cm.ROOT),
+        "videos": str(cm.PROCESSING_INPUT_DIR),                      # Entrada Processamento
+        "processados": str(cm.PROCESSING_OUTPUT_DIR),                # Entrada ReID
+        "reidentificados": str(cm.REID_OUTPUT_DIR),                  # Entrada Anotação
+        "anotados": str(cm.ANNOTATIONS_OUTPUT_DIR),                  # Entrada Split
+        "datasets": str(cm.DATASETS_ROOT),                           # Entrada Converter/Treino
+        "models": str(cm.MODELS_DIR),
+        "modelos_treinados": str(cm.TRAINED_MODELS_DIR),
+        "output": str(cm.PROCESSING_OUTPUT_DIR),
+        "relatorios_testes": str(cm.TEST_REPORTS_DIR)
+    }
+
     return {
         "status": "success", 
         "config": RUNTIME_CONFIG,
-        "paths": RUNTIME_CONFIG.get("paths", {}) #atalho para backward compatibility
+        "paths": system_paths
     }
 
 
