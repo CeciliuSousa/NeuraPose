@@ -71,7 +71,9 @@ def imprimir_banner(checks):
     print(Fore.WHITE + f"OSNet ReID        : {status_str(checks['osnet'])} {Fore.WHITE}{cm.OSNET_PATH.name[:25]}...")
     print(Fore.WHITE + f"RTMPose-l         : {status_str(checks['rtmpose'])} {Fore.WHITE}rtmpose.../{cm.RTMPOSE_PATH.name}")
     
-    mod_temp = "Temporal Fusion Transformer" if cm.TEMPORAL_MODEL == "tft" else "LSTM / BiLSTM"
+    mod_temp = checks.get("model_name_display")
+    if not mod_temp:
+        mod_temp = "Temporal Fusion Transformer" if cm.TEMPORAL_MODEL == "tft" else "LSTM / BiLSTM"
     print(Fore.WHITE + f"Modelo Temporal   : {status_str(checks['modelo_temporal'])} {Fore.WHITE}{mod_temp}")
     
     print(Fore.WHITE + "-"*62)

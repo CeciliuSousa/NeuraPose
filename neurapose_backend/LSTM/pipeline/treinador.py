@@ -167,13 +167,27 @@ def main():
     segundaClasse = cm.CLASS_NAMES[1].lower()
     
     # Carrega dataset
+    # Carrega dataset
     DATA_PATH = args.dataset
     if not Path(DATA_PATH).exists():
         print(Fore.RED + f"[ERRO] Dataset não encontrado: {DATA_PATH}")
         return
 
-    full_ds, y_all = load_data_pt(DATA_PATH)
-    X_all, y_all = full_ds.tensors
+    # [UPDATED] Carrega metadata se disponivel
+    load_res = load_data_pt(DATA_PATH)
+    if len(load_res) == 3:
+        full_ds, y_all, meta_all = load_res
+    else:
+        full_ds, y_all = load_res
+        meta_all = None
+    
+    # Se full_ds ja tem metadata, nao precisamos fazer nada especial se usarmos subset
+    # MAS TensorDataset não suporta StratifiedShuffleSplit direto se quisermos preservar metadata alinhado
+    # Então vamos acessar o tensor de dados X_all do dataset
+    # O dataset pode ter 2 ou 3 tensores
+    tensors = full_ds.tensors
+    X_all = tensors[0]
+    # y_all ja temos
     
     # Verifica dimensao temporal
     time_dimension = X_all.shape[1]
@@ -181,11 +195,45 @@ def main():
         print(Fore.RED + f"[ERRO] Dimensao T={time_dimension}, esperado T=30")
         return
 
-    # Split treino/validacao estratificado 80/20
-    sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
-    train_idx, val_idx = next(sss.split(np.zeros(len(y_all)), y_all.cpu().numpy()))
+    # [UPDATED] Split treino/validacao por GRUPO (ID) para evitar vazamento
+    # Se metadata existir, usamos o PID (coluna 2 do metadata) como grupo
+    # Metadata shape: [scene, clip, pid, sample_idx]
+    
+    if meta_all is not None:
+        print(Fore.BLUE + "[INFO] Utilizando Split por GRUPO (IDs Únicos) para validação rigorosa.")
+        # [CORRECTION] IDs are local to video (e.g., ID 1 exists in many videos).
+        # We need a global unique ID: Scene + Clip + PID
+        # Metadata: [scene, clip, pid, sample_idx]
+        
+        # Create a unique hash/ID for each person-video instance
+        # Assuming reasonable limits: scene < 1000, clip < 1000, pid < 100000
+        # global_id = scene * 10^9 + clip * 10^5 + pid
+        m = meta_all.clone()
+        groups = (m[:, 0] * 1_000_000_000 + m[:, 1] * 100_000 + m[:, 2]).cpu().numpy()
+        
+        from sklearn.model_selection import GroupShuffleSplit
+        # GroupShuffleSplit garante que o mesmo grupo não apareça em train e test
+        gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+        train_idx, val_idx = next(gss.split(X_all, y_all, groups=groups))
+        
+        # Loga quantidade de IDs únicos
+        unique_train = np.unique(groups[train_idx])
+        unique_val = np.unique(groups[val_idx])
+        print(Fore.YELLOW + f"[SPLIT] IDs ÚNICOS Treino: {len(unique_train)} | IDs ÚNICOS Validação: {len(unique_val)}")
+    else:
+        print(Fore.YELLOW + "[AVISO] Metadata não encontrado. Usando Split Aleatório (pode haver vazamento de ID).")
+        # Fallback para StratifiedShuffleSplit se não houver metadata
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+        train_idx, val_idx = next(sss.split(np.zeros(len(y_all)), y_all.cpu().numpy()))
+    
     X_train, y_train = X_all[train_idx], y_all[train_idx]
     X_val, y_val = X_all[val_idx], y_all[val_idx]
+    
+    # Split metadata se existir
+    meta_train, meta_val = None, None
+    if meta_all is not None:
+        meta_train = meta_all[train_idx]
+        meta_val = meta_all[val_idx]
 
     # Normalizacao z-score
     mu = X_train.mean(dim=(0,1), keepdim=True)
@@ -193,17 +241,29 @@ def main():
     X_train = (X_train - mu) / sigma
     X_val = (X_val - mu) / sigma
 
-    # Analise de balanceamento
+    # Analise de balanceamento (Treino)
     n0, n1 = counts_from_labels(y_train)
-    total = n0 + n1
+    total_train = n0 + n1
+    
+    # Analise de balanceamento (Validacao)
+    n0_val, n1_val = counts_from_labels(y_val)
+    total_val = n0_val + n1_val
+    
     ratio = max(n0, n1) / max(1, min(n0, n1))
     
-    print(Fore.BLUE + "[INFO] INICIANDO O PROCESSO DE BALANCEAMENTO\n")
+    print(Fore.BLUE + "[INFO] ESTATÍSTICAS DO DATASET\n")
 
-    print(Fore.YELLOW + f"[BALANCEANDO] TOTAL DE DADOS: {total}")
-    print(Fore.YELLOW + f"[BALANCEANDO] {primeiraClasse.upper()}: {n0}")
-    print(Fore.YELLOW + f"[BALANCEANDO] {segundaClasse.upper()}: {n1}")
-    print(Fore.YELLOW + f"[BALANCEANDO] RAZÃO: {ratio:.2f}x\n")
+    print(Fore.WHITE + f"   TOTAL GERAL    : {total_train + total_val}")
+    print(Fore.WHITE + f"   TREINAMENTO    : {total_train} (Aprox. {total_train/(total_train+total_val or 1)*100:.0f}%)")
+    print(Fore.WHITE + f"   VALIDAÇÃO      : {total_val} (Aprox. {total_val/(total_train+total_val or 1)*100:.0f}%)")
+    print(Fore.WHITE + "-"*40)
+    print(Fore.YELLOW + f"[TREINO] NORMAL   : {n0}")
+    print(Fore.YELLOW + f"[TREINO] FURTO    : {n1}")
+    print(Fore.YELLOW + f"[TREINO] RAZÃO    : {ratio:.2f}x")
+    print(Fore.WHITE + "-"*40)
+    print(Fore.CYAN + f"[VALID]  NORMAL   : {n0_val}")
+    print(Fore.CYAN + f"[VALID]  FURTO    : {n1_val}")
+    print(Fore.CYAN + f"[VALID]  TOTAL    : {total_val}\n")
 
     # Sampler ponderado se desbalanceado
     if ratio > 1.1:
@@ -217,9 +277,9 @@ def main():
         train_sampler = None
         balanced_mode = False
     
-    # DataLoaders
-    train_ds = AugmentedDataset(X_train, y_train, augment=True)
-    val_ds = AugmentedDataset(X_val, y_val, augment=False)
+    # DataLoaders - [UPDATED] Passa metadata
+    train_ds = AugmentedDataset(X_train, y_train, meta=meta_train, augment=True)
+    val_ds = AugmentedDataset(X_val, y_val, meta=meta_val, augment=False)
 
     num_workers = min(4, os.cpu_count() or 1)
     pin_memory = True if DEVICE == 'cuda' else False
@@ -263,6 +323,8 @@ def main():
     
     digits = len(str(args.epochs))
 
+    final_val_report_id = []
+
     for epoch in range(1, args.epochs + 1):
         # Verifica interrupção
         if state.stop_requested:
@@ -270,7 +332,9 @@ def main():
             break
 
         tr_loss, tr_acc, tr_f1m, tr_f1w = train_one_epoch(model, train_loader, optimizer, criterion, DEVICE)
-        va_loss, va_acc, va_f1m, va_f1w, _, _, _, _ = evaluate(model, val_loader, DEVICE, criterion)
+        
+        # [UPDATED] Unpack 9 values
+        va_loss, va_acc, va_f1m, va_f1w, _, _, _, _, val_report_id = evaluate(model, val_loader, DEVICE, criterion)
 
         scheduler.step(va_f1m)
 
@@ -284,6 +348,8 @@ def main():
         if va_f1m > best_val_f1:
             best_val_f1, best_epoch = va_f1m, epoch
             torch.save(model.state_dict(), best_model_path)
+            # Salva o report detalhado da melhor época
+            final_val_report_id = val_report_id
 
         # Log formatado: [TREINANDO] Epoca X/Y ...
         print(f"{Fore.YELLOW}[TREINANDO] Epoca {epoch:0{digits}d}/{args.epochs} | Train loss: {tr_loss:.4f} | Val loss: {va_loss:.4f} | Acc: {va_acc*100:.1f}% | F1: {va_f1m:.4f}")
@@ -303,8 +369,12 @@ def main():
     # Recarrega melhor modelo para avaliação final
     model.load_state_dict(torch.load(best_model_path, map_location=DEVICE))
     # Avaliações finais
-    # tr_loss, tr_acc, tr_f1m, tr_f1w, _, _, _, _ = evaluate(model, train_loader, DEVICE, criterion)
-    va_loss, va_acc, va_f1m, va_f1w, va_report, _, _, va_cm = evaluate(model, val_loader, DEVICE, criterion)
+    # [UPDATED] Unpack
+    va_loss, va_acc, va_f1m, va_f1w, va_report, _, _, va_cm, va_report_id = evaluate(model, val_loader, DEVICE, criterion)
+    
+    # Se a ultima época não for a melhor (quase certo), usamos o report da melhor época ou da atual?
+    # Geralmente reporta-se do melhor modelo carregado.
+    final_val_report_id = va_report_id
 
     # Nomenclatura final do diretório
     def get_model_abbr(m):
@@ -343,6 +413,7 @@ def main():
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     report_path = final_model_dir / f"relatorio_{timestamp}.txt"
     hist_json_path = final_model_dir / f"historico_{timestamp}.json"
+    detalhes_json_path = final_model_dir / f"detalhes_validacao.json"
 
     with open(report_path, "w", encoding="utf-8") as f:
         f.write("RELATORIO DE TREINAMENTO\n")
@@ -351,11 +422,21 @@ def main():
         f.write(f"Modelo: {args.model} ({abbr})\n")
         f.write(f"Epocas: {args.epochs}\n")
         f.write(f"Melhor epoca: {best_epoch}\n")
-        f.write(f"Val Acc (best): {accuracy_percent:.1f}%\n")
-        f.write(f"Val F1 (best): {best_val_f1:.4f}\n")
+        f.write(f"Val Acc (ID-level): {accuracy_percent:.1f}%\n")
+        f.write(f"Val F1 (ID-level): {best_val_f1:.4f}\n")
+        # Podemos adicionar contagem de IDs corretos
+        if final_val_report_id:
+            ok_count = sum(1 for x in final_val_report_id if x['ok'])
+            total_ids = len(final_val_report_id)
+            f.write(f"\nIDs Corretos: {ok_count}/{total_ids} ({(ok_count/total_ids)*100:.1f}%)\n")
 
     with open(hist_json_path, "w", encoding="utf-8") as jf:
         json.dump(history, jf, indent=2)
+        
+    # Salva os detalhes granulares (User requested to remove this for training)
+    # if final_val_report_id:
+    #     with open(detalhes_json_path, "w", encoding="utf-8") as df:
+    #         json.dump(final_val_report_id, df, indent=2, ensure_ascii=False)
 
     # Limpa diretório temporário
     try:

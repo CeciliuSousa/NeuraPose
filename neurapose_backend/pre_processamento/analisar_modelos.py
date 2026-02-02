@@ -9,8 +9,8 @@ from datetime import datetime
 
 init(autoreset=True)
 
-BASE_DIR = "neurapose_backend/modelos-lstm-treinados"
-OUT_PATH = "neurapose_backend/modelos-lstm-treinados/Ranking_Modelos.txt"
+BASE_DIR = "neurapose_backend/modelos-temporais"
+OUT_PATH = "neurapose_backend/modelos-temporais/Ranking_Modelos.txt"
 
 # -----------------------------------------------------------
 # Extração das métricas principais do relatório

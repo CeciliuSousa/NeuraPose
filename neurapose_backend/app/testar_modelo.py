@@ -41,9 +41,7 @@ def format_seconds_to_hms(seconds):
     return " ".join(parts)
 
 def main():
-    checks = verificar_recursos()
-    imprimir_banner(checks)
-    
+    # 1. Resolver paths PRIMEIRO para poder exibir no banner corretamente
     arg_model = getattr(args, 'model_dir', '')
     model_dir = Path(arg_model) if arg_model else MODEL_DIR
     best_model_path = model_dir / "model_best.pt"
@@ -54,7 +52,48 @@ def main():
     elif not best_model_path.exists():
         candidates = list(model_dir.glob("*.pt"))
         if candidates: best_model_path = candidates[0]
-        else: return
+        else:
+             # Se nao achou nada, mantem para falhar no verificar_recursos ou tratar depois
+             pass
+
+    # 2. Detectar nome amigável do modelo
+    folder_name = model_dir.name.lower()
+    display_name = None
+    
+    MODEL_DISPLAY_MAP = {
+        "tcn": "Temporal Convolutional Network (TCN)",
+        "bilstm": "BiLSTM (Bidirectional LSTM)",
+        "attention": "AttentionLSTM",
+        "robust": "RobustLSTM",
+        "pooled": "PooledLSTM",
+        "wavenet": "WaveNet",
+        "transformer": "Transformer",
+        "tft": "Temporal Fusion Transformer",
+        "lstm": "LSTM (Long Short-Term Memory)"
+    }
+    
+    # Ordem de prioridade (ex: bilstm > lstm)
+    for key, name in MODEL_DISPLAY_MAP.items():
+        # Verifica padroes comuns: "_tcn", "-tcn", "modelo_tcn"
+        if key in folder_name:
+             # Refinamento para evitar clash (ex: 'lstm' em 'bilstm')
+             if key == "lstm" and "bilstm" in folder_name: continue
+             display_name = name
+             break
+             
+    if not display_name:
+         display_name = "Temporal Fusion Transformer" if cm.TEMPORAL_MODEL == "tft" else "LSTM / BiLSTM"
+
+    # 3. Validar recursos e Imprimir
+    checks = verificar_recursos()
+    checks['model_name_display'] = display_name
+    # Update modelo_temporal check based on actual resolved path
+    checks['modelo_temporal'] = best_model_path.exists()
+    
+    imprimir_banner(checks)
+    
+    # Se nao achou modelo, sai agora que ja avisou no banner
+    if not best_model_path.exists(): return
 
     video_input = Path(args.input_dir) if args.input_dir else DATASET_DIR
     if video_input.is_dir():
@@ -147,6 +186,67 @@ def main():
             
             lista_res = [p for p in all_predictions.values() if p]
             with open(out_metricas_dir / "resultados.json", "w") as f: json.dump(lista_res, f, indent=2)
+
+            # =========================================================
+            # NOVO: Relatório Detalhado por Vídeo (Tabela)
+            # =========================================================
+            detalhes_videos = {}
+            
+            for video_stem, preds in all_predictions.items():
+                if not preds: continue
+                
+                # Mapa de GT para este video
+                gt_map = labels_gt.get(video_stem, {})
+                # Se não achar por stem, tenta por nome completo se estiver no json
+                if not gt_map:
+                     for k in labels_gt:
+                        if k in video_stem or video_stem in k:
+                            gt_map = labels_gt[k]
+                            break
+                
+                video_details = []
+                
+                # Itera sobre predições e cruza com GT
+                for p_info in preds.get("ids_predicoes", []):
+                    pid = str(p_info["id"])
+                    
+                    # Classe Predita
+                    pred_cls_name = cm.CLASSE2 if p_info["classe_id"] == 1 else cm.CLASSE1
+                    score_val = p_info.get(f"score_{cm.CLASSE2}", 0.0)
+                    if p_info["classe_id"] == 0: 
+                        score_val = 1.0 - score_val # Confiança da classe 0
+                    
+                    # Classe Real
+                    real_cls_name = "?"
+                    if pid in gt_map:
+                        val = gt_map[pid]
+                        if isinstance(val, dict): val = val.get("classe", "?")
+                        real_cls_name = str(val).upper()
+                    
+                    # Verifica acerto
+                    is_ok = False
+                    if real_cls_name != "?":
+                        is_ok = (real_cls_name == pred_cls_name)
+                    
+                    video_details.append({
+                        "id": int(pid),
+                        "real": real_cls_name,
+                        "predito": pred_cls_name,
+                        "conf": round(score_val * 100, 2),
+                        "ok": is_ok,
+                        "status_symbol": "✓" if is_ok else "✗" if real_cls_name != "?" else "-"
+                    })
+                
+                # Ordena por ID
+                video_details.sort(key=lambda x: x["id"])
+                detalhes_videos[video_stem] = video_details
+            
+            # Salva o arquivo detalhado
+            with open(out_metricas_dir / "detalhes_predicoes.json", "w", encoding='utf-8') as f:
+                json.dump(detalhes_videos, f, indent=2, ensure_ascii=False)
+                
+            print(Fore.BLUE + f"[INFO] RELATÓRIO DETALHADO SALVO EM: detalhes_predicoes.json")
+
             
             gerar_todos_graficos(out_metricas_dir / "metricas.json", out_metricas_dir / "resultados.json", labels_gt_path, model_dir.name)
 

@@ -9,7 +9,15 @@ from sklearn.metrics import f1_score, accuracy_score
 def train_one_epoch(model, loader, optimizer, criterion, device):
     model.train()
     running_loss, y_true, y_pred = 0.0, [], []
-    for xb, yb in loader:
+    model.train()
+    running_loss, y_true, y_pred = 0.0, [], []
+    for batch in loader:
+        # Handle unpacking (ignora meta no treino, nao afeta backprop)
+        if len(batch) == 3:
+            xb, yb, _ = batch
+        else:
+            xb, yb = batch
+            
         from neurapose_backend.globals.state import state
         if state.stop_requested:
             break

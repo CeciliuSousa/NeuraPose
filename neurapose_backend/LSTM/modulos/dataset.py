@@ -32,5 +32,28 @@ def load_data_pt(path):
     
     # X final é (N, 30, 34)
     
-    # Retorna o TensorDataset e o tensor de labels separado (para o StratifiedShuffleSplit)
-    return TensorDataset(X, y), y
+    # X final é (N, 30, 34)
+    
+    # [NOVO] Suporte a Metadados (ID, Cena, Clip)
+    # Se o arquivo .pt tiver a chave 'metadata', nós a carregamos.
+    # Metadata shape esperado: (N, 4) -> [scene, clip, pid, sample_idx]
+    metadata = None
+    if isinstance(data_dict, dict) and "metadata" in data_dict:
+        # Carrega e converte para tensor long se não for
+        meta_raw = data_dict["metadata"]
+        if isinstance(meta_raw, list):
+            metadata = torch.tensor(meta_raw, dtype=torch.long)
+        elif isinstance(meta_raw, torch.Tensor):
+            metadata = meta_raw.long()
+    
+    # Retorna o TensorDataset e os componentes separados
+    # Se metadata existir, incluimos no TensorDataset para ser batched pelo DataLoader
+    if metadata is not None:
+        # Garante que metadata tenha mesmo N
+        if len(metadata) == len(y):
+             return TensorDataset(X, y, metadata), y, metadata
+        else:
+             print(f"[AVISO] Metadata len ({len(metadata)}) != Data len ({len(y)}). Ignorando metadata.")
+             return TensorDataset(X, y), y, None
+    
+    return TensorDataset(X, y), y, None
