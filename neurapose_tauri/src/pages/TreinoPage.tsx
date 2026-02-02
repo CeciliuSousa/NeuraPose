@@ -28,9 +28,9 @@ const MODEL_OPTIONS = [
     { value: 'wavenet', label: 'WaveNet', description: 'Convoluções causais dilatadas' },
 ];
 
-// Valores padrão dos parâmetros (do config_master.py)
-const DEFAULT_PARAMS = {
-    epochs: 5000,       // Usuário pediu 5000 como padrão
+// Valores padrão iniciais (fallback seguro)
+const FALLBACK_PARAMS = {
+    epochs: 5000,
     batch_size: 32,
     lr: 0.0003,
     dropout: 0.3,
@@ -53,7 +53,9 @@ export default function TreinoPage() {
     const [pretrainedPath, setPretrainedPath] = useState('');
 
     // Parâmetros de treinamento
-    const [params, setParams] = useState(DEFAULT_PARAMS);
+    const [params, setParams] = useState(FALLBACK_PARAMS);
+    const [defaultParamsRef, setDefaultParamsRef] = useState(FALLBACK_PARAMS); // Para botão reset
+
     const [modelType, setModelType] = useState('tft');
     const [device, setDevice] = useState<'cuda' | 'cpu'>('cuda');
 
@@ -69,31 +71,42 @@ export default function TreinoPage() {
         // Limpeza de estado residual ao entrar na página (GARANTE TERMINAL LIMPO)
         setLogs([]);
         localStorage.removeItem('np_train_logs');
-        // Não removemos loading aqui para permitir reconexão se F5, mas logs limpamos. (ou mantemos? O usuário pediu limpar para evitar "Pronto")
-        // Se limpamos logs, perdemos histórico do F5. O usuário quer evitar que EM UMA NOVA EXECUÇÃO apareça pronto.
-        // Então a limpeza crítica é no handleTrain. Mas no mount também ajuda a não ver lixo antigo.
 
         // Restaurar estado se houver treino em andamento
         APIService.healthCheck().then(res => {
             const healthData = res.data as any;
-            // Só mostra mensagem se for ESTE processo (train)
             if (healthData.processing && healthData.current_process === 'train') {
                 setLoading(true);
                 setMessage({ text: '⏳ Treinamento em andamento...', type: 'processing' });
-                // Se está rodando, recuperamos logs
                 const savedLogs = localStorage.getItem('np_train_logs');
                 if (savedLogs) setLogs(JSON.parse(savedLogs));
             } else {
-                // Se NÃO está rodando, garante limpo
                 setLogs([]);
                 localStorage.removeItem('np_train_logs');
             }
         }).catch(() => { });
 
+        // Carrega CONFIGURAÇÕES do Backend (incluindo defaults)
         APIService.getConfig().then(res => {
             const data = res.data as any;
             if (data.status === 'success') {
-                setRoots(data.paths);
+                setRoots(data.paths || {});
+
+                // Atualiza Params com o que vem do config_master (via backend)
+                const cfg = data.config || {};
+                const newDefaults = {
+                    epochs: cfg.EPOCHS || FALLBACK_PARAMS.epochs,
+                    batch_size: cfg.BATCH_SIZE || FALLBACK_PARAMS.batch_size,
+                    lr: cfg.LEARNING_RATE || FALLBACK_PARAMS.lr,
+                    dropout: cfg.DROPOUT || FALLBACK_PARAMS.dropout,
+                    hidden_size: cfg.HIDDEN_SIZE || FALLBACK_PARAMS.hidden_size,
+                    num_layers: cfg.NUM_LAYERS || FALLBACK_PARAMS.num_layers,
+                    num_heads: cfg.NUM_HEADS || FALLBACK_PARAMS.num_heads,
+                    kernel_size: cfg.KERNEL_SIZE || FALLBACK_PARAMS.kernel_size,
+                };
+
+                setParams(newDefaults);
+                setDefaultParamsRef(newDefaults);
             }
         });
 
@@ -194,15 +207,12 @@ export default function TreinoPage() {
         // LIMPEZA DE ESTADO ANTES DE INICIAR (CRÍTICO)
         setLogs([]);
         localStorage.removeItem('np_train_logs');
+        try { await APIService.clearLogs('train'); } catch (e) { console.error(e); }
 
         // Seta inicio para evitar race condition
         processStartTimeRef.current = Date.now();
         setLoading(true);
         setMessage({ text: `⏳ Iniciando ${mode === 'treinar' ? 'treinamento' : 'retreinamento'}...`, type: 'processing' });
-        // setLogs(prev => [...prev, `[INFO] Modo: ${mode.toUpperCase()}`]); // Removido para limpeza
-        // setLogs(prev => [...prev, `[INFO] Dataset: ${datasetName}`]);     // Removido para limpeza
-        // setLogs(prev => [...prev, `[INFO] Modelo: ${MODEL_OPTIONS.find(m => m.value === modelType)?.label}`]); // Removido para limpeza
-        // setLogs(prev => [...prev, `[INFO] Hardware: ${device === 'cuda' ? 'GPU (CUDA)' : 'CPU'}`]); // Removido para limpeza
 
         try {
             const data = {
@@ -235,7 +245,7 @@ export default function TreinoPage() {
     };
 
     const resetParams = () => {
-        setParams(DEFAULT_PARAMS);
+        setParams(defaultParamsRef);
         setMessage({ text: 'Parâmetros restaurados para valores padrão.', type: 'info' });
     };
 

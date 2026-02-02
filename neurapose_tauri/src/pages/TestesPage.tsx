@@ -152,6 +152,8 @@ export default function TestesPage() {
         // LIMPEZA DE ESTADO ANTES DE INICIAR (CRÍTICO)
         setLogs([]);
         localStorage.removeItem('np_test_logs');
+        try { await APIService.clearLogs('test'); } catch (e) { console.error(e); }
+
         processStartTimeRef.current = Date.now();
 
         setLoading(true);

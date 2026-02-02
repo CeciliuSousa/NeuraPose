@@ -99,7 +99,13 @@ export default function ProcessamentoPage() {
             const handleStatus = (status: any) => {
                 setIsPaused(status.is_paused);
 
+                // GRACE PERIOD: Ignora "is_running: false" se o processo começou há menos de 3 seg
+                // Isso evita o bug onde o status inicial "false" mata o loading instantaneamente
+                const elapsed = Date.now() - (parseInt(localStorage.getItem('np_process_start_time') || '0'));
+
                 if (!status.is_running && loading) {
+                    if (elapsed < 3000 && elapsed > 0) return;
+
                     setLoading(false);
                     localStorage.setItem('np_process_loading', 'false');
                     ws.disconnectLogs();
@@ -133,7 +139,10 @@ export default function ProcessamentoPage() {
         // Limpeza MANDATÓRIA antes de iniciar novo processo
         setLogs([`[INFO] Iniciando novo processamento...`]);
         localStorage.removeItem('np_process_logs');
+        localStorage.setItem('np_process_start_time', Date.now().toString()); // Marca inicio para Grace Period
         localStorage.removeItem('np_process_loading');
+
+        try { await APIService.clearLogs('process'); } catch (e) { console.error(e); }
 
         setLoading(true);
 

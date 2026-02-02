@@ -375,6 +375,16 @@ def update_cm_runtime(updates: Dict[str, Any], persist: bool = True):
         UserConfigManager.save_config(RUNTIME_CONFIG)
 
 
+@app.get("/config")
+def api_get_config():
+    """Retorna todas as configurações atuais (paths, params, etc)."""
+    return {
+        "status": "success", 
+        "config": RUNTIME_CONFIG,
+        "paths": RUNTIME_CONFIG.get("paths", {}) #atalho para backward compatibility
+    }
+
+
 @app.post("/config/reset")
 def api_reset_config():
     global RUNTIME_CONFIG

@@ -286,7 +286,7 @@ def main():
             torch.save(model.state_dict(), best_model_path)
 
         # Log formatado: [TREINANDO] Epoca X/Y ...
-        print(f"{Fore.YELLOW}[TREINANDO] Epoca {epoch:0{digits}d}/{args.epochs} | Train loss: {tr_loss:.4f} | Val loss: {va_loss:.4f} | Acc: {va_acc*100:.1f}% | F1: {va_f1m:.4f}")
+        print(f"{Fore.YELLOW}[TREINANDO] Epoca {epoch:0{digits}d}/{args.epochs}\nTrain loss: {tr_loss:.4f} | Val loss: {va_loss:.4f}\nAcc: {va_acc*100:.1f}% | F1: {va_f1m:.4f}")
 
         if early.should_stop(va_f1m, va_loss):
             print(Fore.MAGENTA + f"\n[STOP] Early stopping na epoca {epoch}")
