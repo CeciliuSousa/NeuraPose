@@ -54,15 +54,19 @@ class EmaSmoother:
         # Se a confiança for baixa, mantemos a posição anterior (reduz "pulos" quando o modelo falha)
         if self.min_conf > 0:
             mask = (curr_conf >= self.min_conf).astype(np.float32)
-            # Se conf é alta, usa alpha normal. Se é baixa, alpha efetivo vira 0 (não muda)
-            # Mas aqui queremos interpolar:
-            # new = alpha * curr + (1-alpha) * prev
-            # Vamos simplificar: aplicamos EMA em tudo, mas confiamos no modelo atual
-            # A lógica original do pré-processamento era EMA puro. Vamos manter EMA puro para paridade total.
-            pass
-
-        # Aplica fórmula do EMA: Y_t = alpha * X_t + (1 - alpha) * Y_{t-1}
-        smooth_xy = self.alpha * curr_xy + (1.0 - self.alpha) * prev_xy
+            # [CORREÇÃO] Não suavizar se a confiança for baixa (evita arrastar membros fantasmas)
+            # Se conf for alta: Aplica EMA (alpha * curr + (1-alpha) * prev)
+            # Se conf for baixa: Mantém o valor 'cru' atual (não suaviza a ida para zero/ruído)
+            # O renderizador deve ignorar pontos com conf baixa.
+            
+            # Calcula termo suavizado
+            ema_val = self.alpha * curr_xy + (1.0 - self.alpha) * prev_xy
+            
+            # Combina: Mascara * EMA + (1-Mascara) * Atual
+            smooth_xy = mask * ema_val + (1.0 - mask) * curr_xy
+        else:
+            # Aplica fórmula do EMA em tudo
+            smooth_xy = self.alpha * curr_xy + (1.0 - self.alpha) * prev_xy
         
         # Reconstrói array (N, 3)
         result_kps = np.concatenate([smooth_xy, curr_conf], axis=1)
