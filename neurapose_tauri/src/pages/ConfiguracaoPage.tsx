@@ -131,7 +131,7 @@ export default function ConfiguracaoPage() {
                 { key: "DETECTION_CONF", label: "Confiança YOLO (0-1)", type: "number", step: 0.01 },
                 { key: "YOLO_IMGSZ", label: "Resolução de Entrada", type: "select", options: ["640", "1280", "1920"] },
                 { key: "YOLO_BATCH_SIZE", label: "Batch Size (GPU)", type: "number" },
-                { key: "YOLO_SKIP_FRAME_INTERVAL", label: "Intervalo Skip-Frame (1-10)", type: "range", min: 1, max: 10, step: 1, tooltip: "1=Preciso, 3=Equilibrado, 10=Rápido" },
+                { key: "YOLO_SKIP_FRAME_INTERVAL", label: "Intervalo Skip-Frame YOLO (1-3)", type: "select", options: ["1", "2", "3"] },
             ]
         },
         {
@@ -153,11 +153,12 @@ export default function ConfiguracaoPage() {
                 { key: "det_thresh", label: "Det. Threshold (Conf)", type: "number", step: 0.05 },
                 { key: "max_age", label: "Max Age (Frames)", type: "number" },
                 { key: "min_hits", label: "Min Hits (Início)", type: "number" },
-                { key: "iou_threshold", label: "IoU Threshold", type: "number", step: 0.05 },
+                { key: "iou_thresh", label: "IoU Threshold", type: "number", step: 0.05 },
                 { key: "delta_t", label: "Delta T (Velocidade)", type: "number" },
                 { key: "asso_func", label: "Função Associação", type: "select", options: ["iou", "giou", "ciou", "diou", "ct_dist"] },
                 { key: "inertia", label: "Inertia (Suavização)", type: "number", step: 0.1 },
                 { key: "w_association_emb", label: "Peso ReID (Embedding)", type: "number", step: 0.05 },
+                { key: "device", label: "Device", type: "select", options: ["cuda", "cpu"] }
             ] : [
                 // BOTSORT PARAMS (Default)
                 { key: "track_high_thresh", label: "Track High Thresh", type: "number", step: 0.05 },
@@ -170,6 +171,7 @@ export default function ConfiguracaoPage() {
                 { key: "gmc_method", label: "GMC Method", type: "select", options: ["none", "orb", "sift", "sparseOptFlow"] },
                 { key: "fuse_score", label: "Fuse Score (Fusão)", type: "boolean" },
                 { key: "with_reid", label: "Ativar ReID (Visual)", type: "boolean" },
+                { key: "device", label: "Device", type: "select", options: ["cuda", "cpu"] }
             ]
         },
         {
@@ -200,18 +202,22 @@ export default function ConfiguracaoPage() {
             description: "Otimizações de GPU e CPU para acelerar o processamento.",
             items: [
                 { key: "USE_ASYNC_LOADER", label: "Leitura Assíncrona (Threaded)", type: "boolean" },
+                { key: "ASYNC_BUFFER_SIZE", label: "Tamanho Buffer Leitura", type: "number" },
                 { key: "USE_TENSORRT", label: "Aceleração TensorRT (.engine)", type: "boolean" },
                 { key: "USE_NVENC", label: "NVENC (Decodificação GPU)", type: "boolean" },
                 { key: "NVENC_PRESET", label: "Preset NVENC", type: "select", options: ["p1", "p4", "p7"] },
                 { key: "USE_FP16", label: "Precisão FP16", type: "boolean" },
             ]
         },
-        // Aviso extra fora da estrutura (hack visual simples) ou na description
         {
-            title: "Notas de Performance",
-            description: "⚠️ TensorRT requer exportação prévia do modelo. Leitura Assíncrona consome mais RAM para o buffer.",
-            items: []
-        }
+            title: "Filtros Pós-Processamento",
+            description: "Filtros para reduzir ruído e falsos positivos.",
+            items: [
+                { key: "MIN_POSDETECTION_CONF", label: "Conf. Mínima Pós-Detecção", type: "number", step: 0.05 },
+                { key: "MIN_POSE_ACTIVITY", label: "Mín. Atividade Pose", type: "number", step: 0.05 },
+                { key: "MIN_MEMBER_ACTIVITY", label: "Mín. Variância (Pixels)", type: "number", step: 0.5 },
+            ]
+        },
     ];
 
 

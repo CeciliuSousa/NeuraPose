@@ -31,7 +31,7 @@ except ImportError: pass
 # YOLO (Detecção)
 YOLO_MODEL = "yolo11s.pt"
 YOLO_IMGSZ = 640
-YOLO_CONF_THRESHOLD = 0.35
+YOLO_CONF_THRESHOLD = 0.55
 YOLO_CLASS_PERSON = 0
 
 # RTMPose (Keypoints)
@@ -42,7 +42,7 @@ RTMPOSE_MAX_BATCH_SIZE = 10         # Batch size para inferência Pose (GPU)
 # OSNet (ReID)
 OSNET_MODEL = "osnet_x0_5_msmt17_combineall_256x128_amsgrad_ep150_stp60_lr0.0015_b64_fb10_softmax_labelsmooth_flip_jitter.pth"
 
-TRACKER_NAME = "BoTSORT" # "BoTSORT" ou "DeepOCSORT"
+TRACKER_NAME = "DeepOCSORT" # "BoTSORT" ou "DeepOCSORT"
 TEMPORAL_MODEL = "tft"
 # -- PARÂMETROS PRE-PROC --
 DETECTION_CONF = 0.55
@@ -82,7 +82,7 @@ VAL_SPLIT = "validacao"
 TEST_SPLIT = "teste"
 
 # -- HIPERPARÂMETROS TREINO --
-TIME_STEPS = 10
+TIME_STEPS = 30
 NUM_JOINTS = 17
 NUM_CHANNELS = 2
 BATCH_SIZE = 64
@@ -182,22 +182,24 @@ BOT_SORT_CONFIG = {
     "fuse_score": True,
     "with_reid": True,
     "model": str(OSNET_PATH),
+    "device": DEVICE,
 }
 
 DEEPOCSORT_YAML_PATH = ROOT / "tracker" / "configuracao" / "deepocsort_custom.yaml"
 
 DEEP_OC_SORT_CONFIG = {
     "tracker_type": "deepocsort",
-    "det_thresh": 0.35,
+    "det_thresh": 0.55,
     "max_age": 120,
     "min_hits": 3,
-    "iou_threshold": 0.3,
+    "iou_thresh": 0.3,
     "delta_t": 3,
     "asso_func": "giou",
     "inertia": 0.2,
     "w_association_emb": 0.75,
-    "model_weights": str(OSNET_PATH), 
-    "fp16": USE_FP16, 
+    "reid_weights": str(OSNET_PATH), 
+    "half": USE_FP16, 
+    "device": DEVICE,
 }
 
 TRAIN_DIR = TEST_DATASETS_ROOT / TRAIN_SPLIT / "videos"

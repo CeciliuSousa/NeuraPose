@@ -448,14 +448,14 @@ def update_cm_runtime(updates: Dict[str, Any], persist: bool = True):
 
     # Sincroniza Depedências Derivadas (DeepOCSORT / BoTSORT)
     if "USE_FP16" in updates:
-        cm.DEEP_OC_SORT_CONFIG["fp16"] = updates["USE_FP16"]
+        cm.DEEP_OC_SORT_CONFIG["half"] = updates["USE_FP16"]
 
     if "OSNET_MODEL" in updates:
         # Recalcula path completo
         new_path = cm.OSNET_DIR / updates["OSNET_MODEL"]
         cm.OSNET_PATH = new_path
         # Atualiza dicts
-        cm.DEEP_OC_SORT_CONFIG["model_weights"] = str(new_path)
+        cm.DEEP_OC_SORT_CONFIG["reid_weights"] = str(new_path)
         cm.BOT_SORT_CONFIG["model"] = str(new_path)
 
     if persist:
