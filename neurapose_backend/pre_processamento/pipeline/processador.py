@@ -191,7 +191,8 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
                 writer.write(viz_frame)
                 
                 # Atualização de Preview para o App Web (Throttle implícito pelo skip_interval = 10fps)
-                if show and state is not None:
+                # Gatekeeper: Só envia se user pediu (state.show_preview) E se a UI estiver pronta
+                if show and state is not None and state.show_preview:
                     state.update_frame(viz_frame)
     
             frame_idx += 1

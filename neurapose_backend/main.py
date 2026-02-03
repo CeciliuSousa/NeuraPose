@@ -16,6 +16,8 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 import psutil
+import platform
+import os
 import torch
 
 import warnings
@@ -96,11 +98,41 @@ app = FastAPI(title="NeuraPose API", version="1.0.0")
 # Registra cleanup para encerramento forçado
 import atexit
 
+
 from neurapose_backend.globals.hardware_monitor import monitor as hw_monitor
+
+def configurar_prioridade_alta():
+    """
+    Força o processo atual a ter Alta Prioridade no SO.
+    Impede que o Windows reduza a CPU quando o terminal é minimizado.
+    """
+    try:
+        p = psutil.Process(os.getpid())
+        system = platform.system()
+        
+        print(f"[SYSTEM] Ajustando prioridade do processo PID {p.pid}...")
+        
+        if system == "Windows":
+            # HIGH_PRIORITY_CLASS (0x00000080)
+            # Não usamos REALTIME para não travar o mouse/teclado do usuário
+            p.nice(psutil.HIGH_PRIORITY_CLASS)
+            print("[SYSTEM] Prioridade definida para: ALTA (Windows)")
+            
+        elif system == "Linux":
+            # Nice -10 (Requer permissão, mas tenta)
+            try:
+                p.nice(-10)
+                print("[SYSTEM] Prioridade definida para: -10 (Linux)")
+            except:
+                print("[SYSTEM] Falha ao definir nice (requer sudo), rodando normal.")
+                
+    except Exception as e:
+        print(f"[SYSTEM] Erro ao ajustar prioridade: {e}")
 
 @app.on_event("startup")
 def startup_event():
-    """Inicializa monitoramento."""
+    """Inicializa monitoramento e prioridade."""
+    configurar_prioridade_alta()
     hw_monitor.start()
     logger.info("Hardware Monitor Started")
 
@@ -506,6 +538,18 @@ def api_reset_config():
             cm.BOT_SORT_CONFIG[k] = RUNTIME_CONFIG[k]
             
     return {"status": "success", "message": "Configurações resetadas para os padrões originais."}
+
+
+@app.post("/set_preview_state/{enabled}")
+def api_set_preview_state(enabled: bool):
+    """
+    Endpoint para o Frontend forçar o estado do preview.
+    Isso ativa/desativa o processamento de visualização em tempo real (economiza CPU se False).
+    """
+    state.show_preview = enabled
+    status = "LIGADO" if enabled else "DESLIGADO"
+    print(f"[API] Preview State alterado para: {status}")
+    return {"status": "success", "preview_enabled": state.show_preview}
 
 
 # ==============================================================

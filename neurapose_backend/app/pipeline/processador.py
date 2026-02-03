@@ -27,11 +27,18 @@ from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
 from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomDeepOCSORT, save_temp_tracker_yaml
 from neurapose_backend.temporal.inferencia_temporal import ClassificadorAcao
 
-# Import Sanitizer
+from neurapose_backend.temporal.inferencia_temporal import ClassificadorAcao
+
+# Import Sanitizer e State
 try:
     from neurapose_backend.nucleo.sanatizer import sanitizar_dados
 except ImportError:
     sanitizar_dados = None
+
+try:
+    from neurapose_backend.globals.state import state
+except ImportError:
+    state = None
 
 def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, show_preview=False, output_dir: Path = None, labels_path: Path = None):
     """
@@ -169,6 +176,22 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
                 t3_end = time.time()
                 tempos["temporal_total"] += (t3_end - t3_start)
                 
+                # --- [NOVO] CLASSIFICAÇÃO DE AÇÃO ---
+                for rec in pose_records:
+                    pid = rec["id_persistente"]
+                    kps = rec["keypoints"]
+
+                    # O Cérebro processa e diz a probabilidade
+                    prob = brain.predict_single(pid, kps)
+
+                    # Anexa metadados para o visualizador/JSON
+                    rec['theft_prob'] = prob
+                    rec['is_theft'] = prob >= cm.CLASSE2_THRESHOLD
+
+                    # LOG DE ALERTA (Apenas se detectar)
+                    if rec['is_theft']:
+                        print(Fore.RED + f"[ALERTA 🚨] Frame {frame_idx}: ID {pid} - FURTO DETECTADO ({prob:.1%})")
+                
                 registros_totais.extend(pose_records)
                 
                 # --- RENDERIZAÇÃO PADRONIZADA (APP) ---
@@ -219,6 +242,10 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
                 
                 # Grava frame (10 FPS)
                 writer.write(viz_frame)
+                
+                # Atualização de Preview para o App Web (Gatekeeper Otimizado)
+                if show_preview and state is not None and state.show_preview:
+                    state.update_frame(viz_frame)
             
             # Se frame não é múltiplo do skip, ignoramos completamente (não grava)
             frame_idx += 1
