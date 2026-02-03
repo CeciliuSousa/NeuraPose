@@ -339,6 +339,57 @@ for k in cm.BOT_SORT_CONFIG:
     if k in RUNTIME_CONFIG:
         cm.BOT_SORT_CONFIG[k] = RUNTIME_CONFIG[k]
 
+# Sincroniza DEEP_OC_SORT_CONFIG
+for k in cm.DEEP_OC_SORT_CONFIG:
+    if k in RUNTIME_CONFIG:
+        cm.DEEP_OC_SORT_CONFIG[k] = RUNTIME_CONFIG[k]
+
+# Sincroniza TRACKER_NAME
+if "TRACKER_NAME" in RUNTIME_CONFIG:
+    cm.TRACKER_NAME = RUNTIME_CONFIG["TRACKER_NAME"]
+
+# =========================================================================
+# SYNC GENÉRICO (REFLECTION) NA INICIALIZAÇÃO
+# =========================================================================
+# 1. Garante que RUNTIME_CONFIG tenha os valores padrão do config_master
+#    (Se o user_config.json não tiver a chave, pegamos do cm)
+#    Isso é vital para o Frontend receber os valores default.
+
+# A. Tracker Configs (Flattened)
+for k, v in cm.BOT_SORT_CONFIG.items():
+    if k not in RUNTIME_CONFIG:
+        RUNTIME_CONFIG[k] = v
+
+for k, v in cm.DEEP_OC_SORT_CONFIG.items():
+    if k not in RUNTIME_CONFIG:
+        RUNTIME_CONFIG[k] = v
+
+# B. Generic Configs (Reflection Inverse)
+# Varre o cm e popula o RUNTIME_CONFIG se faltar
+for k in dir(cm):
+    if k.isupper() and not k.startswith("_"):
+        val = getattr(cm, k)
+        # Filtra funcoes, modulos, tipos e objetos complexos (numpy)
+        if (not callable(val) 
+            and not isinstance(val, type(os)) 
+            and not isinstance(val, type(Path())) 
+            and not isinstance(val, type)
+            and not (hasattr(cm, 'np') and isinstance(val, cm.np.ndarray))):
+             if k not in RUNTIME_CONFIG:
+                 RUNTIME_CONFIG[k] = val
+
+# 2. Atualiza o cm com o que veio do RUNTIME_CONFIG (Override do Usuário)
+for k, v in RUNTIME_CONFIG.items():
+    if hasattr(cm, k):
+        attr = getattr(cm, k)
+        if not callable(attr) and not isinstance(attr, type(os)):
+             # SAFETY: Se o atributo original for Path e o valor novo for str, devemos converter ou ignorar
+             # Por seguranca, vamos ignorar override de Paths críticos (ROOT, etc) vindos do JSON
+             if isinstance(attr, (Path, type(Path()))):
+                 continue
+                 
+             setattr(cm, k, v)
+
 
 def get_all_cm_config():
     return RUNTIME_CONFIG
@@ -362,6 +413,31 @@ def update_cm_runtime(updates: Dict[str, Any], persist: bool = True):
     for k, v in updates.items():
         if k in cm.BOT_SORT_CONFIG:
             cm.BOT_SORT_CONFIG[k] = v
+        
+        # Sync DeepOCSORT
+        if k in cm.DEEP_OC_SORT_CONFIG:
+            cm.DEEP_OC_SORT_CONFIG[k] = v
+            
+    # Sincroniza TRACKER_NAME
+    if "TRACKER_NAME" in updates:
+        cm.TRACKER_NAME = updates["TRACKER_NAME"]
+
+    # =========================================================================
+    # SYNC GENÉRICO (REFLECTION) NO UPDATE
+    # =========================================================================
+    for k, v in updates.items():
+        if hasattr(cm, k):
+            attr = getattr(cm, k)
+            # Proteção básica
+            if (not callable(attr) 
+                and not isinstance(attr, type(os))
+                and not (hasattr(cm, 'np') and isinstance(attr, cm.np.ndarray))):
+                
+                # SAFETY: Path protection
+                if isinstance(attr, (Path, type(Path()))):
+                    continue
+                    
+                setattr(cm, k, v)
     
     # Recalcula derivadas criticas do RTMPose
     if "RTMPOSE_INPUT_SIZE" in updates: # Se foi atualizado
@@ -369,6 +445,18 @@ def update_cm_runtime(updates: Dict[str, Any], persist: bool = True):
              cm.SIMCC_W = RUNTIME_CONFIG["RTMPOSE_INPUT_SIZE"][0]
              cm.SIMCC_H = RUNTIME_CONFIG["RTMPOSE_INPUT_SIZE"][1]
              # print(f"[DEBUG] SIMCC recalibrado para: {cm.SIMCC_W}x{cm.SIMCC_H}")
+
+    # Sincroniza Depedências Derivadas (DeepOCSORT / BoTSORT)
+    if "USE_FP16" in updates:
+        cm.DEEP_OC_SORT_CONFIG["fp16"] = updates["USE_FP16"]
+
+    if "OSNET_MODEL" in updates:
+        # Recalcula path completo
+        new_path = cm.OSNET_DIR / updates["OSNET_MODEL"]
+        cm.OSNET_PATH = new_path
+        # Atualiza dicts
+        cm.DEEP_OC_SORT_CONFIG["model_weights"] = str(new_path)
+        cm.BOT_SORT_CONFIG["model"] = str(new_path)
 
     if persist:
         # Salva apenas as variáveis que queremos persistir (limpa caminhos dinâmicos se houver)
@@ -502,7 +590,7 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
                     # Verifica se ja existe na pasta jsons
                     if not is_processed and jsons_dir.exists():
                         if any(jsons_dir.glob(f"{v.stem}*tracking.json")): is_processed = True
-                        if any(jsons_dir.glob(f"{v.stem}*_30fps.json")): is_processed = True
+                        if any(jsons_dir.glob(f"{v.stem}*{cm.FPS_TARGET}fps.json")): is_processed = True
                     
                     if is_processed:
                         processed_count += 1
@@ -613,7 +701,7 @@ def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, 
                     # Verifica se ja existe na pasta jsons
                     if not is_processed and jsons_dir.exists():
                         if any(jsons_dir.glob(f"{v.stem}*tracking.json")): is_processed = True
-                        if any(jsons_dir.glob(f"{v.stem}*_30fps.json")): is_processed = True
+                        if any(jsons_dir.glob(f"{v.stem}*{cm.FPS_TARGET}fps.json")): is_processed = True
                     
                     if is_processed:
                         processed_count += 1
@@ -1865,7 +1953,7 @@ def get_annotation_details(video_id: str, root_path: Optional[str] = None):
     # Carrega labels existentes para este vídeo
     labels_path = root / "anotacoes" / "labels.json"
     saved_labels = {}
-    video_stem = video_id.replace("_pose", "").replace("_30fps", "_30fps")  # Mantém sufixo _30fps se existir
+    video_stem = video_id.replace("_pose", "").replace(f"_{cm.FPS_TARGET}fps")  # Mantém sufixo _30fps se existir
     
     if labels_path.exists():
         try:
@@ -1875,7 +1963,7 @@ def get_annotation_details(video_id: str, root_path: Optional[str] = None):
                 saved_labels = all_labels.get(video_stem, {})
                 if not saved_labels:
                     # Tenta também sem _30fps caso não encontre
-                    alt_stem = video_stem.replace("_30fps", "")
+                    alt_stem = video_stem.replace(f"_{cm.FPS_TARGET}fps", "")
                     saved_labels = all_labels.get(alt_stem, {})
                 logger.info(f"[ANNOTATE] Labels carregados para {video_stem}: {saved_labels}")
         except Exception as e:

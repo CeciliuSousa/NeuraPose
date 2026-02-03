@@ -9,7 +9,7 @@ from ultralytics import YOLO
 from colorama import Fore
 
 # Importacoes do tracker
-from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomReID, save_temp_tracker_yaml
+from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomReID, CustomDeepOCSORT, save_temp_tracker_yaml
 from neurapose_backend.globals.state import state
 import neurapose_backend.config_master as cm
 
@@ -194,12 +194,24 @@ class YoloStreamDetector:
             cap_read = cap.read
             cap_release = cap.release
         
-        # Init Tracker
-        tracker = CustomBoTSORT(frame_rate=int(fps))
-        self.model.tracker = tracker
-        tracker_yaml_path = save_temp_tracker_yaml()
+        # =========================================================================
+        # SELEÇÃO DINÂMICA DE TRACKER
+        # =========================================================================
+        USING_DEEPOCSORT = (cm.TRACKER_NAME.upper() == "DEEPOCSORT")
         
-        print(Fore.CYAN + f"[INFO] STREAMING VIDEO YOLO ({batch_size} batch)...")
+        deep_tracker = None
+        tracker = None # BoTSORT
+
+        if USING_DEEPOCSORT:
+             # DeepOCSORT roda frame a frame
+            deep_tracker = CustomDeepOCSORT()
+        else:
+             # BoTSORT Injetado
+            tracker = CustomBoTSORT(frame_rate=int(fps))
+            self.model.tracker = tracker
+            tracker_yaml_path = save_temp_tracker_yaml()
+        
+        print(Fore.CYAN + f"[INFO] STREAMING VIDEO YOLO ({batch_size} batch) | Tracker: {cm.TRACKER_NAME}...")
         
         track_data = {}
         frame_idx_global = 0
@@ -272,40 +284,9 @@ class YoloStreamDetector:
                             else:
                                 padded_frames = yolo_frames[:trt_batch_size]
                             
-                            # Inferência em batch único
-                            res_batch = self.model.predict(
-                                source=padded_frames,
-                                imgsz=cm.YOLO_IMGSZ,
-                                conf=cm.DETECTION_CONF,
-                                device=cm.DEVICE,
-                                classes=[cm.YOLO_CLASS_PERSON],
-                                verbose=False,
-                                stream=False
-                            )
-                            
-                            # Extrai detecções apenas dos frames reais (não padding)
-                            for idx, local_i in enumerate(yolo_frame_indices):
-                                if idx < len(res_batch) and len(res_batch[idx].boxes) > 0:
-                                    raw_data = res_batch[idx].boxes.data.cpu().numpy()
-                                    # Normaliza para 6 colunas se necessário
-                                    if raw_data.shape[1] == 4:
-                                        rows = raw_data.shape[0]
-                                        confs = np.full((rows, 1), 0.85, dtype=np.float32)
-                                        clss = np.zeros((rows, 1), dtype=np.float32)
-                                        raw_data = np.hstack((raw_data, confs, clss))
-                                    elif raw_data.shape[1] == 5:
-                                        rows = raw_data.shape[0]
-                                        clss = np.zeros((rows, 1), dtype=np.float32)
-                                        raw_data = np.hstack((raw_data, clss))
-                                    detections_map[local_i] = raw_data
-                                else:
-                                    detections_map[local_i] = np.empty((0, 6))
-                        else:
-                            # PyTorch: Processa frame a frame (dinâmico)
-                            for idx, local_i in enumerate(yolo_frame_indices):
-                                frame = yolo_frames[idx]
-                                res = self.model.predict(
-                                    source=frame,
+                            if not USING_DEEPOCSORT:
+                                res_batch = self.model.predict(
+                                    source=padded_frames,
                                     imgsz=cm.YOLO_IMGSZ,
                                     conf=cm.DETECTION_CONF,
                                     device=cm.DEVICE,
@@ -313,10 +294,56 @@ class YoloStreamDetector:
                                     verbose=False,
                                     stream=False
                                 )
-                                if len(res) > 0 and len(res[0].boxes) > 0:
-                                    detections_map[local_i] = res[0].boxes.data.cpu().numpy()
+                            else:
+                                # DeepOCSORT roda YOLO internamente frame-a-frame
+                                res_batch = []
+                                
+                            # Inicializa mapa de detecções vazio para evitar erro de referência
+                            # detections_map[local_i] = np.empty((0, 6)) # REMOVIDO: Erro de indentação e lógica deslocada
+                            
+                            # Preenche results para BoTSORT
+                            if not USING_DEEPOCSORT:
+                                # Extrai detecções apenas dos frames reais (não padding)
+                                for idx, local_i in enumerate(yolo_frame_indices):
+                                    if idx < len(res_batch) and len(res_batch[idx].boxes) > 0:
+                                        raw_data = res_batch[idx].boxes.data.cpu().numpy()
+                                        # Normaliza para 6 colunas se necessário
+                                        if raw_data.shape[1] == 4:
+                                            rows = raw_data.shape[0]
+                                            confs = np.full((rows, 1), 0.85, dtype=np.float32)
+                                            clss = np.zeros((rows, 1), dtype=np.float32)
+                                            raw_data = np.hstack((raw_data, confs, clss))
+                                        elif raw_data.shape[1] == 5:
+                                            rows = raw_data.shape[0]
+                                            clss = np.zeros((rows, 1), dtype=np.float32)
+                                            raw_data = np.hstack((raw_data, clss))
+                                        detections_map[local_i] = raw_data
+                                    else:
+                                        detections_map[local_i] = np.empty((0, 6))
+
+                        else:
+                            # PyTorch: Processa frame a frame (dinâmico)
+                            for idx, local_i in enumerate(yolo_frame_indices):
+                                frame = yolo_frames[idx]
+                                
+                                # SE BOTSORT: Roda YOLO Detect
+                                if not USING_DEEPOCSORT:
+                                    res = self.model.predict(
+                                        source=frame,
+                                        imgsz=cm.YOLO_IMGSZ,
+                                        conf=cm.DETECTION_CONF,
+                                        device=cm.DEVICE,
+                                        classes=[cm.YOLO_CLASS_PERSON],
+                                        verbose=False,
+                                        stream=False
+                                    )
+                                    if len(res) > 0 and len(res[0].boxes) > 0:
+                                        detections_map[local_i] = res[0].boxes.data.cpu().numpy()
+                                    else:
+                                        detections_map[local_i] = np.empty((0, 6))
                                 else:
-                                    detections_map[local_i] = np.empty((0, 6))
+                                    # Se DEEPOCSORT, não rodamos YOLO aqui, pois o tracker roda internamente
+                                    pass
                     except Exception as e:
                         print(Fore.RED + f"[ERRO] Falha na inferência YOLO batch: {e}")
                         # Fallback: todos os frames sem detecção
@@ -361,15 +388,38 @@ class YoloStreamDetector:
                         # ============================================================
                         is_yolo_frame = i in detections_map and len(detections_map.get(i, [])) > 0
                         
-                        if is_yolo_frame:
-                            # Frame com detecção YOLO: Update completo
-                            tracks = tracker.update(dets, frame)
-                        elif len(dets) == 0 and hasattr(tracker, 'predict_only'):
-                            # Frame PULADO: Usa Kalman Predict (Interpolação Suave)
-                            tracks = tracker.predict_only()
+                        if USING_DEEPOCSORT:
+                            # --- DeepOCSORT (Frame-a-Frame Inteiro) ---
+                            # O usuário configurou CustomDeepOCSORT para rodar YOLO + Tracker em um passo
+                            # Então passamos o frame cru e recebemos os tracks
+                            if is_yolo_frame: # Respeita o skip-frame?
+                                 # Sim, só roda se for frame de yolo. Nos frames pulados, o que fazemos?
+                                 # DeepOCSORT nativo boxmot não tem predict_only explícito público fácil na classe wrapper do usuário
+                                 # Mas vamos assumir que chamamos 'update' com vazio se skipar ou repetimos?
+                                 # Vamos chamar .track(frame)
+                                 
+                                 # Nota: CustomDeepOCSORT.track retorna ndarray [x,y,x,y,id,conf,cls]
+                                 tracks = deep_tracker.track(frame)
+                            else:
+                                 # Skip frame logic para DeepOCSORT
+                                 # Se o usuário não implementou predict_only, passamos vazio ou repetimos?
+                                 # Vamos passar vazio para manter vivo
+                                 # O wrapper do usuário trata vazio: return self.tracker.update(np.empty((0, 6)), frame)
+                                 # Mas aqui não temos detecções.
+                                 # Idealmente, DeepOCSORT deve rodar em TODOS os frames para Kalman funcionar bem.
+                                 # Ignorar YOLO_SKIP_FRAME_INTERVAL para DeepOCSORT é mais seguro.
+                                 tracks = deep_tracker.track(frame)
                         else:
-                            # Fallback: Update com dets vazio
-                            tracks = tracker.update(dets, frame)
+                            # --- BoTSORT (Padrão) ---
+                            if is_yolo_frame:
+                                # Frame com detecção YOLO: Update completo
+                                tracks = tracker.update(dets, frame)
+                            elif len(dets) == 0 and hasattr(tracker, 'predict_only'):
+                                # Frame PULADO: Usa Kalman Predict (Interpolação Suave)
+                                tracks = tracker.predict_only()
+                            else:
+                                # Fallback: Update com dets vazio
+                                tracks = tracker.update(dets, frame)
                         
                     except Exception as e:
                         print(Fore.RED + f"[ERRO] Falha no tracking frame {current_frame_idx}: {e}")
@@ -393,11 +443,14 @@ class YoloStreamDetector:
                             if tid < 0: continue
                             
                             # Feature extraction seguro
-                            try:
-                                trk = tracker.tracks[tid]
-                                f = trk.feat.copy() if hasattr(trk, 'feat') else np.zeros(512)
-                            except:
-                                f = np.zeros(512, dtype=np.float32)
+                            if not USING_DEEPOCSORT:
+                                try:
+                                    trk = tracker.tracks[tid]
+                                    f = trk.feat.copy() if hasattr(trk, 'feat') else np.zeros(512)
+                                except:
+                                    f = np.zeros(512, dtype=np.float32)
+                            else:
+                                 f = np.zeros(512, dtype=np.float32)
                             
                             if tid not in track_data:
                                 track_data[tid] = {
@@ -434,7 +487,8 @@ class YoloStreamDetector:
                     
         finally:
             cap_release()
-            del self.model.tracker
+            if not USING_DEEPOCSORT:
+                 del self.model.tracker
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 

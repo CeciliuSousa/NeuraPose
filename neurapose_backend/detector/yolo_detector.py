@@ -10,7 +10,7 @@ from pathlib import Path
 from ultralytics import YOLO
 
 # Importacoes do tracker
-from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomReID, save_temp_tracker_yaml
+from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomReID, CustomDeepOCSORT, save_temp_tracker_yaml
 
 from neurapose_backend.globals.state import state
 from colorama import Fore
@@ -157,8 +157,26 @@ def yolo_detector_botsort(videos_dir=None, batch_size=None):
         # Configure Tracker YAML
         tracker_yaml_path = save_temp_tracker_yaml()
         
-        print(Fore.CYAN + f"[INFO] PROCESSANDO VIDEO COM YOLO + BOTSORT-CUSTOM + OSNET...")
+        print(Fore.CYAN + f"[INFO] PROCESSANDO VIDEO COM YOLO + {cm.TRACKER_NAME.upper()}...")
         sys.stdout.flush()
+
+        # =========================================================================
+        # SELEÇÃO DINÂMICA DE TRACKER
+        # =========================================================================
+        USING_DEEPOCSORT = (cm.TRACKER_NAME.upper() == "DEEPOCSORT")
+        
+        deep_tracker = None
+        if USING_DEEPOCSORT:
+            print(Fore.MAGENTA + "[TRACKER] Inicializando DeepOCSORT (BoxMOT)...")
+            # DeepOCSORT roda frame a frame, não injetado no YOLO
+            deep_tracker = CustomDeepOCSORT()
+            # YOLO model inside DeepOCSORT wrapper handles inference
+            # We will use deep_tracker.track(frame) inside the loop
+        else:
+            # BoTSORT Default (Injetado no YOLO)
+            tracker = CustomBoTSORT(frame_rate=int(fps))
+            model.tracker = tracker
+
 
         results = []
         
@@ -196,22 +214,54 @@ def yolo_detector_botsort(videos_dir=None, batch_size=None):
             if not frames_batch:
                 break # Fim do vídeo
 
-            # 2. Inferência em Batch (Bloqueante mas muito rápida na GPU)
-            # persist=True mantém o tracking entre os batches sequenciais
-            batch_results = model.track(
-                source=frames_batch,
-                imgsz=cm.YOLO_IMGSZ,
-                conf=cm.DETECTION_CONF,
-                device=cm.DEVICE,
-                persist=True,
-                tracker=str(tracker_yaml_path),
-                classes=[cm.YOLO_CLASS_PERSON],
-                verbose=False,
-                half=True,
-                stream=False # Batch retorna lista completa imediatamente
-            )
+            # =========================================================================
+            # INFERÊNCIA (BRANCH CONFORME TRACKER)
+            # =========================================================================
+            
+            # --- OPÇÃO A: DEEPOCSORT (FRAME-A-FRAME) ---
+            if USING_DEEPOCSORT:
+                # Adaptação: DeepOCSORT espera 1 frame por vez (ou lista de frames para loop interno)
+                # Nosso wrapper CustomDeepOCSORT.track aceita 1 frame.
+                # Precisamos iterar o batch manualmente aqui.
+                
+                batch_results_fake = [] # Estrutura para manter compatibilidade com loop abaixo
+                
+                for frame in frames_batch:
+                    # Roda rastreador (YOLO interno + OCSORT)
+                    # Retorna np.array: [[x1, y1, x2, y2, id, conf, cls, ...]]
+                    tracks = deep_tracker.track(frame)
+                    
+                    # Empacota em um objeto mock que imita o resultado do YOLO para o loop de baixo
+                    # Precisamos de algo com .boxes.data
+                    class MockResult:
+                        def __init__(self, data):
+                            self.boxes = self.MockBoxes(data)
+                        class MockBoxes:
+                            def __init__(self, data):
+                                self.data = torch.from_numpy(data) if data.shape[0] > 0 else torch.empty(0, 6)
+                                
+                    batch_results_fake.append(MockResult(tracks))
+                
+                batch_results = batch_results_fake
 
-            # 3. Processar Resultados do Batch
+            # --- OPÇÃO B: BOTSORT (BATCH NATIVO YOLO) ---
+            else:
+                # Inferencia com Tracker Default
+                batch_results = model.track(
+                    source=frames_batch,
+                    imgsz=cm.YOLO_IMGSZ,
+                    conf=cm.DETECTION_CONF,
+                    device=cm.DEVICE,
+                    persist=True,
+                    tracker=str(tracker_yaml_path),
+                    classes=[cm.YOLO_CLASS_PERSON],
+                    verbose=False,
+                    half=True,
+                    stream=False 
+                )
+
+
+            # 3. Processar Resultados do Batch (COMUM AOS DOIS)
             for i, r in enumerate(batch_results):
                 current_frame_idx = frame_idx_global + i
                 
@@ -236,13 +286,19 @@ def yolo_detector_botsort(videos_dir=None, batch_size=None):
                             tid = int(tid_raw)
                             
                             # Feature extraction (se disponível)
-                            try:
-                                # Acesso direto interno ao tracker do Ultralytics
-                                # Pode variar dependendo da versão, protegemos com try
-                                trk = tracker.tracks[tid]
-                                f = trk.feat.copy() if hasattr(trk, 'feat') else np.zeros(512)
-                            except:
-                                f = np.zeros(512, dtype=np.float32)
+                            # DeepOCSORT não expõe 'feat' facilmente no output padrão boxmot
+                            # BoTSORT expõe via tracker.tracks
+                            f = np.zeros(512, dtype=np.float32)
+
+                            if not USING_DEEPOCSORT:
+                                try:
+                                    trk = tracker.tracks[tid]
+                                    f = trk.feat.copy() if hasattr(trk, 'feat') else np.zeros(512)
+                                except:
+                                    pass
+                            
+                            # Se DeepOCSORT implementasse extração, pegariamos aqui. 
+                            # Por hora, ele foca no rastreamento robusto.
 
                             if tid not in track_data:
                                 track_data[tid] = {
@@ -292,7 +348,8 @@ def yolo_detector_botsort(videos_dir=None, batch_size=None):
         })
         
         # Clean Memory
-        del model.tracker
+        if not USING_DEEPOCSORT:
+            del model.tracker
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 

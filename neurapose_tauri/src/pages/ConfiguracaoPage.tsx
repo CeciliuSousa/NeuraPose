@@ -107,7 +107,8 @@ export default function ConfiguracaoPage() {
             title: "Modelos de IA",
             description: "Modelos usados para detecção, pose e re-identificação.",
             items: [
-                { key: "YOLO_MODEL", label: "Modelo YOLO (Detecção)", type: "select", options: ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolov8x.pt", "yolo11m.pt"] },
+                { key: "YOLO_MODEL", label: "Modelo YOLO (Detecção)", type: "select", options: ["yolov8n.pt", "yolov8s.pt", "yolo11n.pt", "yolo11s.pt", "yolo11m.pt"] },
+                { key: "TRACKER_NAME", label: "Rastreador Ativo", type: "select", options: ["BoTSORT", "DeepOCSORT"] },
                 { key: "OSNET_MODEL", label: "Modelo OSNet (Re-ID)", type: "path", rootKey: "modelos_reid" },
                 { key: "RTMPOSE_MODEL", label: "Modelo RTMPose (Pose)", type: "path", rootKey: "modelos_pose" },
                 { key: "RTMPOSE_INPUT_SIZE", label: "Resol. Entrada RTMPose", type: "select", options: ["256x192", "384x288"] },
@@ -143,10 +144,22 @@ export default function ConfiguracaoPage() {
                 { key: "RTMPOSE_MAX_BATCH_SIZE", label: "Batch Pose (GPU)", type: "number" },
             ]
         },
+
         {
-            title: "Rastreador (BoTSORT)",
-            description: "Parâmetros do tracker para manter IDs consistentes.",
-            items: [
+            title: `Rastreador (${config.TRACKER_NAME || 'BoTSORT'})`,
+            description: "Parâmetros específicos do algoritmo de rastreamento selecionado.",
+            items: config.TRACKER_NAME === 'DeepOCSORT' ? [
+                // DEEPOCSORT PARAMS
+                { key: "det_thresh", label: "Det. Threshold (Conf)", type: "number", step: 0.05 },
+                { key: "max_age", label: "Max Age (Frames)", type: "number" },
+                { key: "min_hits", label: "Min Hits (Início)", type: "number" },
+                { key: "iou_threshold", label: "IoU Threshold", type: "number", step: 0.05 },
+                { key: "delta_t", label: "Delta T (Velocidade)", type: "number" },
+                { key: "asso_func", label: "Função Associação", type: "select", options: ["iou", "giou", "ciou", "diou", "ct_dist"] },
+                { key: "inertia", label: "Inertia (Suavização)", type: "number", step: 0.1 },
+                { key: "w_association_emb", label: "Peso ReID (Embedding)", type: "number", step: 0.05 },
+            ] : [
+                // BOTSORT PARAMS (Default)
                 { key: "track_high_thresh", label: "Track High Thresh", type: "number", step: 0.05 },
                 { key: "track_low_thresh", label: "Track Low Thresh", type: "number", step: 0.05 },
                 { key: "new_track_thresh", label: "New Track Thresh", type: "number", step: 0.05 },

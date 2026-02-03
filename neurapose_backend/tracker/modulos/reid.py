@@ -15,10 +15,21 @@ from colorama import Fore
 
 
 class OSNetAIN(nn.Module):
-    def __init__(self, state_dict):
+    def __init__(self, state_dict, model_name="osnet_x1_0"):
         super().__init__()
-        from torchreid.reid.models import osnet_ain_x1_0
-        self.model = osnet_ain_x1_0(num_classes=0, pretrained=False)
+        
+        # Importação Dinâmica baseada no nome
+        # Ex: "osnet_x0_5" -> from torchreid.reid.models import osnet_x0_5
+        import torchreid.reid.models as models
+        
+        if hasattr(models, model_name):
+            builder = getattr(models, model_name)
+        else:
+            print(Fore.RED + f"[ReID] Arquitetura '{model_name}' não encontrada. Usando 'osnet_x1_0' como fallback.")
+            builder = models.osnet_x1_0
+            
+        # Instancia sem pre-treino (vamos carregar os nossos)
+        self.model = builder(num_classes=0, pretrained=False)
         self.model.load_state_dict(state_dict, strict=False)
         self.model.eval()
 
@@ -30,8 +41,31 @@ class CustomReID:
     def __init__(self, model_path):
         ckpt = torch.load(model_path, map_location=cm.DEVICE)
         state_dict = ckpt.get("state_dict", ckpt)
-
-        self.model = OSNetAIN(state_dict)
+        
+        # Detecção de arquitetura pelo nome do arquivo
+        fname = str(model_path).lower()
+        model_name = "osnet_x1_0" # fallback padrao
+        
+        # Lista de arquiteturas conhecidas do torchreid (na ordem do mais especifico para o mais geral)
+        known_archs = [
+            "osnet_ain_x1_0", "osnet_ain_x0_75", "osnet_ain_x0_5", "osnet_ain_x0_25",
+            "osnet_ibn_x1_0", "osnet_x1_0", "osnet_x0_75", "osnet_x0_5", "osnet_x0_25"
+        ]
+        
+        for arch in known_archs:
+            if arch in fname:
+                model_name = arch
+                # print(f"[ReID] Arquitetura detectada pelo nome: {model_name}")
+                break
+        
+        # Remove chaves do classificador (geram erro de tamanho pois num_classes=0)
+        # O checkpoint tem classifier para 4101 classes (MSMT17), nos usamos 0 (Feature Extractor)
+        keys_to_remove = ["classifier.weight", "classifier.bias"]
+        for k in keys_to_remove:
+            if k in state_dict:
+                del state_dict[k]
+        
+        self.model = OSNetAIN(state_dict, model_name=model_name)
         self.device = cm.DEVICE
         self.model.to(self.device)
         

@@ -29,20 +29,20 @@ except ImportError: pass
 
 # -- MODELOS --
 # YOLO (Detecção)
-YOLO_MODEL = "yolo11m.pt"
+YOLO_MODEL = "yolo11s.pt"
 YOLO_IMGSZ = 640
 YOLO_CONF_THRESHOLD = 0.35
 YOLO_CLASS_PERSON = 0
 
 # RTMPose (Keypoints)
-RTMPOSE_MODEL = "rtmpose-l_simcc-body7_pt-body7_420e-256x192/end2end.onnx"
+RTMPOSE_MODEL = "rtmpose-m_simcc-body7_pt-body7_420e-256x192/end2end.onnx"
 RTMPOSE_INPUT_SIZE = (192, 256)
 RTMPOSE_MAX_BATCH_SIZE = 10         # Batch size para inferência Pose (GPU)
 
 # OSNet (ReID)
-OSNET_MODEL = "osnet_ain_x1_0_msmt17_256x128_amsgrad_ep50_lr0.0015_coslr_b64_fb10_softmax_labsmth_flip_jitter.pth"
+OSNET_MODEL = "osnet_x0_5_msmt17_combineall_256x128_amsgrad_ep150_stp60_lr0.0015_b64_fb10_softmax_labelsmooth_flip_jitter.pth"
 
-TRACKER_NAME = "BoTSORT"
+TRACKER_NAME = "BoTSORT" # "BoTSORT" ou "DeepOCSORT"
 TEMPORAL_MODEL = "tft"
 # -- PARÂMETROS PRE-PROC --
 DETECTION_CONF = 0.55
@@ -69,7 +69,7 @@ ID_TO_CLASS = {idx: name for idx, name in enumerate(CLASS_NAMES)}
 
 POSITIVE_CLASS_ID = 1
 POSITIVE_CLASS_NAME = CLASS_NAMES[POSITIVE_CLASS_ID]
-MIN_FRAMES_PER_ID = 30
+MIN_FRAMES_PER_ID = 10
 
 # -- DATASETS --
 PROCESSING_DATASET = "data-labex-completo"
@@ -82,7 +82,7 @@ VAL_SPLIT = "validacao"
 TEST_SPLIT = "teste"
 
 # -- HIPERPARÂMETROS TREINO --
-TIME_STEPS = 30
+TIME_STEPS = 10
 NUM_JOINTS = 17
 NUM_CHANNELS = 2
 BATCH_SIZE = 64
@@ -134,8 +134,8 @@ RTMPOSE_PREPROCESSING_PATH = RTMPOSE_PATH
 
 # Parâmetros sequência
 MAX_FRAMES_PER_SEQUENCE = 9000  # Para streaming de vídeo (inferência)
-TRAIN_SEQUENCE_LENGTH = 30      # Para treinamento/conversão de dataset (modelo espera T=30)
-FPS_TARGET = 30.0
+TRAIN_SEQUENCE_LENGTH = 10      # Para treinamento/conversão de dataset (modelo espera T=30)
+FPS_TARGET = 10.0
 FRAME_DISPLAY_W = 1280
 FRAME_DISPLAY_H = 720
 
@@ -184,8 +184,22 @@ BOT_SORT_CONFIG = {
     "model": str(OSNET_PATH),
 }
 
-# Legacy
-# DATASETS_ROOT = TEST_DATASETS_ROOT # REMOVED: conflicting definition
+DEEPOCSORT_YAML_PATH = ROOT / "tracker" / "configuracao" / "deepocsort_custom.yaml"
+
+DEEP_OC_SORT_CONFIG = {
+    "tracker_type": "deepocsort",
+    "det_thresh": 0.35,
+    "max_age": 120,
+    "min_hits": 3,
+    "iou_threshold": 0.3,
+    "delta_t": 3,
+    "asso_func": "giou",
+    "inertia": 0.2,
+    "w_association_emb": 0.75,
+    "model_weights": str(OSNET_PATH), 
+    "fp16": USE_FP16, 
+}
+
 TRAIN_DIR = TEST_DATASETS_ROOT / TRAIN_SPLIT / "videos"
 VAL_DIR = TEST_DATASETS_ROOT / VAL_SPLIT / "videos"
 PREPROCESSING_OUTPUT = ROOT / "resultado_processamento"
@@ -269,7 +283,7 @@ def imprimir_configuracoes():
 def imprimir_configs_yolo_botsort():
     """Imprime configurações do YOLO e BoTSORT."""
     print("\n" + "="*50)
-    print(" DETALHES DO RASTREADOR (YOLO + BoTSORT)")
+    print(" DETALHES DO RASTREADOR")
     print("="*50)
     print(f"  [YOLO] Detection Conf:  {DETECTION_CONF}")
     print("-" * 50)

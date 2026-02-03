@@ -81,7 +81,7 @@ def desenhar_info_predicao_padrao(frame, bbox, pid, conf, pred_name=None, classe
     # ============================================================
     # LINHA 1: ID_P | Pessoa: conf
     # ============================================================
-    label_linha1 = f"ID: {pid} | Conf: {conf:.2f}"
+    label_linha1 = f"ID: {pid} | Pessoa: {conf:.2f}"
 
     # ============================================================
     # LINHA 2: Classe: NORMAL/FURTO (apenas se existir pred_name)

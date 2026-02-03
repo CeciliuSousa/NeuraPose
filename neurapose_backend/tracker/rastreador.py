@@ -4,7 +4,8 @@
 
 from neurapose_backend.tracker.modulos.botsort import CustomBoTSORT
 from neurapose_backend.tracker.modulos.reid import CustomReID
+from neurapose_backend.tracker.modulos.deepocsort import CustomDeepOCSORT
 from neurapose_backend.tracker.utils.ferramentas import save_temp_tracker_yaml
 
 
-__all__ = ["CustomBoTSORT", "CustomReID", "save_temp_tracker_yaml"]
+__all__ = ["CustomBoTSORT", "CustomReID", "CustomDeepOCSORT", "save_temp_tracker_yaml"]

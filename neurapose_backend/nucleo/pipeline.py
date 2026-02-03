@@ -151,7 +151,7 @@ def executar_pipeline_extracao(
     try:
         raw_records, track_data, total_frames = pipeline.executar(video_path_norm, batch_size)
     except Exception as e:
-        print(Fore.RED + f"[CRITICAL] Erro no pipeline paralelo: {e}")
+        print(Fore.RED + f"[ERRO] Erro no pipeline paralelo: {e}")
         return [], {}, [], 0, tempos
 
     t_total_extracao = time.time() - t0_global
