@@ -95,6 +95,8 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
     # 5. MODELOS
     pose_extractor = ExtratorPoseRTMPose(device=cm.DEVICE)
     
+
+
     USING_DEEPOCSORT = (cm.TRACKER_NAME.upper() == "DEEPOCSORT")
     tracker = None
     yolo_model = None
@@ -104,7 +106,6 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
         tracker = CustomDeepOCSORT()
     else:
         yolo_model = YOLO(str(cm.YOLO_PATH)).to(cm.DEVICE)
-        # Tracker configurado para o FPS do target (10fps) já que vamos pular frames
         tracker_instance = CustomBoTSORT(frame_rate=int(target_fps))
         yolo_model.tracker = tracker_instance
         yaml_path = save_temp_tracker_yaml()
@@ -112,10 +113,12 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
     # 6. LOOP
     records = []
     frame_idx = 0
+    start_time_global = time.time()
     
     t_yolo_acc = 0.0
     t_pose_acc = 0.0
-    
+    last_logged_percent = -1
+
     try:
         while cap.isOpened():
             ret, frame = cap.read()
@@ -123,6 +126,14 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
             
             # LOGICAL SKIP: Apenas processa se for o frame do intervalo
             if frame_idx % skip_interval == 0:
+                # --- LÓGICA DE LOG (SILENCIOSA: A CADA 20%) ---
+                current_percent = int((frame_idx / total_frames) * 100)
+                should_log = (current_percent % 20 == 0 and current_percent > last_logged_percent) or (frame_idx == 0)
+                
+                if should_log:
+                    last_logged_percent = current_percent
+                    print(f"\r[PROC] Progresso: {current_percent}% ({frame_idx}/{total_frames})")
+
                 t0 = time.time()
                 
                 # --- DETECÇÃO ---
@@ -154,7 +165,6 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
                 records.extend(pose_records)
                 
                 # --- VISUALIZAÇÃO PADRONIZADA ---
-                # Regra: BBox Verde, Texto Preto/Branco, Esqueletos Coloridos
                 viz_frame = frame.copy()
                 
                 for rec in pose_records:
@@ -163,22 +173,22 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
                     kps = np.array(rec["keypoints"])
                     conf = rec["confidence"]
                     
-                    # 1. Esqueletos Coloridos (Padrão RTMPose / Random ID color)
+                    # 1. Esqueletos Coloridos
                     pid_color = color_for_id(pid)
                     desenhar_esqueleto_unificado(viz_frame, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=pid_color)
                     
-                    # 2. BBox Verde Apenas
-                    color_bbox = (0, 255, 0) # Verde BGR
+                    # 2. BBox (Verde Apenas)
+                    color_bbox = (0, 255, 0)
                     if bbox is not None:
                         x1, y1, x2, y2 = map(int, bbox)
                         cv2.rectangle(viz_frame, (x1, y1), (x2, y2), color_bbox, 2)
                         
-                        # 3. Texto Preto com Fundo Branco
-                        # "ID: <id> | Pessoa: <conf>"
+                        # 3. Label (ID e Confiança)
                         label = f"ID: {pid} | Pessoa: {conf:.2f}"
                         
                         font_scale = 0.6
                         thick = 2
+                        
                         (w_txt, h_txt), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thick)
                         
                         # Retângulo Branco Cheio
@@ -190,17 +200,11 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
                 # Grava frame processado (10fps output)
                 writer.write(viz_frame)
                 
-                # Atualização de Preview para o App Web (Throttle implícito pelo skip_interval = 10fps)
-                # Gatekeeper: Só envia se user pediu (state.show_preview) E se a UI estiver pronta
+                # Atualização de Preview
                 if show and state is not None and state.show_preview:
                     state.update_frame(viz_frame)
     
             frame_idx += 1
-            
-            # print(f"\r[INFO] INICIANDO FASE PROCESSAMENTO...")
-            
-            if frame_idx % 10 == 0:
-                print(f"\r[PROCESSAMENTO] Frame {frame_idx}/{total_frames}", end="")
 
     except KeyboardInterrupt:
         print("\nProcessamento interrompido.")

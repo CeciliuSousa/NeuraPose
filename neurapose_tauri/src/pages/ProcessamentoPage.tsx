@@ -91,6 +91,11 @@ export default function ProcessamentoPage() {
                             currentLogs.push(content);
                         }
                     });
+                    // Limita o histórico de logs para evitar travar a UI (DOM Overload)
+                    const MAX_LOGS = 300;
+                    if (currentLogs.length > MAX_LOGS) {
+                        return currentLogs.slice(currentLogs.length - MAX_LOGS);
+                    }
                     return currentLogs;
                 });
             };

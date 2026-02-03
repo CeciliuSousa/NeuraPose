@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+// import { Link } from 'react-router-dom';
 import { APIService } from '../services/api';
+import { useProcessingStatus } from '../hooks/useProcessingStatus';
 import {
     Activity,
     AlertCircle,
@@ -19,14 +21,7 @@ import {
     History
 } from 'lucide-react';
 
-interface SystemInfo {
-    cpu_percent: number;
-    ram_used_gb: number;
-    ram_total_gb: number;
-    gpu_mem_used_gb: number;
-    gpu_mem_total_gb: number;
-    gpu_name: string;
-}
+// interface SystemInfo movida para useProcessingStatus
 
 interface SystemStatus {
     status: string;
@@ -35,18 +30,18 @@ interface SystemStatus {
 
 export default function HomePage() {
     const [status, setStatus] = useState<SystemStatus | null>(null);
-    const [sysInfo, setSysInfo] = useState<SystemInfo | null>(null);
     const [loading, setLoading] = useState(true);
+    const { hardware } = useProcessingStatus();
+
+    // Usa hardware do hook global
+    const sysInfo = hardware;
 
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const [healthRes, infoRes] = await Promise.all([
-                    APIService.healthCheck(),
-                    APIService.getSystemInfo()
-                ]);
+                // Checa apenas o healthCheck (o resto vem via WS)
+                const healthRes = await APIService.healthCheck();
                 setStatus(healthRes.data);
-                setSysInfo(infoRes.data);
             } catch (err) {
                 setStatus({ status: 'error', version: 'Unknown' });
             } finally {
@@ -54,7 +49,8 @@ export default function HomePage() {
             }
         };
         fetchData();
-        const interval = setInterval(fetchData, 5000);
+        // Health check pode ser menos frequente ou removido se confiarmos totalmente no WS
+        const interval = setInterval(fetchData, 10000);
         return () => clearInterval(interval);
     }, []);
 

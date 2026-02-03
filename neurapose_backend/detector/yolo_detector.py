@@ -122,6 +122,13 @@ def yolo_detector_botsort(videos_dir=None, batch_size=None):
         try:
             temp_model = YOLO(model_base)
             temp_model.save(str(model_path))
+            
+            # Cleanup: YOLO baixa no CWD, então removemos o arquivo solto
+            local_file = Path(f"{model_base}.pt")
+            if local_file.exists():
+                local_file.unlink()
+                print(Fore.CYAN + f"[INFO] Arquivo temporário removido: {local_file.name}")
+                
         except Exception as e:
             if model_path.exists():
                 os.remove(model_path)

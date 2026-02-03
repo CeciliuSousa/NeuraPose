@@ -9,6 +9,16 @@ export interface ProcessingStatusContextType {
     clearPageStatus: (page: string) => void;
     isAnyProcessing: boolean;
     currentProcess: string | null;  // Qual processo está rodando agora
+    hardware: SystemInfo | null;    // Métricas de hardware em tempo real
+}
+
+export interface SystemInfo {
+    cpu_percent: number;
+    ram_used_gb: number;
+    ram_total_gb: number;
+    gpu_mem_used_gb: number;
+    gpu_mem_total_gb: number;
+    gpu_name: string;
 }
 
 const ProcessingStatusContext = createContext<ProcessingStatusContextType | null>(null);
@@ -22,6 +32,7 @@ export function ProcessingStatusProvider({ children }: { children: ReactNode }) 
         return saved ? JSON.parse(saved) : {};
     });
     const [currentProcess, setCurrentProcess] = useState<string | null>(null);
+    const [hardware, setHardware] = useState<SystemInfo | null>(null);
 
     const setPageStatus = useCallback((page: string, status: PageStatus) => {
         setStatuses(prev => {
@@ -43,6 +54,11 @@ export function ProcessingStatusProvider({ children }: { children: ReactNode }) 
 
                 // Atualiza qual processo está rodando
                 setCurrentProcess(is_running ? current_process : null);
+
+                // Atualiza hardware se disponível no payload
+                if (status.hardware) {
+                    setHardware(status.hardware);
+                }
 
                 setStatuses(prev => {
                     const next = { ...prev };
@@ -107,7 +123,7 @@ export function ProcessingStatusProvider({ children }: { children: ReactNode }) 
     const isAnyProcessing = Object.values(statuses).some(s => s === 'processing');
 
     return (
-        <ProcessingStatusContext.Provider value={{ statuses, setPageStatus, clearPageStatus, isAnyProcessing, currentProcess }}>
+        <ProcessingStatusContext.Provider value={{ statuses, setPageStatus, clearPageStatus, isAnyProcessing, currentProcess, hardware }}>
             {children}
         </ProcessingStatusContext.Provider>
     );

@@ -902,11 +902,23 @@ async def websocket_status(websocket: WebSocket):
     await ws_manager.connect(websocket)
     try:
         while True:
+            # Coleta métricas atuais (sem custo de polling HTTP)
+            metrics = hw_monitor.get_metrics()
+            
             status = {
                 "is_running": state.is_running,
                 "is_paused": state.is_paused,
                 "current_process": state.current_process,
-                "process_status": state.process_status
+                "process_status": state.process_status,
+                # Dados de Hardware (Push 1Hz - elimina Polling do Frontend)
+                "hardware": {
+                    "cpu_percent": metrics.get("cpu", 0),
+                    "ram_used_gb": metrics.get("ram_used", 0),
+                    "ram_total_gb": metrics.get("ram_total", 0),
+                    "gpu_mem_used_gb": metrics.get("gpu_mem", 0),
+                    "gpu_mem_total_gb": metrics.get("gpu_total", 0),
+                    "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else ""
+                }
             }
             await ws_manager.send_status(websocket, status)
             await asyncio.sleep(1.0)  # Envia a cada 1s

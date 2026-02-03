@@ -105,6 +105,12 @@ export default function TestesPage() {
                         if (content.trim()) currentLogs.push(content);
                     });
 
+                    // Limita o histórico de logs para evitar travar a UI (DOM Overload)
+                    const MAX_LOGS = 300;
+                    if (currentLogs.length > MAX_LOGS) {
+                        return currentLogs.slice(currentLogs.length - MAX_LOGS);
+                    }
+
                     // Persiste on-the-fly para F5
                     localStorage.setItem('np_test_logs', JSON.stringify(currentLogs));
                     return currentLogs;

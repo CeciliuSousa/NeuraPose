@@ -1,5 +1,7 @@
 // EventEmitter import removed since we define a simple one below
 
+import { SystemInfo } from '../hooks/useProcessingStatus';
+
 type LogCategory = 'process' | 'train' | 'test' | 'default';
 
 export interface LogMessage {
@@ -15,6 +17,28 @@ export interface StatusMessage {
     is_paused: boolean;
     current_process: string | null;
     process_status: string;
+    hardware?: SystemInfo;
+}
+
+// Implementação simples de EventEmitter para browser
+// Definida ANTES da classe WebSocketService para evitar ReferenceError (Hoisting)
+class BrowserEventEmitter {
+    private listeners: Record<string, Function[]> = {};
+
+    on(event: string, callback: Function) {
+        if (!this.listeners[event]) this.listeners[event] = [];
+        this.listeners[event].push(callback);
+    }
+
+    off(event: string, callback: Function) {
+        if (!this.listeners[event]) return;
+        this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
+    }
+
+    emit(event: string, data: any) {
+        if (!this.listeners[event]) return;
+        this.listeners[event].forEach(cb => cb(data));
+    }
 }
 
 class WebSocketService {
@@ -100,28 +124,5 @@ class WebSocketService {
     }
 }
 
-// Implementação simples de EventEmitter para browser
-class BrowserEventEmitter {
-    private listeners: Record<string, Function[]> = {};
-
-    on(event: string, callback: Function) {
-        if (!this.listeners[event]) this.listeners[event] = [];
-        this.listeners[event].push(callback);
-    }
-
-    off(event: string, callback: Function) {
-        if (!this.listeners[event]) return;
-        this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
-    }
-
-    emit(event: string, data: any) {
-        if (!this.listeners[event]) return;
-        this.listeners[event].forEach(cb => cb(data));
-    }
-}
-
-// Patch para usar a classe interna se não tiver arquivo separado
 const wsService = new WebSocketService();
-wsService.events = new BrowserEventEmitter();
-
 export default wsService;

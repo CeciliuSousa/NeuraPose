@@ -106,6 +106,13 @@ class YoloStreamDetector:
             try:
                 temp = YOLO(model_base)
                 temp.save(str(pt_path))
+                
+                # Cleanup: YOLO baixa no CWD, então removemos o arquivo solto
+                local_file = Path(f"{model_base}.pt")
+                if local_file.exists():
+                    local_file.unlink()
+                    print(Fore.CYAN + f"[INFO] Arquivo temporário removido: {local_file.name}")
+                    
             except Exception as e:
                 if pt_path.exists(): os.remove(pt_path)
                 raise FileNotFoundError(f"Erro ao baixar {cm.YOLO_PATH}: {e}")

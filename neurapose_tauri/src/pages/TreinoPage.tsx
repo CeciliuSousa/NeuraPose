@@ -154,9 +154,9 @@ export default function TreinoPage() {
 
                             const updated = [...prev, ...processedLogs];
 
-                            // Mantém apenas as últimas 1000 linhas para performance/evitar crash
-                            if (updated.length > 1000) {
-                                const sliced = updated.slice(-1000);
+                            // Mantém apenas as últimas 300 linhas para performance/evitar crash
+                            if (updated.length > 300) {
+                                const sliced = updated.slice(-300);
                                 localStorage.setItem('np_train_logs', JSON.stringify(sliced));
                                 return sliced;
                             }

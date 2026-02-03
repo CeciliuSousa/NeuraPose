@@ -127,6 +127,19 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
             # LOGICAL SKIP: Só processa e grava os frames do intervalo
             # Ex: Frame 0, 3, 6...
             if frame_idx % skip_interval == 0:
+                # --- LÓGICA DE LOG (SILENCIOSA: A CADA 20%) ---
+                # Calcula porcentagem atual
+                current_percent = int((frame_idx / total_frames_in) * 100)
+                
+                # Regra: Loga no inicio (0%), a cada 20%, e no final
+                # Também loga SEMPRE que houver um ALERTA DE FURTO (prioridade máxima) via override na detecção
+                should_log = (current_percent % 20 == 0 and current_percent > last_logged_percent) or (frame_idx == 0)
+                
+                if should_log:
+                    last_logged_percent = current_percent
+                    # Este print vai para o WebSocket via LogBuffer (que o WebService lê)
+                    print(f"\r[APP] Progresso: {current_percent}% ({frame_idx}/{total_frames_in})")
+                    
                 t0 = time.time()
                 
                 # --- DETECÇÃO ---
@@ -155,12 +168,13 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
                 t2 = time.time()
                 tempos["rtmpose_total"] += (t2 - t1)
                 
-                # --- CLASSIFICAÇÃO ---
+                # --- CLASSIFICAÇÃO (CÉREBRO) ---
                 t3_start = time.time()
                 for rec in pose_records:
                     pid = rec["id_persistente"]
                     kps = rec["keypoints"]
                     
+                    # O Cérebro processa e diz a probabilidade
                     prob = brain.predict_single(pid, kps)
                     rec['theft_prob'] = prob
                     rec['is_theft'] = prob >= cm.CLASSE2_THRESHOLD
@@ -170,27 +184,13 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
                     
                     if rec['is_theft']:
                         id_final_preds[pid] = 1
+                        # ALERTA DE FURTO: Fura o bloqueio de logs!
+                        print(Fore.RED + f"[ALERTA 🚨] Frame {frame_idx}: ID {pid} - FURTO DETECTADO ({prob:.1%})")
                     elif pid not in id_final_preds:
                         id_final_preds[pid] = 0
 
                 t3_end = time.time()
                 tempos["temporal_total"] += (t3_end - t3_start)
-                
-                # --- [NOVO] CLASSIFICAÇÃO DE AÇÃO ---
-                for rec in pose_records:
-                    pid = rec["id_persistente"]
-                    kps = rec["keypoints"]
-
-                    # O Cérebro processa e diz a probabilidade
-                    prob = brain.predict_single(pid, kps)
-
-                    # Anexa metadados para o visualizador/JSON
-                    rec['theft_prob'] = prob
-                    rec['is_theft'] = prob >= cm.CLASSE2_THRESHOLD
-
-                    # LOG DE ALERTA (Apenas se detectar)
-                    if rec['is_theft']:
-                        print(Fore.RED + f"[ALERTA 🚨] Frame {frame_idx}: ID {pid} - FURTO DETECTADO ({prob:.1%})")
                 
                 registros_totais.extend(pose_records)
                 
@@ -217,9 +217,6 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
                         cv2.rectangle(viz_frame, (x1, y1), (x2, y2), color, 2)
                         
                         # 3. Label de 2 Linhas (Fundo Branco, Texto Preto)
-                        # ID: <id> | Pessoa: <conf>
-                        # Classe: <FURTO/NORMAL>
-                        
                         class_name = cm.CLASSE2 if is_theft else cm.CLASSE1
                         line1 = f"ID: {pid} | Pessoa: {conf:.2f}"
                         line2 = f"Classe: {class_name} ({prob:.1%})"
@@ -249,9 +246,6 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
             
             # Se frame não é múltiplo do skip, ignoramos completamente (não grava)
             frame_idx += 1
-            
-            if frame_idx % 30 == 0:
-                print(f"\r[APP] Frame {frame_idx}/{total_frames_in}", end="")
 
     except KeyboardInterrupt:
         print("\n[STOP] Interrompido pelo usuário.")

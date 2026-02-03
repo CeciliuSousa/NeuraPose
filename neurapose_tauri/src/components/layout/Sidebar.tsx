@@ -18,7 +18,7 @@ import {
     History
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { APIService } from '../../services/api';
+// import { APIService } from '../../services/api';
 import { useProcessingStatus, PageStatus } from '../../hooks/useProcessingStatus';
 
 // Mapeamento de rotas para chaves de status
@@ -55,22 +55,21 @@ const menuItems = [
     { name: 'Configurações', href: '/configuracao', icon: Settings },
 ];
 
-interface SystemInfo {
-    cpu_percent: number;
-    ram_used_gb: number;
-    ram_total_gb: number;
-    gpu_mem_used_gb: number;
-    gpu_mem_total_gb: number;
-    gpu_name: string;
-}
+// Interface SystemInfo movida para useProcessingStatus
+// export interface SystemInfo ...
 
 export function Sidebar() {
     const location = useLocation();
     const pathname = location.pathname;
     const [isOpen, setIsOpen] = useState(false);
-    const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
     const [isOnline, setIsOnline] = useState(false);
-    const { statuses, clearPageStatus } = useProcessingStatus();
+    const { statuses, clearPageStatus, hardware } = useProcessingStatus();
+    // Usa hardware do WebSocket (status) em vez de estado local
+    const systemInfo = hardware;
+    // Assume Online se estamos recebendo dados via WS e backend respondeu status
+    useEffect(() => {
+        if (hardware) setIsOnline(true);
+    }, [hardware]);
 
     // Limpa o status (success/error) ao visitar a página
     useEffect(() => {
@@ -80,27 +79,8 @@ export function Sidebar() {
         }
     }, [pathname, clearPageStatus]);
 
-    // Polling de informações do sistema - otimizado
-    useEffect(() => {
-        let errorCount = 0;
-
-        const fetchSystemInfo = async () => {
-            try {
-                const res = await APIService.getSystemInfo();
-                setSystemInfo(res.data);
-                setIsOnline(true);
-                errorCount = 0; // Reset error count on success
-            } catch {
-                setIsOnline(false);
-                errorCount++;
-            }
-        };
-
-        fetchSystemInfo();
-        // 20s interval para reduzir overhead durante processamento
-        const interval = setInterval(fetchSystemInfo, 20000);
-        return () => clearInterval(interval);
-    }, []);
+    // Polling REMOVIDO: Agora usamos o WebSocket via useProcessingStatus!
+    // Economia de recursos absurda. 🚀
 
     const ramPercent = systemInfo ? (systemInfo.ram_used_gb / systemInfo.ram_total_gb) * 100 : 0;
     const gpuPercent = systemInfo && systemInfo.gpu_mem_total_gb > 0

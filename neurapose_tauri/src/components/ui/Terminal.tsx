@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo, memo } from 'react';
 import { Terminal as TerminalIcon } from 'lucide-react';
 
 interface TerminalProps {
@@ -36,7 +36,7 @@ interface TerminalProps {
  * - Indicador de status no footer
  * - Design consistente estilo macOS
  */
-export function Terminal({
+function TerminalBase({
     logs,
     title = 'Terminal',
     height = '500px',
@@ -68,10 +68,12 @@ export function Terminal({
         }
     };
 
-    // Filtra logs de progresso se configurado
-    const displayLogs = hideProgressLogs
-        ? logs.filter(log => !log.includes('[PROGRESSO]'))
-        : logs;
+    // Filtra logs de progresso se configurado (Memoized)
+    const displayLogs = useMemo(() => {
+        return hideProgressLogs
+            ? logs.filter(log => !log.includes('[PROGRESSO]'))
+            : logs;
+    }, [logs, hideProgressLogs]);
 
     // Determina classes de cor para cada log
     const getLogClasses = (log: string): string => {
@@ -197,3 +199,5 @@ export function Terminal({
         </div>
     );
 }
+
+export const Terminal = memo(TerminalBase);
