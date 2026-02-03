@@ -57,40 +57,40 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
 
     # print(Fore.CYAN + f"[PROC] Iniciando: {video_path.name}")
 
-    # 2. NORMALIZAÇÃO (Garante vídeo físico a 10FPS na pasta 'videos')
-    # O usuário pediu: "renderizar na pasta vídeos o vídeo normalizado!"
-    # A função normalizar_video já faz isso (salva em videos_norm_dir com fps target)
-    video_norm_path, t_norm = normalizar_video(video_path, videos_norm_dir)
+    # 2. NORMALIZAÇÃO (REMOVIDO POR PERFORMANCE)
+    # OBS: Otimização solicitada para reduzir overhead de ffmpeg.
+    # Usaremos LOGICAL SKIP para processar apenas os frames alvo (10fps) do vídeo original.
     
-    if not video_norm_path:
-        print(Fore.RED + "[ERRO] Falha na normalização do vídeo.")
-        return None
+    # video_norm_path, t_norm = normalizar_video(video_path, videos_norm_dir)
+    t_norm = 0.0
+    video_norm_path = video_path # Usa original
 
-    # 3. EXTRAÇÃO (Lê o vídeo JÁ normalizado para processar quadro a quadro)
-    # Isso simplifica a lógica de skip: se o vídeo já está em 10fps, processamos todos os frames.
+    # 3. EXTRAÇÃO (Lê o vídeo ORIGINAL 30fps e aplica SKIP)
     cap = cv2.VideoCapture(str(video_norm_path))
     
-    # Propriedades do normalizado
-    fps_norm = cap.get(cv2.CAP_PROP_FPS)
+    # Propriedades
+    fps_in = cap.get(cv2.CAP_PROP_FPS) or 30.0
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-    # print(Fore.WHITE + f"          {fps_norm:.2f}fps ({total_frames} frames)")
+    # Calcula Skip para atingir TARGET_FPS (10)
+    target_fps = cm.FPS_TARGET
+    skip_interval = max(1, int(round(fps_in / target_fps)))
 
-    # 4. SETUP WRITER (Predições na mesma taxa do processamento)
+    # 4. SETUP WRITER (Predições a 10fps)
     video_out_name = f"{video_path.stem}_pred.mp4"
     path_out = predicoes_dir / video_out_name
     
     # Tenta usar codec AVC1 (H.264)
     fourcc = cv2.VideoWriter_fourcc(*'avc1')
-    writer = cv2.VideoWriter(str(path_out), fourcc, fps_norm, (w, h))
+    writer = cv2.VideoWriter(str(path_out), fourcc, target_fps, (w, h))
 
     # Fallback se falhar
     if not writer.isOpened():
         print(Fore.YELLOW + "[AVISO] 'avc1' falhou. Tentando 'mp4v'.")
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        writer = cv2.VideoWriter(str(path_out), fourcc, fps_norm, (w, h))
+        writer = cv2.VideoWriter(str(path_out), fourcc, target_fps, (w, h))
 
     # 5. MODELOS
     pose_extractor = ExtratorPoseRTMPose(device=cm.DEVICE)
@@ -104,8 +104,8 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
         tracker = CustomDeepOCSORT()
     else:
         yolo_model = YOLO(str(cm.YOLO_PATH)).to(cm.DEVICE)
-        # Tracker configurado para o FPS do vídeo normalizado
-        tracker_instance = CustomBoTSORT(frame_rate=int(fps_norm))
+        # Tracker configurado para o FPS do target (10fps) já que vamos pular frames
+        tracker_instance = CustomBoTSORT(frame_rate=int(target_fps))
         yolo_model.tracker = tracker_instance
         yaml_path = save_temp_tracker_yaml()
 
@@ -121,83 +121,82 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
             ret, frame = cap.read()
             if not ret: break
             
-            t0 = time.time()
-            
-            # --- DETECÇÃO ---
-            yolo_dets = None
-            if USING_DEEPOCSORT:
-                tracks = tracker.track(frame)
-                yolo_dets = tracks
-            else:
-                res = yolo_model.track(
-                    source=frame, persist=True, tracker=str(yaml_path),
-                    verbose=False, classes=[cm.YOLO_CLASS_PERSON]
+            # LOGICAL SKIP: Apenas processa se for o frame do intervalo
+            if frame_idx % skip_interval == 0:
+                t0 = time.time()
+                
+                # --- DETECÇÃO ---
+                yolo_dets = None
+                if USING_DEEPOCSORT:
+                    tracks = tracker.track(frame)
+                    yolo_dets = tracks
+                else:
+                    res = yolo_model.track(
+                        source=frame, persist=True, tracker=str(yaml_path),
+                        verbose=False, classes=[cm.YOLO_CLASS_PERSON]
+                    )
+                    if len(res) > 0: yolo_dets = res[0].boxes
+                
+                t1 = time.time()
+                t_yolo_acc += (t1 - t0)
+    
+                # --- POSE ---
+                pose_records, _ = pose_extractor.processar_frame(
+                    frame_img=frame,
+                    detections_yolo=yolo_dets,
+                    frame_idx=frame_idx,
+                    desenhar_no_frame=False 
                 )
-                if len(res) > 0: yolo_dets = res[0].boxes
-            
-            t1 = time.time()
-            t_yolo_acc += (t1 - t0)
-
-            # --- POSE ---
-            pose_records, _ = pose_extractor.processar_frame(
-                frame_img=frame,
-                detections_yolo=yolo_dets,
-                frame_idx=frame_idx,
-                desenhar_no_frame=False 
-            )
-            
-            t2 = time.time()
-            t_pose_acc += (t2 - t1)
-            
-            records.extend(pose_records)
-            
-            # --- VISUALIZAÇÃO PADRONIZADA ---
-            # Regra: BBox Verde, Texto Preto/Branco, Esqueletos Coloridos
-            viz_frame = frame.copy()
-            
-            for rec in pose_records:
-                pid = rec["id_persistente"]
-                bbox = rec["bbox"]
-                kps = np.array(rec["keypoints"])
-                conf = rec["confidence"]
                 
-
-
-                # 1. Esqueletos Coloridos (Padrão RTMPose / Random ID color)
-                pid_color = color_for_id(pid)
-                desenhar_esqueleto_unificado(viz_frame, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=pid_color)
+                t2 = time.time()
+                t_pose_acc += (t2 - t1)
                 
-                # 2. BBox Verde Apenas
-                color_bbox = (0, 255, 0) # Verde BGR
-                if bbox is not None:
-                    x1, y1, x2, y2 = map(int, bbox)
-                    cv2.rectangle(viz_frame, (x1, y1), (x2, y2), color_bbox, 2)
+                records.extend(pose_records)
+                
+                # --- VISUALIZAÇÃO PADRONIZADA ---
+                # Regra: BBox Verde, Texto Preto/Branco, Esqueletos Coloridos
+                viz_frame = frame.copy()
+                
+                for rec in pose_records:
+                    pid = rec["id_persistente"]
+                    bbox = rec["bbox"]
+                    kps = np.array(rec["keypoints"])
+                    conf = rec["confidence"]
                     
-                    # 3. Texto Preto com Fundo Branco
-                    # "ID: <id> | Pessoa: <conf>"
-                    label = f"ID: {pid} | Pessoa: {conf:.2f}"
+                    # 1. Esqueletos Coloridos (Padrão RTMPose / Random ID color)
+                    pid_color = color_for_id(pid)
+                    desenhar_esqueleto_unificado(viz_frame, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=pid_color)
                     
-                    font_scale = 0.6
-                    thick = 2
-                    (w_txt, h_txt), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thick)
-                    
-                    # Retângulo Branco Cheio
-                    cv2.rectangle(viz_frame, (x1, y1 - h_txt - 10), (x1 + w_txt + 10, y1), (255, 255, 255), -1)
-                    
-                    # Texto Preto
-                    cv2.putText(viz_frame, label, (x1 + 5, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), thick)
-
-            # Grava frame processado (10fps output)
-            writer.write(viz_frame)
-            
-            # Atualização de Preview para o App Web
-            if show and state is not None:
-                # O state espera BGR (padrão cv2)
-                state.update_frame(viz_frame)
-
+                    # 2. BBox Verde Apenas
+                    color_bbox = (0, 255, 0) # Verde BGR
+                    if bbox is not None:
+                        x1, y1, x2, y2 = map(int, bbox)
+                        cv2.rectangle(viz_frame, (x1, y1), (x2, y2), color_bbox, 2)
+                        
+                        # 3. Texto Preto com Fundo Branco
+                        # "ID: <id> | Pessoa: <conf>"
+                        label = f"ID: {pid} | Pessoa: {conf:.2f}"
+                        
+                        font_scale = 0.6
+                        thick = 2
+                        (w_txt, h_txt), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thick)
+                        
+                        # Retângulo Branco Cheio
+                        cv2.rectangle(viz_frame, (x1, y1 - h_txt - 10), (x1 + w_txt + 10, y1), (255, 255, 255), -1)
+                        
+                        # Texto Preto
+                        cv2.putText(viz_frame, label, (x1 + 5, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), thick)
+    
+                # Grava frame processado (10fps output)
+                writer.write(viz_frame)
+                
+                # Atualização de Preview para o App Web (Throttle implícito pelo skip_interval = 10fps)
+                if show and state is not None:
+                    state.update_frame(viz_frame)
+    
             frame_idx += 1
-
-            print(f"\r[INFO] INICIANDO FASE PROCESSAMENTO...")
+            
+            # print(f"\r[INFO] INICIANDO FASE PROCESSAMENTO...")
             
             if frame_idx % 10 == 0:
                 print(f"\r[PROCESSAMENTO] Frame {frame_idx}/{total_frames}", end="")
