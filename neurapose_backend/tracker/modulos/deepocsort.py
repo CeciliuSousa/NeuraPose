@@ -34,7 +34,7 @@ class CustomDeepOCSORT:  # Mudei o nome para não conflitar
             det_thresh=cfg['det_thresh'],
             max_age=cfg['max_age'],
             min_hits=cfg['min_hits'],
-            iou_threshold=cfg['iou_threshold'],
+            iou_thresh=cfg['iou_thresh'],
             delta_t=cfg['delta_t'],
             asso_func=cfg['asso_func'],
             inertia=cfg['inertia'],

@@ -94,7 +94,7 @@ def sanitizar_dados(lista_deteccoes, threshold=DEFAULT_THRESHOLD):
     """
     if not lista_deteccoes: return []
 
-    print(Fore.CYAN + f"[SANITIZER] Iniciando limpeza (Ref: {FRAMES_REF} frames/seg)...")
+    # print(Fore.CYAN + f"[SANITIZER] Iniciando limpeza (Ref: {FRAMES_REF} frames/seg)...")
 
     # =========================================================================
     # ETAPA 1: REATRIBUIÇÃO INTELIGENTE (CORREÇÃO DE CRACHÁS)
@@ -106,7 +106,7 @@ def sanitizar_dados(lista_deteccoes, threshold=DEFAULT_THRESHOLD):
         pos = _calibrar_posicao_fixa(lista_deteccoes, pid, cfg['frames_ancora'])
         if pos:
             posicoes_fixas[pid] = pos
-            print(Fore.YELLOW + f"[LOCK] ID {pid} calibrado na posição {int(pos[0])}x{int(pos[1])} (Raio: {cfg['raio']}px)")
+            # print(Fore.YELLOW + f"[LOCK] ID {pid} calibrado na posição {int(pos[0])}x{int(pos[1])} (Raio: {cfg['raio']}px)")
 
     trocas_resgate = 0
     trocas_impostor = 0
@@ -130,7 +130,8 @@ def sanitizar_dados(lista_deteccoes, threshold=DEFAULT_THRESHOLD):
                 trocas_resgate += 1
 
     if trocas_impostor > 0 or trocas_resgate > 0:
-        print(Fore.GREEN + f"[FIX] Trava Espacial: {trocas_resgate} resgates e {trocas_impostor} impostores renomeados.")
+        pass
+        # print(Fore.GREEN + f"[FIX] Trava Espacial: {trocas_resgate} resgates e {trocas_impostor} impostores renomeados.")
 
     # =========================================================================
     # ETAPA 2: VELOCITY GATING (ANTI-TELEPORTE)
@@ -183,6 +184,6 @@ def sanitizar_dados(lista_deteccoes, threshold=DEFAULT_THRESHOLD):
         dados_limpos.extend(valid_track)
 
     dados_limpos.sort(key=lambda x: x.get("frame", 0))
-    print(f"[SANITIZER] Limpeza concluída. {frames_removidos} frames removidos em {len(ids_afetados)} IDs.")
+    # print(f"[SANITIZER] Limpeza concluída. {frames_removidos} frames removidos em {len(ids_afetados)} IDs.")
     
     return dados_limpos

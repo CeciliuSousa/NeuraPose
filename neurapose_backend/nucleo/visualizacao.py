@@ -35,24 +35,33 @@ def desenhar_esqueleto_unificado(frame, keypoints, kp_thresh=cm.POSE_CONF_MIN, b
     """
     Desenha o esqueleto (keypoints e conexões) no frame.
     keypoints: array (K, 3) -> [x, y, conf]
-    (Renomeado de desenhar_esqueleto para compatibilidade com backend modular)
+    base_color: Cor BGR (tupla) usada para todos os membros (se id não for usado para colorir antes).
     """
     if edge_color is None:
-        edge_color = tuple(int(c * 0.6) for c in base_color)
+        # Cria uma cor interna ligeiramente mais escura para as conexões
+        edge_color = tuple(max(0, int(c * 0.8)) for c in base_color)
+
+    # Convert keypoints to int points once
+    pts = []
+    for x, y, conf in keypoints:
+        pts.append((int(x), int(y), conf))
 
     # Desenha conexões (limbs)
     for a, b in cm.PAIRS:
         # Verifica bounds
-        if a < len(keypoints) and b < len(keypoints):
-            if keypoints[a][2] >= kp_thresh and keypoints[b][2] >= kp_thresh:
-                pt1 = (int(keypoints[a][0]), int(keypoints[a][1]))
-                pt2 = (int(keypoints[b][0]), int(keypoints[b][1]))
-                cv2.line(frame, pt1, pt2, edge_color, 1, lineType=cv2.LINE_AA)
+        if a < len(pts) and b < len(pts):
+            pt_a = pts[a]
+            pt_b = pts[b]
+            
+            if pt_a[2] >= kp_thresh and pt_b[2] >= kp_thresh:
+                start = (pt_a[0], pt_a[1])
+                end   = (pt_b[0], pt_b[1])
+                cv2.line(frame, start, end, edge_color, 2, lineType=cv2.LINE_AA)
 
     # Desenha pontos (joints)
-    for i, (x, y, conf) in enumerate(keypoints):
+    for x, y, conf in pts:
         if conf >= kp_thresh:
-            cv2.circle(frame, (int(x), int(y)), 2, base_color, -1, lineType=cv2.LINE_AA)
+            cv2.circle(frame, (x, y), 3, base_color, -1, lineType=cv2.LINE_AA)
 
     return frame
 

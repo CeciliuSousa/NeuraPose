@@ -91,7 +91,8 @@ export function Terminal({
             log.includes('[PREDIÇÃO]') ||
             log.includes('[ALERT]') ||
             log.includes('[BALANCEANDO]') ||
-            log.includes('[TREINANDO]');
+            log.includes('[TREINANDO]') ||
+            log.includes('[PROCESSAMENTO]');
 
         // Info e Headers (Azul)
         // Verifica [INFO] ou padrão [1/10] ou ENCONTRADOS
