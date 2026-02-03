@@ -277,8 +277,8 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
     model_name = cm.TEMPORAL_MODEL.upper() if getattr(cm, 'TEMPORAL_MODEL', None) else "TEMPORAL MODEL"
     
     print("\n" + "="*60)
-    print(f"{'Normalização video 10 FPS':<45} {t_norm:>10.2f} seg")
-    print(f"{'YOLO + BoTSORT-Custom + OSNet':<45} {t_yolo:>10.2f} seg")
+    # print(f"{'Normalização video 10 FPS':<45} {t_norm:>10.2f} seg")
+    print(f"{f'YOLO + {cm.TRACKER_NAME} + OSNet':<45} {t_yolo:>10.2f} seg")
     print(f"{'RTMPose':<45} {t_pose:>10.2f} seg")
     print(f"{model_name:<45} {t_temp:>10.2f} seg")
     print("-" * 60)

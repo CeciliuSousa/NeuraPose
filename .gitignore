@@ -29,6 +29,7 @@ neurapose_backend/videos/*
 neurapose_backend/modelos-temporais/
 neurapose_backend/relatorios-testes/
 neurapose_backend/scripts/
+neurapose_backend/tracker/configuracao/botsort_custom.yaml
 
 neurapose_backend/data/
 neurapose_backend/logs/

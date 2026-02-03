@@ -289,8 +289,8 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
     total_time = t_norm + t_yolo_acc + t_pose_acc
     
     print("\n" + "="*60)
-    print(f"{'Normalização video 10 FPS':<45} {t_norm:>10.2f} seg")
-    print(f"{'YOLO + BoTSORT-Custom + OSNet':<45} {t_yolo_acc:>10.2f} seg")
+    # print(f"{'Normalização video 10 FPS':<45} {t_norm:>10.2f} seg")
+    print(f"{f'YOLO + {cm.TRACKER_NAME} + OSNet':<45} {t_yolo_acc:>10.2f} seg")
     print(f"{'RTMPose':<45} {t_pose_acc:>10.2f} seg")
     print("-" * 60)
     print(f"{'TOTAL':<45} {total_time:>10.2f} seg")

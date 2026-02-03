@@ -305,35 +305,38 @@ class YoloStreamDetector:
                                 # DeepOCSORT roda YOLO internamente frame-a-frame
                                 res_batch = []
                                 
-                            # Inicializa mapa de detecções vazio para evitar erro de referência
-                            # detections_map[local_i] = np.empty((0, 6)) # REMOVIDO: Erro de indentação e lógica deslocada
-                            
-                            # Preenche results para BoTSORT
+                            # Preenche results para BoTSORT (TensorRT)
                             if not USING_DEEPOCSORT:
                                 # Extrai detecções apenas dos frames reais (não padding)
                                 for idx, local_i in enumerate(yolo_frame_indices):
                                     if idx < len(res_batch) and len(res_batch[idx].boxes) > 0:
                                         raw_data = res_batch[idx].boxes.data.cpu().numpy()
+                                        
                                         # Normaliza para 6 colunas se necessário
-                                        if raw_data.shape[1] == 4:
-                                            rows = raw_data.shape[0]
-                                            confs = np.full((rows, 1), 0.85, dtype=np.float32)
-                                            clss = np.zeros((rows, 1), dtype=np.float32)
-                                            raw_data = np.hstack((raw_data, confs, clss))
-                                        elif raw_data.shape[1] == 5:
-                                            rows = raw_data.shape[0]
-                                            clss = np.zeros((rows, 1), dtype=np.float32)
-                                            raw_data = np.hstack((raw_data, clss))
-                                        detections_map[local_i] = raw_data
+                                        if raw_data.shape[1] == 6:
+                                             detections_map[local_i] = raw_data
+                                        elif raw_data.shape[1] == 4: # [x1,y1,x2,y2]
+                                             # Add Conf=0.85, Cls=0
+                                             rows = raw_data.shape[0]
+                                             block = np.hstack((raw_data, np.full((rows, 1), 0.85), np.zeros((rows, 1))))
+                                             detections_map[local_i] = block
+                                        elif raw_data.shape[1] == 5: # [x1,y1,x2,y2,conf] or [x1,y1,x2,y2,cls]? Usually conf.
+                                             # Assume 5th is conf, add cls=0
+                                             block = np.hstack((raw_data, np.zeros((raw_data.shape[0], 1)))) 
+                                             detections_map[local_i] = block
+                                        else:
+                                             detections_map[local_i] = raw_data # Hope for the best
                                     else:
                                         detections_map[local_i] = np.empty((0, 6))
 
                         else:
+                            # --------------------------------------------------------
                             # PyTorch: Processa frame a frame (dinâmico)
+                            # --------------------------------------------------------
                             for idx, local_i in enumerate(yolo_frame_indices):
                                 frame = yolo_frames[idx]
                                 
-                                # SE BOTSORT: Roda YOLO Detect
+                                # SE BOTSORT: Roda YOLO Detect MANUALLY
                                 if not USING_DEEPOCSORT:
                                     res = self.model.predict(
                                         source=frame,
@@ -367,28 +370,7 @@ class YoloStreamDetector:
                     try:
                         # Obtém detecções (do batch ou vazio se foi skip)
                         dets = detections_map.get(i, np.empty((0, 6)))
-                        
-                        # ============================================================
-                        # NORMALIZAÇÃO DE COLUNAS (TensorRT retorna 4, Tracker exige 6)
-                        # ============================================================
-                        if isinstance(dets, np.ndarray) and len(dets) > 0:
-                            ncols = dets.shape[1]
-                            
-                            # Se o array tiver formato (N, 4) -> [x1, y1, x2, y2]
-                            if ncols == 4:
-                                rows = dets.shape[0]
-                                # Criar coluna de Confiança (0.85 padrão para TensorRT filtrado)
-                                confs = np.full((rows, 1), 0.85, dtype=np.float32)
-                                # Criar coluna de Classe (0 -> Pessoa)
-                                clss = np.zeros((rows, 1), dtype=np.float32)
-                                # Juntar: Agora temos (N, 6)
-                                dets = np.hstack((dets, confs, clss))
-                                
-                            # Se o array tiver formato (N, 5) -> falta classe
-                            elif ncols == 5:
-                                rows = dets.shape[0]
-                                clss = np.zeros((rows, 1), dtype=np.float32)
-                                dets = np.hstack((dets, clss))
+
                         
                         # ============================================================
                         # SMARTSKIP: Usa Kalman Prediction em frames pulados

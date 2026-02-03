@@ -46,45 +46,57 @@ class CustomDeepOCSORT:  # Mudei o nome para não conflitar
         Recebe um frame (imagem cv2) e retorna os tracks [x1, y1, x2, y2, id, conf, cls, ...]
         """
         
-        # 1. Inferência YOLO (Rápida)
-        # verbose=False limpa o terminal
-        # conf=0.35 para pegar pessoas meio escondidas
-        results = self.model.predict(frame, conf=cm.DETECTION_CONF, verbose=False)
-        
-        # 2. Prepara dados para o Tracker
-        # O BoxMOT exige um array Numpy no formato: [x1, y1, x2, y2, conf, cls]
-        detecções = results[0].boxes.data.cpu().numpy()
-        
-        # FILTRO DE CLASSE: MANTER APENAS PESSOAS (Classe 0)
-        # Assumindo que YOLO_CLASS_PERSON é 0
-        if len(detecções) > 0:
-            detecções = detecções[detecções[:, 5] == 0]
-        
-        # Se não detectou ninguém, retorna vazio para não quebrar o tracker e limpar memória
-        if len(detecções) == 0:
-             try:
-                 # Passa array vazio com shape correto (0, 6)
-                 return self.tracker.update(np.empty((0, 6)), frame)
-             except Exception:
-                 return np.empty((0, 7))
-
-        # 3. Atualiza o DeepOCSORT
-        # Ele faz a mágica de ReID + Kalman Filter aqui
+        # 1. Inferência YOLO (safer)
         try:
-            tracks = self.tracker.update(detecções, frame)
-        except IndexError:
-            # Captura erro de "axis 0 with size 1" do Kalman Filter (xysr_kf.py)
-            # Geralmente acontece em oclusão total ou inicialização ruim
-            # Retorna vazio neste frame para evitar crash
-            return np.empty((0, 7))
+            results = self.model.predict(frame, conf=cm.DETECTION_CONF, verbose=False)
         except Exception as e:
-            print(f"[DeepOCSORT] Erro inesperado no update: {e}")
+            print(f"[DeepOCSORT] Erro no YOLO predict: {e}")
             return np.empty((0, 7))
+
+        if not results:
+            return np.empty((0, 7))
+
+        # 2. Prepara dados para o Tracker
+        try:
+            # Garante que boxes existe e tem dados
+            if results[0].boxes is None or len(results[0].boxes) == 0:
+                 try:
+                     return self.tracker.update(np.empty((0, 6)), frame)
+                 except:
+                     return np.empty((0, 7))
+
+            detecções = results[0].boxes.data.cpu().numpy()
+            
+            # FILTRO DE CLASSE: MANTER APENAS PESSOAS (Classe 0)
+            if len(detecções) > 0:
+                detecções = detecções[detecções[:, 5] == 0]
+            
+            # Se vazio após filtro
+            if len(detecções) == 0:
+                 try:
+                     return self.tracker.update(np.empty((0, 6)), frame)
+                 except:
+                     return np.empty((0, 7))
+
+            # 3. Atualiza o DeepOCSORT
+            tracks = self.tracker.update(detecções, frame)
+            
+        except IndexError as e:
+            # ERRO ESPECÍFICO DO USUÁRIO (Tuple index out of range)
+            # Pode vir do Kalman interna do boxmot se frame for muito diferente
+            print(f"[DeepOCSORT] Erro CRÍTICO de Índice (Tuple/List): {e}")
+            return np.empty((0, 7))
+            
+        except Exception as e:
+            print(f"[DeepOCSORT] Erro genérico no update: {e}")
+            # Tenta recuperar chamando com vazio
+            try:
+                return self.tracker.update(np.empty((0, 6)), frame)
+            except:
+                return np.empty((0, 7))
         
-        # O tracks retorna algo como: [[x1, y1, x2, y2, id, conf, cls, ...]]
-        # Vamos garantir que as coordenadas sejam inteiros (Otimização Regra 3)
+        # Post-processing seguro
         if len(tracks) > 0:
-            # Arredonda apenas as 4 primeiras colunas (coords)
             tracks[:, :4] = np.round(tracks[:, :4])
             
         return tracks
