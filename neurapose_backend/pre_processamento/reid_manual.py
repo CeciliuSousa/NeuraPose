@@ -616,7 +616,8 @@ def main():
                 # shutil.copy2(v_raw, out_videos_dir / v_raw.name)
                 
                 # 4. Renderizar vídeo final LIMPO e CORTADO
-                out_v_pred = out_pred_dir / f"{stem}_pose.mp4"
+                stem_clean = stem.replace("_pose", "")
+                out_v_pred = out_pred_dir / f"{stem_clean}_pose.mp4"
                 print(Fore.WHITE + "  Renderizando novo video limpo e cortado...")
                 
                 renderizar_video_limpo(v_raw, out_v_pred, recs_mod, cut_list)

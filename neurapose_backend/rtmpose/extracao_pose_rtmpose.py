@@ -119,6 +119,15 @@ class ExtratorPoseRTMPose:
 
         is_numpy = isinstance(detections_yolo, np.ndarray)
         if is_numpy:
+            # Proteção contra arrays 1D ou vazios (IndexError no shape[1])
+            if detections_yolo.ndim < 2:
+                if detections_yolo.size == 0: 
+                    return registros, frame_img
+                else: 
+                     # Tenta recuperar se for (N,) expandindo dims? Não, assumir erro.
+                     print(Fore.YELLOW + f"[RTMPOSE] WARN: Array 1D ignorado: {detections_yolo.shape}")
+                     return registros, frame_img
+
             if detections_yolo.shape[1] >= 6:
                 boxes_list = detections_yolo[:, :4]
                 track_ids_list = detections_yolo[:, 4]
@@ -219,7 +228,7 @@ class ExtratorPoseRTMPose:
             # Registro
             registros.append({
                 "frame": frame_idx,
-                "botsort_id": meta["raw_tid"],
+                f"{cm.TRACKER_NAME}_id": meta["raw_tid"],
                 "id_persistente": meta["pid"],
                 "bbox": meta["box"], # <--- [AUDIT] GARANTIDO: USANDO BOX SUAVIZADA DO TRACKER (NÃO RECALCULAR)
                 "confidence": meta["conf"],

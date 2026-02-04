@@ -148,11 +148,29 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
                     tracks = tracker.track(frame)
                     yolo_dets = tracks
                 else:
-                    res = yolo_model.track(
-                        source=frame, persist=True, tracker=str(yaml_path),
-                        verbose=False, classes=[cm.YOLO_CLASS_PERSON]
+                    # BoTSORT Manual (Robust Fix)
+                    res = yolo_model.predict(
+                        source=frame,
+                        imgsz=cm.YOLO_IMGSZ,
+                        conf=cm.DETECTION_CONF,
+                        device=cm.DEVICE,
+                        classes=[cm.YOLO_CLASS_PERSON],
+                        verbose=False,
+                        stream=False
                     )
-                    if len(res) > 0: yolo_dets = res[0].boxes
+                    
+                    dets = np.empty((0, 6))
+                    if len(res) > 0 and len(res[0].boxes) > 0:
+                        dets = res[0].boxes.data.cpu().numpy()
+                        # Normaliza shapes se necessario (igual yolo_stream)
+                        if dets.shape[1] == 4: # [x,y,x,y]
+                             r = dets.shape[0]
+                             dets = np.hstack((dets, np.full((r, 1), 0.85), np.zeros((r, 1))))
+                        elif dets.shape[1] == 5:
+                             dets = np.hstack((dets, np.zeros((dets.shape[0], 1))))
+                    
+                    tracks = tracker_instance.update(dets, frame)
+                    yolo_dets = tracks
 
                 t1 = time.time()
                 tempos["detector_total"] += (t1 - t0)

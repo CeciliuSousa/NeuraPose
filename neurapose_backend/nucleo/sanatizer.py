@@ -29,7 +29,7 @@ DEFAULT_THRESHOLD = 150.0  # Pixels máximos permitidos por movimento (ajustáve
 # Útil para caixas, recepção ou posições fixas.
 STATIC_IDENTITIES = {
     # ID Alvo : { 'raio': pixels, 'frames_ancora': qtd_frames_para_media }
-    3: {'raio': 100.0, 'frames_ancora': 60} 
+    # 3: {'raio': 100.0, 'frames_ancora': 60}  <-- DESATIVADO (Regra de Negócio Específica)
 }
 
 # Prefixo para IDs de impostores (Ex: ID 3 vira 903)

@@ -9,6 +9,13 @@ from boxmot.trackers.deepocsort.deepocsort import DeepOcSort
 # Importa suas configs
 import neurapose_backend.config_master as cm
 
+# Silencia Logs do BoxMOT (Loguru)
+try:
+    from loguru import logger
+    logger.remove()
+except ImportError:
+    pass
+
 class CustomDeepOCSORT:  # Mudei o nome para não conflitar
     def __init__(self):
         # 1. Carrega Detector (YOLO)
@@ -82,9 +89,8 @@ class CustomDeepOCSORT:  # Mudei o nome para não conflitar
             tracks = self.tracker.update(detecções, frame)
             
         except IndexError as e:
-            # ERRO ESPECÍFICO DO USUÁRIO (Tuple index out of range)
-            # Pode vir do Kalman interna do boxmot se frame for muito diferente
-            print(f"[DeepOCSORT] Erro CRÍTICO de Índice (Tuple/List): {e}")
+            # ERRO ESPECÍFICO (Tuple index out of range) - Silenciado
+            # print(f"[DeepOCSORT] Erro CRÍTICO de Índice (Tuple/List): {e}")
             return np.empty((0, 7))
             
         except Exception as e:

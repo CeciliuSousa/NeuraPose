@@ -1470,23 +1470,35 @@ def list_reid_candidates(root_path: Optional[str] = None):
         if not json_dir.exists():
             return {"videos": [], "root": str(root)}
             
+        # O padrão agora é *_pose.json
         jsons = sorted(json_dir.glob("*.json"))
         videos = []
         for j in jsons:
             if "_tracking" in j.name: continue
-            stem = j.stem
-            # Check if video exists
-            video_path = root / "videos" / f"{stem.replace('_pose', '')}.mp4"
-            if not video_path.exists():
-                video_path = root / "videos" / f"{stem}.mp4" # fallback
             
-            videos.append({
-                "id": stem,
-                "json_path": str(j),
-                "video_path": str(video_path) if video_path.exists() else None,
-                "processed": False 
-            })
-        return {"videos": videos, "root": str(root)}
+            # Remove sufixo _pose do ID visual
+            stem_clean = j.stem.replace("_pose", "")
+            
+            # Check for prediction video (_pred.mp4) first - User request
+            pred_path = root / "predicoes" / f"{stem_clean}_pred.mp4"
+            raw_path = root / "videos" / f"{stem_clean}.mp4"
+            
+            # Use prediction if available, else raw
+            final_video_path = pred_path if pred_path.exists() else (raw_path if raw_path.exists() else None)
+            
+            if final_video_path:
+                videos.append({
+                    "id": final_video_path.stem,  # Retorna ID do arquivo real (_pred)
+                    "video_name": final_video_path.name,
+                    "processed": (root / "reid" / f"{stem_clean}.json").exists(),
+                    "creation_time": final_video_path.stat().st_mtime
+                })
+    
+        # Ordena por nome (crescente)
+        return {
+            "videos": sorted(videos, key=lambda x: x["video_name"]),
+            "root": str(root)
+        }
     except Exception as e:
         logger.error(f"Erro ao listar videos ReID: {e}")
         return {"videos": [], "error": str(e)}
@@ -1497,9 +1509,22 @@ def get_reid_data(video_id: str, root_path: Optional[str] = None):
     root = Path(root_path).resolve() if root_path else cm.PROCESSING_OUTPUT_DIR
     if root.name in ["predicoes", "jsons", "videos"]: root = root.parent
     
-    # Prioriza _tracking.json (com IDs persistentes corretos) sobre o .json (keypoints)
-    tracking_path = root / "jsons" / f"{video_id}_tracking.json"
-    keypoints_path = root / "jsons" / f"{video_id}.json"
+    # ID vem do Frontend. Pode vir limpo ("cena-00") ou sujo ("cena-00_pred")
+    # Arquivos no disco: "cena-00_pose.json" ou "cena-00_tracking.json"
+    
+    # Limpeza de ID robusta
+    clean_id = video_id.replace("_pred", "").replace("_pose", "")
+    
+    # 1. Tenta tracking (prioridade)
+    tracking_path = root / "jsons" / f"{clean_id}_tracking.json"
+    if not tracking_path.exists():
+        # Tenta variantes
+        tracking_path = root / "jsons" / f"{clean_id}_pose_tracking.json"
+
+    # 2. Tenta pose normal
+    keypoints_path = root / "jsons" / f"{clean_id}.json"
+    if not keypoints_path.exists():
+        keypoints_path = root / "jsons" / f"{clean_id}_pose.json"
     
     # Decide qual arquivo usar
     use_tracking = tracking_path.exists()
@@ -1562,7 +1587,6 @@ def stream_video(video_id: str, root_path: Optional[str] = None):
     
     # 1. Tenta achar na pasta de predicoes (com esqueleto)
     possible_preds = [
-        root / "predicoes" / f"{video_id}_pose.mp4",
         root / "predicoes" / f"{video_id}.mp4"
     ]
     
@@ -1941,26 +1965,30 @@ def list_videos_to_annotate(root_path: Optional[str] = None):
             if vfile.suffix.lower() not in valid_exts:
                 continue
                 
-            stem = vfile.stem.replace("_pose", "")
+            stem = vfile.stem.replace("_pose", "").replace("_pred", "")
             
             # Verifica se tem JSON correspondente
             json_path = json_dir / f"{stem}.json"
             if not json_path.exists():
+                json_path = json_dir / f"{stem}_pose.json"
+            if not json_path.exists():
                 json_path = json_dir / f"{vfile.stem}.json"
             
-            status = "anotado" if stem in labels_existentes else "pendente"
+            # Check status (matches Clean OR Dirty key)
+            is_annotated = (stem in labels_existentes) or (vfile.stem in labels_existentes)
+            status = "anotado" if is_annotated else "pendente"
             
             result.append({
-                "video_id": stem,
+                "video_id": vfile.stem,  # ID sujo (com _pred/_pose) para o vídeo carregar
                 "video_name": vfile.name,
                 "status": status,
                 "has_json": json_path.exists(),
                 "creation_time": vfile.stat().st_mtime
             })
     
-    # Ordena por data de criação (mais recente primeiro)
+    # Ordena por nome (crescente) - Solicitado pelo usuario
     return {
-        "videos": sorted(result, key=lambda x: x["creation_time"], reverse=True),
+        "videos": sorted(result, key=lambda x: x["video_id"]),
         "root": str(root),
         "labels_path": str(labels_path)
     }
@@ -1992,15 +2020,16 @@ def get_annotation_details(video_id: str, root_path: Optional[str] = None):
     logger.info(f"[ANNOTATE] Tentando: {json_path.name} | Existe: {json_path.exists()}")
     
     if not json_path.exists():
-        # Tenta sem sufixo _pose
-        clean_id = video_id.replace("_pose", "")
+        # Tenta sem sufixo _pose e _pred
+        clean_id = video_id.replace("_pose", "").replace("_pred", "")
         json_path = json_dir / f"{clean_id}.json"
-        logger.info(f"[ANNOTATE] Tentando sem _pose: {json_path.name} | Existe: {json_path.exists()}")
+        logger.info(f"[ANNOTATE] Tentando clean: {json_path.name} | Existe: {json_path.exists()}")
     
     if not json_path.exists():
-        # Tenta com sufixo _pose
-        json_path = json_dir / f"{video_id}_pose.json"
-        logger.info(f"[ANNOTATE] Tentando com _pose: {json_path.name} | Existe: {json_path.exists()}")
+        # Tenta com sufixo _pose (com ID clean)
+        clean_id = video_id.replace("_pose", "").replace("_pred", "")
+        json_path = json_dir / f"{clean_id}_pose.json"
+        logger.info(f"[ANNOTATE] Tentando clean+_pose: {json_path.name} | Existe: {json_path.exists()}")
     
     if not json_path.exists():
         logger.error(f"[ANNOTATE] JSON não encontrado para: {video_id}")
@@ -2009,7 +2038,7 @@ def get_annotation_details(video_id: str, root_path: Optional[str] = None):
     # Carrega labels existentes para este vídeo
     labels_path = root / "anotacoes" / "labels.json"
     saved_labels = {}
-    video_stem = video_id.replace("_pose", "").replace(f"_{cm.FPS_TARGET}fps")  # Mantém sufixo _30fps se existir
+    video_stem = video_id.replace("_pose", "").replace(f"_{cm.FPS_TARGET}fps", "")  # Mantém sufixo _30fps se existir
     
     if labels_path.exists():
         try:

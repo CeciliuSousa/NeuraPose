@@ -42,13 +42,13 @@ RTMPOSE_MAX_BATCH_SIZE = 10         # Batch size para inferência Pose (GPU)
 # OSNet (ReID)
 OSNET_MODEL = "osnet_x0_5_msmt17_combineall_256x128_amsgrad_ep150_stp60_lr0.0015_b64_fb10_softmax_labelsmooth_flip_jitter.pth"
 
-TRACKER_NAME = "DeepOCSORT" # "BoTSORT" ou "DeepOCSORT"
+TRACKER_NAME = "BoTSORT" # "BoTSORT" ou "DeepOCSORT"
 TEMPORAL_MODEL = "tft"
 # -- PARÂMETROS PRE-PROC --
 DETECTION_CONF = 0.55
 POSE_CONF_MIN = 0.30
 CLAMP_MARGIN = 0.0                  # NÃO ALTERE
-EMA_ALPHA = 0.35                    # Suavização temporal
+EMA_ALPHA = 1.0                     # SEM SUAVIZAÇÃO (1.0 = Raw Data, Zero Lag)
 EMA_MIN_CONF = 0.0
 
 # Filtros Pós-Processamento

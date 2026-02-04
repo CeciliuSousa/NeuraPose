@@ -33,7 +33,7 @@ def listar_jsons(json_dir: Path):
 
 def encontrar_video_para_json(pred_dir: Path, stem: str):
     """Encontra video correspondente ao JSON."""
-    candidatos = [pred_dir / f"{stem}_pose.mp4", pred_dir / f"{stem}.mp4"]
+    candidatos = [pred_dir / f"{stem}_pred.mp4", pred_dir / f"{stem}_pose.mp4", pred_dir / f"{stem}.mp4"]
     candidatos += list(pred_dir.glob(f"{stem}*.mp4"))
     for c in candidatos:
         if c.exists():
@@ -222,7 +222,7 @@ def main():
     print(Fore.MAGENTA + f"[INFO] {len(json_files)} JSONs encontrados")
 
     for jpath in json_files:
-        stem = jpath.stem
+        stem = jpath.stem.replace("_pose", "")
         vpath = encontrar_video_para_json(pred_dir, stem)
 
         try:

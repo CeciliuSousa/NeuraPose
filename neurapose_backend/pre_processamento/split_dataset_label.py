@@ -49,7 +49,10 @@ def flatten_labels(labels: dict, class1: str, class2: str):
 def find_file(base_dir: Path, video_name: str, exts):
     """Procura arquivo por nome com várias extensões."""
     patterns = {video_name, video_name.replace("_", ""),
-                video_name.replace("normal", "normal_").replace("furto", "furto_")}
+                video_name.replace("normal", "normal_").replace("furto", "furto_"),
+                video_name.replace("_pose", ""),     # Handle Dirty Key -> Clean File
+                video_name + "_pose"                 # Handle Clean Key -> Dirty File
+               }
     for pat in patterns:
         for ext in exts:
             found = list(base_dir.glob(f"{pat}{ext}"))

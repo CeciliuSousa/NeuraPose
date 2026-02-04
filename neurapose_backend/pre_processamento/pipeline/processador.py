@@ -68,6 +68,16 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
     # 3. EXTRAÇÃO (Lê o vídeo ORIGINAL 30fps e aplica SKIP)
     cap = cv2.VideoCapture(str(video_norm_path))
     
+    # --- COPIA VIDEO BRUTO (Pedido do Usuário para Split posterior) ---
+    import shutil
+    try:
+        video_out_raw = videos_norm_dir / video_norm_path.name
+        if not video_out_raw.exists():
+            # print(f"[INFO] Copiando vídeo bruto para: {video_out_raw}")
+            shutil.copy2(video_norm_path, video_out_raw)
+    except Exception as e:
+        print(f"[AVISO] Falha ao copiar vídeo bruto: {e}")
+
     # Propriedades
     fps_in = cap.get(cv2.CAP_PROP_FPS) or 30.0
     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -138,26 +148,33 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
                 
                 # --- DETECÇÃO ---
                 yolo_dets = None
-                if USING_DEEPOCSORT:
-                    tracks = tracker.track(frame)
-                    yolo_dets = tracks
-                else:
-                    res = yolo_model.track(
-                        source=frame, persist=True, tracker=str(yaml_path),
-                        verbose=False, classes=[cm.YOLO_CLASS_PERSON]
-                    )
-                    if len(res) > 0: yolo_dets = res[0].boxes
-                
+                try:
+                    if USING_DEEPOCSORT:
+                        tracks = tracker.track(frame)
+                        yolo_dets = tracks
+                    else:
+                        res = yolo_model.track(
+                            source=frame, persist=True, tracker=str(yaml_path),
+                            verbose=False, classes=[cm.YOLO_CLASS_PERSON]
+                        )
+                        if len(res) > 0: yolo_dets = res[0].boxes
+                except Exception as e:
+                    # Falha pontual no tracker (skip frame)
+                    yolo_dets = np.empty((0, 7))
+
                 t1 = time.time()
                 t_yolo_acc += (t1 - t0)
     
                 # --- POSE ---
-                pose_records, _ = pose_extractor.processar_frame(
-                    frame_img=frame,
-                    detections_yolo=yolo_dets,
-                    frame_idx=frame_idx,
-                    desenhar_no_frame=False 
-                )
+                try:
+                    pose_records, _ = pose_extractor.processar_frame(
+                        frame_img=frame,
+                        detections_yolo=yolo_dets,
+                        frame_idx=frame_idx,
+                        desenhar_no_frame=False 
+                    )
+                except Exception as e:
+                     pose_records = []
                 
                 t2 = time.time()
                 t_pose_acc += (t2 - t1)
