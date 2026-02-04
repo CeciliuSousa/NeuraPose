@@ -2,6 +2,7 @@
 # Script principal para teste do modelo treinado.
 
 import json
+import time
 from pathlib import Path
 from colorama import Fore, init as colorama_init
 from sklearn.metrics import (accuracy_score, f1_score, precision_score, recall_score,
@@ -141,6 +142,7 @@ def main():
     all_predictions = {}
     total_videos = len(video_list)
     total_time_all = 0.0
+    start_time_total = time.time()
     
     for i, video_path in enumerate(video_list):
         if state.stop_requested: break
@@ -158,7 +160,8 @@ def main():
 
     if state.stop_requested: return
 
-    print(Fore.CYAN + f"\n[INFO] TEMPO TOTAL DE TESTE DOS {len(video_list)} VIDEOS: {format_seconds_to_hms(total_time_all)}")
+    elapsed_total = time.time() - start_time_total
+    print(Fore.CYAN + f"\n[INFO] TEMPO TOTAL DE TESTE DOS {len(video_list)} VIDEOS: {format_seconds_to_hms(elapsed_total)}")
     
     print(Fore.BLUE + "[INFO] SALVANDO RELATÓRIO COMPLETO DE TESTE DO MODELO...")
 

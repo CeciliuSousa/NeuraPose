@@ -1,4 +1,5 @@
 import sys
+import time
 import os
 import psutil
 # Silencia logs verbosos do OpenCV/FFmpeg
@@ -648,6 +649,7 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
 
                 total_time_all = 0.0
                 total_processed = 0
+                start_time_total = time.time()
 
                 for i, v in enumerate(videos_to_process, 1):
                     if state.stop_requested:
@@ -665,7 +667,8 @@ def run_subprocess_processing(input_path: str, dataset_name: str, show: bool, de
                     state.current_frame = None  # Limpa frame entre vídeos
                 
                 if total_processed > 0:
-                     print(Fore.CYAN + f"\n[INFO] TEMPO TOTAL DE PROCESSAMENTO DOS {total_processed} VIDEOS: {format_seconds_to_hms(total_time_all)}")
+                     elapsed_total = time.time() - start_time_total
+                     print(Fore.CYAN + f"\n[INFO] TEMPO TOTAL DE PROCESSAMENTO DOS {total_processed} VIDEOS: {format_seconds_to_hms(elapsed_total)}")
             
             if state.stop_requested:
                 state.process_status = 'idle'
@@ -756,7 +759,8 @@ def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, 
                     print(Fore.YELLOW + f"[INFO] PASTA DE SAÍDA ENCONTRADA COM {processed_count} VIDEOS PROCESSADOS")
                 
                 print(Fore.CYAN + f"[INFO] PROCESSANDO OS {len(videos_to_process)} VIDEOS NÃO PROCESSADOS")
-
+                
+                start_time_total = time.time()
                 for i, v in enumerate(videos_to_process, 1):
                     if state.stop_requested: break
                     print(f"\n[{i}/{len(videos_to_process)}] PROCESSANDO: {v.name}")
@@ -769,6 +773,10 @@ def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, 
                 logger.info("Processamento interrompido pelo usuario.")
                 state.process_status = 'idle' # Ou manter error/warning?
             else:
+                elapsed_total = time.time() - start_time_total
+                if len(videos_to_process) > 0:
+                     print(Fore.CYAN + f"\n[INFO] TEMPO TOTAL DE PROCESSAMENTO DOS {len(videos_to_process)} VIDEOS: {format_seconds_to_hms(elapsed_total)}")
+                
                 print(Fore.GREEN + "[OK] FINALIZANDO O PROGRAMA DE PROCESSAMENTO..." + Fore.RESET)
                 logger.info("Processamento concluido.")
                 state.process_status = 'success'
