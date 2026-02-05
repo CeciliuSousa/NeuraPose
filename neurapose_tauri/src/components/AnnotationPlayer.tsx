@@ -152,14 +152,11 @@ export function AnnotationPlayer({
             const classe = annotations[String(pid)] || classe1;
 
             let strokeColor: string;
-            let bgColor: string;
 
             if (classe === classe2) {
                 strokeColor = '#ef4444';
-                bgColor = 'rgba(239, 68, 68, 0.85)';
             } else {
                 strokeColor = '#22c55e';
-                bgColor = 'rgba(34, 197, 94, 0.85)';
             }
 
             // Apply scaling WITH offset for letterboxing
@@ -177,10 +174,12 @@ export function AnnotationPlayer({
             const textWidth = ctx.measureText(label).width + 12;
             const labelHeight = 22;
 
-            ctx.fillStyle = bgColor;
+            // Fundo Branco (Pedido do User)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
             ctx.fillRect(sx1, sy1 - labelHeight, textWidth, labelHeight);
 
-            ctx.fillStyle = 'white';
+            // Texto Preto (Pedido do User)
+            ctx.fillStyle = 'black';
             ctx.fillText(label, sx1 + 6, sy1 - 6);
         }
     };

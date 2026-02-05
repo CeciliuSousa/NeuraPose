@@ -350,7 +350,7 @@ export default function AnotacaoPage() {
     ], [stats]);
 
     const videoSrc = selectedVideo
-        ? `http://localhost:8000/reid/video/${selectedVideo.video_id}?root_path=${encodeURIComponent(inputPath)}`
+        ? `http://localhost:8000/reid/video/${selectedVideo.video_id}?root_path=${encodeURIComponent(inputPath)}&source=raw`
         : '';
 
     return (
@@ -680,7 +680,7 @@ export default function AnotacaoPage() {
                     const relative = normCurrent.replace(normRoot, '');
                     const depth = relative.split('/').filter(p => p).length;
 
-                    if (depth === 1) return item.name === 'predicoes';
+                    if (depth === 1) return item.name === 'videos';
 
                     return true;
                 }}

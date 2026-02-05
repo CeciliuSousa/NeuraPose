@@ -1634,7 +1634,7 @@ def get_reid_data(video_id: str, root_path: Optional[str] = None):
     }
 
 @app.get("/reid/video/{video_id}")
-def stream_video(video_id: str, root_path: Optional[str] = None):
+def stream_video(video_id: str, root_path: Optional[str] = None, source: str = "default"):
     """Serve o arquivo de video."""
     root = Path(root_path).resolve() if root_path else cm.PROCESSING_OUTPUT_DIR
     if root.name in ["predicoes", "jsons", "videos"]: root = root.parent
@@ -1642,15 +1642,29 @@ def stream_video(video_id: str, root_path: Optional[str] = None):
     # Prioridade: Vídeo com correções/marcações (_pose.mp4 na pasta predicoes)
     v_final = None
     
-    # 1. Tenta achar na pasta de predicoes (com esqueleto)
-    possible_preds = [
-        root / "predicoes" / f"{video_id}.mp4"
-    ]
-    
-    for p in possible_preds:
-        if p.exists():
-            v_final = p
-            break
+    # Se solicitado RAW, tenta primeiro na pasta de videos originais
+    if source == 'raw':
+        # Remove sufixos comuns de processamento para tentar achar o original
+        clean_id = video_id.replace('_pose', '').replace('_pred', '')
+        possible_raw = [
+            root / "videos" / f"{clean_id}.mp4",
+            root / "videos" / f"{video_id}.mp4"
+        ]
+        for p in possible_raw:
+            if p.exists():
+                v_final = p
+                break
+
+    # 1. Se não achou (ou não pediu raw), tenta achar na pasta de predicoes (com esqueleto)
+    if not v_final:
+        possible_preds = [
+            root / "predicoes" / f"{video_id}.mp4"
+        ]
+        
+        for p in possible_preds:
+            if p.exists():
+                v_final = p
+                break
             
     # 2. Se não achar, tenta o original (fallback, mas sem marcações)
     if not v_final:
