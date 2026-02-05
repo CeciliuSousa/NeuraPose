@@ -33,20 +33,11 @@ export function FileExplorerModal({
 
     useEffect(() => {
         if (isOpen) {
-            // Sempre começa do rootPath quando disponível (para pickers de modelo)
-            if (rootPath) {
-                loadPath(rootPath);
-            } else if (initialPath) {
-                setCurrentPath(initialPath);
-                loadPath(initialPath);
-            } else if (!currentPath) {
-                APIService.getConfig().then(res => {
-                    const data = res.data as any;
-                    const defaultPath = data.paths?.videos || 'C:\\';
-                    loadPath(defaultPath);
-                }).catch(() => loadPath('C:\\'));
-            } else {
-                loadPath(currentPath);
+            // Prioridade: rootPath > initialPath > currentPath > C:\
+            // NÃO usa videos como fallback universal
+            const pathToLoad = rootPath || initialPath || currentPath || 'C:\\';
+            if (pathToLoad) {
+                loadPath(pathToLoad);
             }
         }
     }, [isOpen, initialPath, rootPath]);

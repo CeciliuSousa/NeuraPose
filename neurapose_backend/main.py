@@ -1059,6 +1059,54 @@ def api_get_config():
         }
     }
 
+USER_SETTINGS_PATH = cm.ROOT / "user_settings.json"
+
+@app.post("/config/update")
+def api_update_config(updates: dict):
+    """Persiste alterações do usuário em user_settings.json."""
+    try:
+        # Carrega settings existentes
+        existing = {}
+        if USER_SETTINGS_PATH.exists():
+            with open(USER_SETTINGS_PATH, 'r', encoding='utf-8') as f:
+                existing = json.load(f)
+        
+        # Merge com novas atualizações
+        existing.update(updates)
+        
+        # Salva
+        with open(USER_SETTINGS_PATH, 'w', encoding='utf-8') as f:
+            json.dump(existing, f, indent=2, ensure_ascii=False)
+        
+        # Atualiza config_master em runtime (valores simples)
+        for key, value in updates.items():
+            if hasattr(cm, key):
+                setattr(cm, key, value)
+        
+        return {"status": "success", "message": "Configurações salvas com sucesso."}
+    except Exception as e:
+        logger.error(f"Erro ao salvar config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/config/reset")
+def api_reset_config():
+    """Remove user_settings.json e força reload das configs originais do config_master.py."""
+    try:
+        # Remove arquivo de override do usuário
+        if USER_SETTINGS_PATH.exists():
+            USER_SETTINGS_PATH.unlink()
+            logger.info("user_settings.json removido. Configs resetadas para defaults.")
+        
+        # Recarrega módulo config_master para garantir valores originais
+        import importlib
+        importlib.reload(cm)
+        
+        return {"status": "success", "message": "Configurações resetadas para os valores padrão."}
+    except Exception as e:
+        logger.error(f"Erro ao resetar config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/browse")
 def browse_path(path: str = "."):
     """Lista o conteúdo de uma pasta para o explorador de arquivos do frontend."""
@@ -1066,9 +1114,10 @@ def browse_path(path: str = "."):
         p = Path(path).resolve()
         
         if not p.exists():
-            logger.warning(f"Caminho solicitado no /browse não existe: {p}. Fallback para videos.")
-            p = Path(cm.PROCESSING_INPUT_DIR).resolve()
-            if not p.exists(): p = Path.cwd()
+            # REMOVIDO: Fallback silencioso para /videos 
+            # Isso causava bug onde todas as páginas abriam em /videos
+            raise HTTPException(status_code=404, detail=f"Caminho não encontrado: {path}")
+        
         
         # Por segurança, podemos limitar o browse ao ROOT_DIR ou drives específicos
         # Para este projeto, vamos permitir navegar livremente, mas com cautela

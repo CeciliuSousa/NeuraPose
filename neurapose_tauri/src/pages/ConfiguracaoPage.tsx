@@ -59,6 +59,14 @@ export default function ConfiguracaoPage() {
     };
 
     const openExplorer = (key: string, rootKey?: string) => {
+        // Guard: Se é um picker de modelo, espera roots carregar
+        if (rootKey && !roots[rootKey]) {
+            console.warn(`[ConfigPage] Roots para '${rootKey}' ainda não carregado. Esperando...`);
+            // Retry after short delay
+            setTimeout(() => openExplorer(key, rootKey), 200);
+            return;
+        }
+        console.log(`[ConfigPage] Abrindo explorer: key=${key}, rootKey=${rootKey}, rootPath=${rootKey ? roots[rootKey] : 'default'}`);
         setActiveKey(key);
         setActiveRootKey(rootKey || null);
         setExplorerOpen(true);
@@ -364,7 +372,7 @@ export default function ConfiguracaoPage() {
                 isOpen={explorerOpen}
                 onClose={() => setExplorerOpen(false)}
                 onSelect={onPathSelect}
-                initialPath={activeRootKey ? '' : (activeKey ? config[activeKey] : '')}
+                initialPath={activeRootKey ? roots[activeRootKey] : (activeKey ? config[activeKey] : '')}
                 rootPath={activeRootKey ? roots[activeRootKey] : roots.root}
                 title={activeRootKey === 'modelos_reid' ? 'Selecionar Modelo OSNet' : (activeRootKey === 'modelos_pose' ? 'Selecionar Modelo RTMPose' : 'Selecionar Arquivo')}
             />
