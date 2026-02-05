@@ -94,14 +94,35 @@ export function AnnotationPlayer({
         if (!ctx) return;
 
         const currentFrame = Math.round(v.currentTime * fps);
-        setDisplayFrame(currentFrame);
-        onFrameChange?.(currentFrame);
+        // Otimização: Evitar re-render do React a cada frame (60Hz)
+        // Só atualiza o estado se o frame integer mudar
+        if (currentFrame !== displayFrame) {
+            setDisplayFrame(currentFrame);
+            onFrameChange?.(currentFrame);
+        }
 
         ctx.clearRect(0, 0, c.width, c.height);
 
         if (!framesLookup) return;
-        const detections = framesLookup[String(currentFrame)];
-        if (!detections || !Array.isArray(detections)) return;
+
+        // Lógica "Sample-and-Hold" (Segurar último estado)
+        // O tracking pode ter sido feito com vid_stride > 1 (ex: a cada 3 frames)
+        // Se não tiver dados para o frame atual, procura nos anteriores (até 5 frames atrás)
+        let detections: any[] | null = null;
+        const LOOKBACK_LIMIT = 5;
+
+        for (let offset = 0; offset <= LOOKBACK_LIMIT; offset++) {
+            const lookupFrame = currentFrame - offset;
+            if (lookupFrame < 0) break;
+
+            const data = framesLookup[String(lookupFrame)];
+            if (data && Array.isArray(data)) {
+                detections = data;
+                break; // Encontrou dados recentes
+            }
+        }
+
+        if (!detections) return; // Nenhuma detecção recente encontrada
 
         // Get scaling with letterbox offset
         const params = getScalingParams(v, c);

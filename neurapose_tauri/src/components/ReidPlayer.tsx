@@ -79,7 +79,11 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
         if (!ctx) return;
 
         const currentFrame = Math.round(v.currentTime * fps);
-        setDisplayFrame(currentFrame);
+
+        // Otimização: Evitar re-render do React a cada frame (60Hz)
+        if (currentFrame !== displayFrame) {
+            setDisplayFrame(currentFrame);
+        }
 
         const canvasW = c.width;
         const canvasH = c.height;
@@ -106,7 +110,22 @@ export function ReidPlayer({ src, reidData, swaps, deletions, cuts, fps = 30 }: 
 
         // Draw BBoxes
         if (framesLookup) {
-            const frameData = framesLookup[String(currentFrame)];
+            // Lógica "Sample-and-Hold" (Segurar último estado)
+            // Se não tiver dados para o frame atual, procura nos anteriores (até 5 frames atrás)
+            let frameData: any[] | null = null;
+            const LOOKBACK_LIMIT = 5;
+
+            for (let offset = 0; offset <= LOOKBACK_LIMIT; offset++) {
+                const lookupFrame = currentFrame - offset;
+                if (lookupFrame < 0) break;
+
+                const data = framesLookup[String(lookupFrame)];
+                if (data && Array.isArray(data)) {
+                    frameData = data;
+                    break;
+                }
+            }
+
             if (frameData && Array.isArray(frameData)) {
                 for (let i = 0; i < frameData.length; i++) {
                     const item = frameData[i];
