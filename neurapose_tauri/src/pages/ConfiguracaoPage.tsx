@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
-import { Settings, Save, RotateCcw, ShieldAlert, FolderOpen } from 'lucide-react';
+import { Settings, Save, RotateCcw, ShieldAlert, Brain, Scan } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
-import { shortenPath } from '../lib/utils';
+import { PathSelector } from '../components/ui/PathSelector';
 
 export default function ConfiguracaoPage() {
     const [config, setConfig] = useState<any>(null);
@@ -18,15 +18,31 @@ export default function ConfiguracaoPage() {
     const [activeRootKey, setActiveRootKey] = useState<string | null>(null);
     const [roots, setRoots] = useState<Record<string, string>>({});
 
+    // Ref para evitar problemas de closure com roots
+    const rootsRef = useRef<Record<string, string>>({});
+    useEffect(() => { rootsRef.current = roots; }, [roots]);
+
 
     useEffect(() => {
         loadConfig();
+        // console.log('[ConfigPage] Iniciando fetch de /config...');
         APIService.getConfig().then(res => {
+            // console.log('[ConfigPage] API /config raw response:', res);
             const data = res.data as any;
-            if (data.status === 'success') {
-                setRoots(data.paths);
+            // Tenta pegar paths de diferentes formatos de resposta
+            const paths = data?.paths || data;
+            // console.log('[ConfigPage] Paths extraídos:', paths);
+            if (paths && typeof paths === 'object') {
+                // Garante que modelos_reid e modelos_pose existam mesmo se o backend não retornar
+                const computedPaths = {
+                    ...paths,
+                    modelos_reid: paths.modelos_reid || (paths.root ? `${paths.root}\\tracker\\weights` : undefined),
+                    modelos_pose: paths.modelos_pose || (paths.root ? `${paths.root}\\rtmpose\\modelos` : undefined)
+                };
+                // console.log('[ConfigPage] Setting roots com:', computedPaths);
+                setRoots(computedPaths);
             }
-        });
+        }).catch(err => console.error('[ConfigPage] Erro ao buscar config:', err));
     }, []);
 
 
@@ -59,14 +75,6 @@ export default function ConfiguracaoPage() {
     };
 
     const openExplorer = (key: string, rootKey?: string) => {
-        // Guard: Se é um picker de modelo, espera roots carregar
-        if (rootKey && !roots[rootKey]) {
-            console.warn(`[ConfigPage] Roots para '${rootKey}' ainda não carregado. Esperando...`);
-            // Retry after short delay
-            setTimeout(() => openExplorer(key, rootKey), 200);
-            return;
-        }
-        console.log(`[ConfigPage] Abrindo explorer: key=${key}, rootKey=${rootKey}, rootPath=${rootKey ? roots[rootKey] : 'default'}`);
         setActiveKey(key);
         setActiveRootKey(rootKey || null);
         setExplorerOpen(true);
@@ -74,14 +82,15 @@ export default function ConfiguracaoPage() {
 
     const onPathSelect = (path: string) => {
         if (activeKey) {
-            // Para modelos (OSNET/RTMPOSE), extrair apenas o nome relativo
+            // Para modelos (OSNET/RTMPOSE), extrair path relativo ao root
             // Ex: C:\...\tracker\weights\osnet.pth -> osnet.pth
-            // Ex: C:\...\rtmpose\modelos\folder\end2end.onnx -> folder/end2end.onnx
+            // Ex: C:\...\rtmpose\modelos\rtmpose-m_simcc.../end2end.onnx -> rtmpose-m_simcc.../end2end.onnx
             let finalPath = path;
             if (activeRootKey && roots[activeRootKey]) {
-                const rootNorm = roots[activeRootKey].replace(/\\/g, '/');
+                const rootNorm = roots[activeRootKey].replace(/\\/g, '/').replace(/\/$/, '');
                 const pathNorm = path.replace(/\\/g, '/');
                 if (pathNorm.startsWith(rootNorm)) {
+                    // Remove o root path e a barra inicial
                     finalPath = pathNorm.slice(rootNorm.length).replace(/^\//, '');
                 }
             }
@@ -301,22 +310,12 @@ export default function ConfiguracaoPage() {
                                     </div>
 
                                     {item.type === 'path' ? (
-                                        <div className="flex gap-2">
-                                            <input
-                                                type="text"
-                                                value={shortenPath(config[item.key] || '')}
-                                                title={config[item.key] || ''}
-                                                onChange={(e) => setConfig({ ...config, [item.key]: e.target.value })}
-                                                className="flex-1 bg-background border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/40 transition-all text-xs font-mono"
-                                            />
-                                            <button
-                                                onClick={() => openExplorer(item.key, (item as any).rootKey)}
-                                                className="p-2.5 bg-secondary hover:bg-primary/20 hover:text-primary rounded-xl transition-all border border-border"
-                                                title="Procurar arquivo/diretório"
-                                            >
-                                                <FolderOpen className="w-5 h-5" />
-                                            </button>
-                                        </div>
+                                        <PathSelector
+                                            value={config[item.key] || ''}
+                                            onSelect={() => openExplorer(item.key, (item as any).rootKey)}
+                                            placeholder="Clique para selecionar..."
+                                            icon={item.key.includes('OSNET') ? Brain : Scan}
+                                        />
                                     ) : item.type === 'select' ? (
                                         <select
                                             value={config[item.key]}

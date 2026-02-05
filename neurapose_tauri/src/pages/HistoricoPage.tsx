@@ -40,65 +40,77 @@ export default function HistoricoPage() {
             const paths = configData.paths;
             const allItems: HistoryItem[] = [];
 
-            try {
-                const res = await APIService.browse(paths.videos_com_pose);
-                const data = res.data as any;
-                data.items.forEach((item: any) => {
-                    if (!item.is_dir && item.name.endsWith('.mp4')) {
-                        allItems.push({
-                            id: `proc_${item.name}`,
-                            name: item.name,
-                            path: item.path,
-                            type: 'processamento'
-                        });
-                    }
-                });
-            } catch (e) { console.error('Erro ao ler processamentos', e); }
+            // Processamentos - usa "processamentos" (resultados) ao invés de "videos_com_pose"
+            if (paths.processamentos) {
+                try {
+                    const res = await APIService.browse(paths.processamentos);
+                    const data = res.data as any;
+                    data.items.forEach((item: any) => {
+                        if (!item.is_dir && item.name.endsWith('.mp4')) {
+                            allItems.push({
+                                id: `proc_${item.name}`,
+                                name: item.name,
+                                path: item.path,
+                                type: 'processamento'
+                            });
+                        }
+                    });
+                } catch (e) { console.error('Erro ao ler processamentos', e); }
+            }
 
-            try {
-                const res = await APIService.browse(paths.reidentificacoes);
-                const data = res.data as any;
-                data.items.forEach((item: any) => {
-                    if (item.is_dir) {
-                        allItems.push({
-                            id: `reid_${item.name}`,
-                            name: item.name,
-                            path: item.path,
-                            type: 'reid'
-                        });
-                    }
-                });
-            } catch (e) { console.error('Erro ao ler reidentificacoes', e); }
+            // Reidentificações
+            if (paths.reidentificacoes) {
+                try {
+                    const res = await APIService.browse(paths.reidentificacoes);
+                    const data = res.data as any;
+                    data.items.forEach((item: any) => {
+                        if (item.is_dir) {
+                            allItems.push({
+                                id: `reid_${item.name}`,
+                                name: item.name,
+                                path: item.path,
+                                type: 'reid'
+                            });
+                        }
+                    });
+                } catch (e) { console.error('Erro ao ler reidentificacoes', e); }
+            }
 
-            try {
-                const res = await APIService.browse(paths.anotacoes);
-                const data = res.data as any;
-                data.items.forEach((item: any) => {
-                    if (!item.is_dir && item.name.endsWith('.json')) {
-                        allItems.push({
-                            id: `annot_${item.name}`,
-                            name: item.name,
-                            path: item.path,
-                            type: 'anotacao'
-                        });
-                    }
-                });
-            } catch (e) { console.error('Erro ao ler anotações', e); }
+            // Anotações - usa "anotacoes" que existe no config
+            if (paths.anotacoes) {
+                try {
+                    const res = await APIService.browse(paths.anotacoes);
+                    const data = res.data as any;
+                    data.items.forEach((item: any) => {
+                        if (!item.is_dir && item.name.endsWith('.json')) {
+                            allItems.push({
+                                id: `annot_${item.name}`,
+                                name: item.name,
+                                path: item.path,
+                                type: 'anotacao'
+                            });
+                        }
+                    });
+                } catch (e) { console.error('Erro ao ler anotações', e); }
+            }
 
-            try {
-                const res = await APIService.browse(paths.modelos);
-                const data = res.data as any;
-                data.items.forEach((item: any) => {
-                    if (!item.is_dir && (item.name.endsWith('.pt') || item.name.endsWith('.pth'))) {
-                        allItems.push({
-                            id: `model_${item.name}`,
-                            name: item.name,
-                            path: item.path,
-                            type: 'modelo'
-                        });
-                    }
-                });
-            } catch (e) { console.error('Erro ao ler modelos', e); }
+            // Modelos treinados
+            if (paths.modelos_treinados || paths.modelos) {
+                try {
+                    const res = await APIService.browse(paths.modelos_treinados || paths.modelos);
+                    const data = res.data as any;
+                    data.items.forEach((item: any) => {
+                        if (!item.is_dir && (item.name.endsWith('.pt') || item.name.endsWith('.pth'))) {
+                            allItems.push({
+                                id: `model_${item.name}`,
+                                name: item.name,
+                                path: item.path,
+                                type: 'modelo'
+                            });
+                        }
+                    });
+                } catch (e) { console.error('Erro ao ler modelos', e); }
+            }
 
             setItems(allItems);
         } catch (err) {

@@ -18,9 +18,8 @@ export function PathSelector({
     readOnly = true
 }: PathSelectorProps) {
 
-    // Extrai apenas o nome da pasta/arquivo para exibição amigável
-    // Se estiver vazio, mostra vazio.
-    const displayValue = value ? value.replace(/\\/g, '/').split('/').pop() || '' : '';
+    // Exibe o valor completo (path relativo) ao invés de truncar para só o nome do arquivo
+    const displayValue = value ? value.replace(/\\/g, '/') : '';
 
     return (
         <div className="space-y-2">

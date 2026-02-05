@@ -86,7 +86,7 @@ logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
 # SEGURANÇA: Pastas e arquivos restritos no explorador
 # ==============================================================
 HIDDEN_ENTRIES = {
-    "app", "pre_processamento", "detector", "LSTM", "tracker", 
+    "app", "pre_processamento", "detector", "LSTM",
     "neurapose_backend", "neurapose_frontend", "node_modules", 
     ".git", ".next", ".venv", "__pycache__", ".agent", ".gemini", 
     "config_master.py", "main.py", "picker.py", "agente.txt", 

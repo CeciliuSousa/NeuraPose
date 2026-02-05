@@ -40,8 +40,8 @@ RTMPOSE_INPUT_SIZE = (192, 256)
 RTMPOSE_MAX_BATCH_SIZE = 10         # Batch size para inferência Pose (GPU)
 
 # OSNet (ReID)
-# OSNET_MODEL = "osnet_x0_5_msmt17_combineall_256x128_amsgrad_ep150_stp60_lr0.0015_b64_fb10_softmax_labelsmooth_flip_jitter.pth"
-OSNET_MODEL = "osnet_ain_x1_0_msmt17_256x128_amsgrad_ep50_lr0.0015_coslr_b64_fb10_softmax_labsmth_flip_jitter.pth"
+OSNET_MODEL = "osnet_x0_5_msmt17_combineall_256x128_amsgrad_ep150_stp60_lr0.0015_b64_fb10_softmax_labelsmooth_flip_jitter.pth"
+# OSNET_MODEL = "osnet_ain_x1_0_msmt17_256x128_amsgrad_ep50_lr0.0015_coslr_b64_fb10_softmax_labsmth_flip_jitter.pth"
 
 
 TRACKER_NAME = "BoTSORT" # "BoTSORT" ou "DeepOCSORT"

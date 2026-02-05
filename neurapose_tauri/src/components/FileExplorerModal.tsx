@@ -33,9 +33,11 @@ export function FileExplorerModal({
 
     useEffect(() => {
         if (isOpen) {
+            // console.log(`[FileExplorer] Modal opened - rootPath="${rootPath}", initialPath="${initialPath}", currentPath="${currentPath}"`);
             // Prioridade: rootPath > initialPath > currentPath > C:\
             // NÃO usa videos como fallback universal
             const pathToLoad = rootPath || initialPath || currentPath || 'C:\\';
+            // console.log(`[FileExplorer] Loading path: "${pathToLoad}"`);
             if (pathToLoad) {
                 loadPath(pathToLoad);
             }
