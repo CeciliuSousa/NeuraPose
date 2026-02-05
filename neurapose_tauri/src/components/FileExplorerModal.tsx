@@ -33,12 +33,12 @@ export function FileExplorerModal({
 
     useEffect(() => {
         if (isOpen) {
-            if (initialPath) {
+            // Sempre começa do rootPath quando disponível (para pickers de modelo)
+            if (rootPath) {
+                loadPath(rootPath);
+            } else if (initialPath) {
                 setCurrentPath(initialPath);
                 loadPath(initialPath);
-            }
-            else if (rootPath && (!currentPath || !normalize(currentPath).startsWith(normalize(rootPath)))) {
-                loadPath(rootPath);
             } else if (!currentPath) {
                 APIService.getConfig().then(res => {
                     const data = res.data as any;
@@ -49,7 +49,7 @@ export function FileExplorerModal({
                 loadPath(currentPath);
             }
         }
-    }, [isOpen, initialPath]);
+    }, [isOpen, initialPath, rootPath]);
 
     // ESC key to close modal
     useEffect(() => {
@@ -104,6 +104,16 @@ export function FileExplorerModal({
 
     if (!isOpen) return null;
 
+    // Helper para exibir caminho relativo a partir de neurapose_backend
+    const getDisplayPath = (fullPath: string) => {
+        const marker = 'neurapose_backend';
+        const idx = fullPath.toLowerCase().indexOf(marker.toLowerCase());
+        if (idx !== -1) {
+            return '\\' + fullPath.slice(idx);
+        }
+        return fullPath;
+    };
+
     const isAtRoot = rootPath ? normalize(currentPath) === normalize(rootPath) : false;
 
     return (
@@ -127,7 +137,7 @@ export function FileExplorerModal({
                         <ChevronLeft className="w-4 h-4" />
                     </button>
                     <div className="flex-1 text-xs font-mono bg-background/50 border border-border px-2 py-1.5 rounded truncate">
-                        {currentPath}
+                        {getDisplayPath(currentPath)}
                     </div>
                 </div>
 

@@ -66,7 +66,18 @@ export default function ConfiguracaoPage() {
 
     const onPathSelect = (path: string) => {
         if (activeKey) {
-            setConfig({ ...config, [activeKey]: path });
+            // Para modelos (OSNET/RTMPOSE), extrair apenas o nome relativo
+            // Ex: C:\...\tracker\weights\osnet.pth -> osnet.pth
+            // Ex: C:\...\rtmpose\modelos\folder\end2end.onnx -> folder/end2end.onnx
+            let finalPath = path;
+            if (activeRootKey && roots[activeRootKey]) {
+                const rootNorm = roots[activeRootKey].replace(/\\/g, '/');
+                const pathNorm = path.replace(/\\/g, '/');
+                if (pathNorm.startsWith(rootNorm)) {
+                    finalPath = pathNorm.slice(rootNorm.length).replace(/^\//, '');
+                }
+            }
+            setConfig({ ...config, [activeKey]: finalPath });
         }
         setExplorerOpen(false);
         setActiveKey(null);
@@ -353,9 +364,9 @@ export default function ConfiguracaoPage() {
                 isOpen={explorerOpen}
                 onClose={() => setExplorerOpen(false)}
                 onSelect={onPathSelect}
-                initialPath={activeKey ? config[activeKey] : ''}
+                initialPath={activeRootKey ? '' : (activeKey ? config[activeKey] : '')}
                 rootPath={activeRootKey ? roots[activeRootKey] : roots.root}
-                title="Selecionar Arquivo ou Diretório"
+                title={activeRootKey === 'modelos_reid' ? 'Selecionar Modelo OSNet' : (activeRootKey === 'modelos_pose' ? 'Selecionar Modelo RTMPose' : 'Selecionar Arquivo')}
             />
 
             <div className="bg-primary/5 border border-primary/10 p-5 rounded-2xl text-xs text-muted-foreground leading-relaxed flex items-start gap-4">

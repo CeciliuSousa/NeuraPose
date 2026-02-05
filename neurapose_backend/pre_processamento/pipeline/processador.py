@@ -57,8 +57,6 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
     jsons_dir.mkdir(parents=True, exist_ok=True)
     videos_norm_dir.mkdir(parents=True, exist_ok=True)
 
-    # print(Fore.CYAN + f"[PROC] Iniciando: {video_path.name}")
-
     # 2. NORMALIZAÇÃO (REMOVIDO POR PERFORMANCE)
     # OBS: Otimização solicitada para reduzir overhead de ffmpeg.
     # Usaremos LOGICAL SKIP para processar apenas os frames alvo (10fps) do vídeo original.
@@ -144,7 +142,7 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
                 
                 if should_log:
                     last_logged_percent = current_percent
-                    print(f"\r[PROC] Progresso: {current_percent}% ({frame_idx}/{total_frames})")
+                    print(f"\r[PROCESSAMENTO] Progresso: {current_percent}% ({frame_idx}/{total_frames})")
 
                 t0 = time.time()
                 

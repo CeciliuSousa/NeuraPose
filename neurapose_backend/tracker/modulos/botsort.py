@@ -86,17 +86,21 @@ class CustomBoTSORT(BOTSORT_ORIGINAL):
         for k, v in cm.BOT_SORT_CONFIG.items():
             setattr(args, k, v)
 
-        # Nao usamos o ReID nativo, usamos o nosso encoder
+        # 1. Salva config original de ReID
+        desired_reid = args.with_reid
+        
+        # 2. Desativa temporariamente para o Init da Base (evita download do modelo default)
         args.with_reid = False
-
         super().__init__(args, frame_rate)
-        self.args = args
-
-        # GMC (motion compensation)
-        self.gmc = GMC(method=args.gmc_method)
-
-        # Custom ReID
-        self.encoder = CustomReID(args.model)
+        
+        # 3. Restaura config real e inicializa nosso encoder CUSTOM
+        self.args.with_reid = desired_reid
+        self.encoder = None
+        
+        if self.args.with_reid:
+            # Custom ReID (OSNet)
+            # print(Fore.MAGENTA + f"[BoTSORT] Inicializando Custom OSNet ReID: {args.model}")
+            self.encoder = CustomReID(args.model)
         
         # Histórico para suavização EMA (Anti-Jitter)
         self.box_history = {}
