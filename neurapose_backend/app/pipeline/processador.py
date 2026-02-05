@@ -19,6 +19,13 @@ import torch
 # Silencia logs verbosos do OpenCV/FFmpeg
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 
+import logging
+class TaskWarningFilter(logging.Filter):
+    def filter(self, record):
+        return "Unable to automatically guess model task" not in record.getMessage()
+
+logging.getLogger("ultralytics").addFilter(TaskWarningFilter())
+
 # Importações do projeto
 import neurapose_backend.config_master as cm
 from neurapose_backend.rtmpose.extracao_pose_rtmpose import ExtratorPoseRTMPose
@@ -106,7 +113,7 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
     if USING_DEEPOCSORT:
         tracker = CustomDeepOCSORT()
     else:
-        yolo_model = YOLO(str(cm.YOLO_PATH)).to(cm.DEVICE)
+        yolo_model = YOLO(str(cm.YOLO_PATH), task='detect').to(cm.DEVICE)
         tracker_instance = CustomBoTSORT(frame_rate=int(target_fps))
         yolo_model.tracker = tracker_instance
         yaml_path = save_temp_tracker_yaml()

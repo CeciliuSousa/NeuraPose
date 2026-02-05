@@ -120,7 +120,7 @@ def yolo_detector_botsort(videos_dir=None, batch_size=None):
     if not model_path.exists():
         model_base = cm.YOLO_MODEL.replace('.pt', '')
         try:
-            temp_model = YOLO(model_base)
+            temp_model = YOLO(model_base, task='detect')
             temp_model.save(str(model_path))
             
             # Cleanup: YOLO baixa no CWD, então removemos o arquivo solto
@@ -135,7 +135,7 @@ def yolo_detector_botsort(videos_dir=None, batch_size=None):
             raise FileNotFoundError(f"Erro ao baixar {cm.YOLO_PATH}: {e}")
     
     # Carrega o modelo
-    model = YOLO(str(model_path)).to(cm.DEVICE)
+    model = YOLO(str(model_path), task='detect').to(cm.DEVICE)
 
     # Lista de videos
     if videos_path.is_file():
@@ -264,7 +264,9 @@ def yolo_detector_botsort(videos_dir=None, batch_size=None):
                     classes=[cm.YOLO_CLASS_PERSON],
                     verbose=False,
                     half=True,
-                    stream=False 
+                    stream=False,
+                    task="detect",
+                    persist=True
                 )
 
 

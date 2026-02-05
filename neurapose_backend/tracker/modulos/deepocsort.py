@@ -21,7 +21,7 @@ class CustomDeepOCSORT:  # Mudei o nome para não conflitar
         # 1. Carrega Detector (YOLO)
         # # Usa o path do config para garantir que pegou o modelo certo
         # print(f"[INIT] Carregando YOLO: {cm.YOLO_PATH}")
-        self.model = YOLO(cm.YOLO_PATH) 
+        self.model = YOLO(cm.YOLO_PATH, task='detect') 
         
         # 2. Carrega Tracker (DeepOCSORT)
         # Mapeia as configs do seu dicionário para os argumentos da classe

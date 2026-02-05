@@ -93,7 +93,7 @@ class YoloStreamDetector:
             self.model = YOLO(str(self.engine_path), task="detect")
         else:
             print(Fore.YELLOW + f"[INFO] Usando Modelo Padrão (PyTorch): {cm.YOLO_PATH.name}")
-            self.model = YOLO(str(cm.YOLO_PATH)).to(cm.DEVICE)
+            self.model = YOLO(str(cm.YOLO_PATH), task='detect').to(cm.DEVICE)
         
     def ensure_model(self):
         # 1. Garante modelo PT base
@@ -104,7 +104,7 @@ class YoloStreamDetector:
             print(Fore.CYAN + f"[INFO] Baixando modelo base: {pt_path.name}...")
             model_base = cm.YOLO_MODEL.replace('.pt', '')
             try:
-                temp = YOLO(model_base)
+                temp = YOLO(model_base, task='detect')
                 temp.save(str(pt_path))
                 
                 # Cleanup: YOLO baixa no CWD, então removemos o arquivo solto
@@ -126,7 +126,7 @@ class YoloStreamDetector:
                 print(f"Isso pode levar de 5 a 10 minutos. Por favor aguarde...")
                 print("="*60 + Fore.RESET)
                 try:
-                    model = YOLO(str(pt_path))
+                    model = YOLO(str(pt_path), task='detect')
 
                     batch_size = cm.YOLO_BATCH_SIZE
                     print(Fore.CYAN + f"[TRT] Exportando com Batch Size = {batch_size}...")

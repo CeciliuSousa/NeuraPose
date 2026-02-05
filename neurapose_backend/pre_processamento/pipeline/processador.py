@@ -18,6 +18,8 @@ import torch
 # Silencia logs OpenCV
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 
+
+
 import neurapose_backend.config_master as cm
 from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomDeepOCSORT, save_temp_tracker_yaml
 from neurapose_backend.rtmpose.extracao_pose_rtmpose import ExtratorPoseRTMPose
@@ -115,7 +117,7 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
     if USING_DEEPOCSORT:
         tracker = CustomDeepOCSORT()
     else:
-        yolo_model = YOLO(str(cm.YOLO_PATH)).to(cm.DEVICE)
+        yolo_model = YOLO(str(cm.YOLO_PATH), task='detect').to(cm.DEVICE)
         tracker_instance = CustomBoTSORT(frame_rate=int(target_fps))
         yolo_model.tracker = tracker_instance
         yaml_path = save_temp_tracker_yaml()
@@ -153,11 +155,32 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
                         tracks = tracker.track(frame)
                         yolo_dets = tracks
                     else:
-                        res = yolo_model.track(
-                            source=frame, persist=True, tracker=str(yaml_path),
-                            verbose=False, classes=[cm.YOLO_CLASS_PERSON]
+                        # BoTSORT Manual (Fix para Empty JSON/Warnings)
+                        # 1. Detect (Predict direto evita problemas do .track)
+                        res = yolo_model.predict(
+                            source=frame,
+                            imgsz=cm.YOLO_IMGSZ,
+                            conf=cm.DETECTION_CONF,
+                            device=cm.DEVICE,
+                            classes=[cm.YOLO_CLASS_PERSON],
+                            verbose=False,
+                            stream=False
                         )
-                        if len(res) > 0: yolo_dets = res[0].boxes
+                        
+                        # 2. Formata Dets para Tracker
+                        dets = np.empty((0, 6))
+                        if len(res) > 0 and len(res[0].boxes) > 0:
+                            dets = res[0].boxes.data.cpu().numpy()
+                            # Normaliza shapes (x1,y1,x2,y2,conf,cls)
+                            if dets.shape[1] == 4:
+                                 r = dets.shape[0]
+                                 dets = np.hstack((dets, np.full((r, 1), 0.85), np.zeros((r, 1))))
+                            elif dets.shape[1] == 5:
+                                 dets = np.hstack((dets, np.zeros((dets.shape[0], 1))))
+                        
+                        # 3. Update Tracker
+                        tracks = tracker_instance.update(dets, frame)
+                        yolo_dets = tracks
                 except Exception as e:
                     # Falha pontual no tracker (skip frame)
                     yolo_dets = np.empty((0, 7))
