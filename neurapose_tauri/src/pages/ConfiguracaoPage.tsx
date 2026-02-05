@@ -135,7 +135,7 @@ export default function ConfiguracaoPage() {
             title: "Modelos de IA",
             description: "Modelos usados para detecção, pose e re-identificação.",
             items: [
-                { key: "YOLO_MODEL", label: "Modelo YOLO (Detecção)", type: "select", options: ["yolov8n.pt", "yolov8s.pt", "yolo11n.pt", "yolo11s.pt", "yolo11m.pt"] },
+                { key: "YOLO_MODEL", label: "Modelo YOLO (Detecção)", type: "select", options: ["yolov8n.pt", "yolov8s.pt", "yolov8m.pt", "yolov8l.pt", "yolo11n.pt", "yolo11s.pt", "yolo11m.pt", "yolo11l.pt"] },
                 { key: "TRACKER_NAME", label: "Rastreador Ativo", type: "select", options: ["BoTSORT", "DeepOCSORT"] },
                 { key: "OSNET_MODEL", label: "Modelo OSNet (Re-ID)", type: "path", rootKey: "modelos_reid" },
                 { key: "RTMPOSE_MODEL", label: "Modelo RTMPose (Pose)", type: "path", rootKey: "modelos_pose" },
@@ -315,6 +315,7 @@ export default function ConfiguracaoPage() {
                                             onSelect={() => openExplorer(item.key, (item as any).rootKey)}
                                             placeholder="Clique para selecionar..."
                                             icon={item.key.includes('OSNET') ? Brain : Scan}
+                                            showFullValue={true}
                                         />
                                     ) : item.type === 'select' ? (
                                         <select

@@ -7,6 +7,7 @@ interface PathSelectorProps {
     label?: string;
     icon?: React.ElementType; // Ícone opcional para substituir o Video padrão
     readOnly?: boolean;
+    showFullValue?: boolean; // Se true, mostra o caminho completo (relativo ou absoluto). Padrão false (apenas nome).
 }
 
 export function PathSelector({
@@ -15,11 +16,14 @@ export function PathSelector({
     placeholder = "Selecione o diretório...",
     label,
     icon: Icon = Video,
-    readOnly = true
+    readOnly = true,
+    showFullValue = false
 }: PathSelectorProps) {
 
-    // Exibe o valor completo (path relativo) ao invés de truncar para só o nome do arquivo
-    const displayValue = value ? value.replace(/\\/g, '/') : '';
+    // Exibe o valor completo ou apenas o nome, dependendo da prop
+    const displayValue = value
+        ? (showFullValue ? value.replace(/\\/g, '/') : (value.replace(/\\/g, '/').split('/').pop() || ''))
+        : '';
 
     return (
         <div className="space-y-2">
