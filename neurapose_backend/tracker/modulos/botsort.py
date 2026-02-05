@@ -165,7 +165,9 @@ class CustomBoTSORT(BOTSORT_ORIGINAL):
         
         # Divide tracks em ativos e não confirmados
         unconfirmed = [t for t in self.tracked_stracks if not t.is_activated]
-        tracked_stracks = [t for t in self.tracked_stracks if t.is_activated]
+        # Custom BoTSORT: Incluir lost_stracks no primeiro matching (ReID)
+        # Isso permite que o OSNet recupere IDs perdidos (oculsão/saída de cena)
+        tracked_stracks = [t for t in self.tracked_stracks if t.is_activated] + self.lost_stracks
         
         # Predição de todos os tracks
         for track in tracked_stracks:
@@ -408,9 +410,10 @@ class CustomBoTSORT(BOTSORT_ORIGINAL):
         feats = self.encoder(img, dets)
 
         tracks = []
-        for xywh, s, c, f in zip(bboxes, confs, clss, feats):
-            # Ultralytics STrack exige vetor de tamanho 5 [x, y, w, h, score]
-            element = np.append(xywh, s)
+        for bs_xywh, s, c, f in zip(bboxes, confs, clss, feats):
+            # Ultralytics BOTrack espera XYWH (Center) e converte internamente se necessário
+            # A conversão anterior para TLWH causou deslocamento das caixas (Ponto Inf-Dir no Centro)
+            element = np.append(bs_xywh, s)
             tracks.append(BOTrack(element, s, c, f))
 
         return tracks
