@@ -1594,16 +1594,62 @@ def get_reid_data(video_id: str, root_path: Optional[str] = None):
     
     # Handle tracking.json format (object with tracking_by_frame)
     if use_tracking and isinstance(raw_data, dict) and "tracking_by_frame" in raw_data:
+        # Load auxiliary keypoints from pose.json if available
+        pose_kps_map = {}
+        if keypoints_path.exists():
+            try:
+                logger.info(f"[REID_DATA] Carregando keypoints auxiliares de: {keypoints_path}")
+                pose_data = carregar_pose_records(keypoints_path)
+                # Build map: (frame, tracker_id) -> keypoints
+                def get_tracker_id(item):
+                    # Tenta chaves comuns de rastreadores
+                    for k in ["BoTSORT_id", "botsort_id", "DeepOCSORT_id", "deepocsort_id", "track_id", "id_persistente"]:
+                        val = item.get(k)
+                        if val is not None: return int(val)
+                    return None
+
+                pose_kps_map = {}
+                count_kps = 0
+                for r in pose_data:
+                    f_idx = int(r.get("frame", 0))
+                    tid = get_tracker_id(r)
+                    kps = r.get("keypoints")
+                    if tid is not None and kps:
+                         pose_kps_map[(f_idx, tid)] = kps
+                         count_kps += 1
+                logger.info(f"[REID_DATA] Keypoints carregados: {count_kps}")
+            except Exception as e:
+                logger.warning(f"Failed to load auxiliary keypoints from {keypoints_path}: {e}")
+        else:
+             logger.warning(f"[REID_DATA] Arquivo de keypoints nao encontrado: {keypoints_path}")
+
         # Converte o formato tracking para lista de records para reusar indexar_por_frame_e_contar_ids
         records = []
+        merged_count = 0
+        
+        # Helper interno repetido para garantir escopo, ou move para fora
+        def get_tracker_id_det(item):
+            for k in ["BoTSORT_id", "botsort_id", "DeepOCSORT_id", "deepocsort_id", "track_id", "id_persistente"]:
+                val = item.get(k)
+                if val is not None: return int(val)
+            return None
+
         for frame_idx, detections in raw_data["tracking_by_frame"].items():
+            f_int = int(frame_idx)
             for det in detections:
+                # Tenta recuperar keypoints pelo Tracker ID original
+                tid = get_tracker_id_det(det)
+                kps = pose_kps_map.get((f_int, tid)) if tid is not None else None
+                if kps: merged_count += 1
+                
                 records.append({
-                    "frame": int(frame_idx),
-                    "id_persistente": det.get("id_persistente", det.get("botsort_id", -1)),
+                    "frame": f_int,
+                    "id_persistente": det.get("id_persistente", tid or -1),
                     "bbox": det.get("bbox", [0,0,0,0]),
-                    "confidence": det.get("confidence", 0)
+                    "confidence": det.get("confidence", 0),
+                    "keypoints": kps
                 })
+        logger.info(f"[REID_DATA] Keypoints fundidos em {merged_count} registros.")
         
         # Use id_map for accurate unique ID count
         id_map = raw_data.get("id_map", {})
@@ -1618,8 +1664,8 @@ def get_reid_data(video_id: str, root_path: Optional[str] = None):
     frames_clean = {}
     for f, items in frames_index.items():
         frames_clean[str(f)] = []
-        for bbox, gid in items:
-            frames_clean[str(f)].append({"bbox": bbox, "id": gid})
+        for bbox, gid, kps in items:
+            frames_clean[str(f)].append({"bbox": bbox, "id": gid, "keypoints": kps})
     
     # For tracking files, use id_map count; otherwise use counter
     if unique_persistent_ids is not None:
@@ -2027,8 +2073,9 @@ def list_videos_to_annotate(root_path: Optional[str] = None):
     
     result = []
     
-    # Lista vídeos de predicoes ou videos (preferência para predicoes)
-    source_dir = pred_dir if pred_dir.exists() else videos_dir
+    # Lista vídeos de predicoes ou videos (preferência para videos RAW se existirem)
+    # AJUSTE: Prioriza 'videos' para garantir nomes limpos na interface
+    source_dir = videos_dir if videos_dir.exists() else pred_dir
     
     if source_dir.exists():
         valid_exts = {'.mp4', '.avi', '.mov', '.mkv'}
@@ -2050,7 +2097,8 @@ def list_videos_to_annotate(root_path: Optional[str] = None):
             status = "anotado" if is_annotated else "pendente"
             
             result.append({
-                "video_id": vfile.stem,  # ID sujo (com _pred/_pose) para o vídeo carregar
+                "video_id": stem,  # ID Limpo!
+                "video_name": vfile.name,
                 "video_name": vfile.name,
                 "status": status,
                 "has_json": json_path.exists(),

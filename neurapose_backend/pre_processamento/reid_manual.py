@@ -453,7 +453,8 @@ def indexar_por_frame_e_contar_ids(records):
         if isinstance(bbox, list) and len(bbox) == 4:
             bbox = {"x1": bbox[0], "y1": bbox[1], "x2": bbox[2], "y2": bbox[3]}
         frame_idx = int(r.get("frame", 0))
-        frames.setdefault(frame_idx, []).append((bbox, gid))
+        keypoints = r.get("keypoints", [])
+        frames.setdefault(frame_idx, []).append((bbox, gid, keypoints))
         id_counter[gid] += 1
     return frames, id_counter
 

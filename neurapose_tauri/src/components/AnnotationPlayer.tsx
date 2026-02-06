@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
+import { drawSkeleton } from './SkeletonUtils';
 import { RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Play, Pause } from 'lucide-react';
 
 interface AnnotationPlayerProps {
@@ -159,11 +160,16 @@ export function AnnotationPlayer({
                 strokeColor = '#22c55e';
             }
 
-            // Apply scaling WITH offset for letterboxing
             const sx1 = x1 * scaleX + offsetX;
             const sy1 = y1 * scaleY + offsetY;
             const w = (x2 - x1) * scaleX;
             const h = (y2 - y1) * scaleY;
+
+            // --- SKELETON DRAWING ---
+            const kps = item.keypoints;
+            if (kps && Array.isArray(kps)) {
+                drawSkeleton(ctx, kps, pid, scaleX, scaleY, offsetX, offsetY);
+            }
 
             ctx.strokeStyle = strokeColor;
             ctx.lineWidth = 3;
