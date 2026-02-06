@@ -168,14 +168,14 @@ export function AnnotationPlayer({
             // --- SKELETON DRAWING ---
             const kps = item.keypoints;
             if (kps && Array.isArray(kps)) {
-                drawSkeleton(ctx, kps, pid, scaleX, scaleY, offsetX, offsetY);
+                drawSkeleton(ctx, kps, pid, scaleX, scaleY, offsetX, offsetY, strokeColor);
             }
 
             ctx.strokeStyle = strokeColor;
             ctx.lineWidth = 3;
             ctx.strokeRect(sx1, sy1, w, h);
 
-            const label = `ID ${pid}`;
+            const label = `ID: ${pid} | Classe: ${classe}`;
             ctx.font = 'bold 12px sans-serif';
             const textWidth = ctx.measureText(label).width + 12;
             const labelHeight = 22;

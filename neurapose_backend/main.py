@@ -2289,30 +2289,70 @@ def save_all_pending(req: BatchAnnotationRequest):
         except:
             pass
     
-    # Lista todos os JSONs de pose disponíveis (exclui _tracking.json)
-    all_json_files = list(jsons_path.glob("*.json"))
-    json_files = [f for f in all_json_files if not f.name.endswith("_tracking.json")]
+    # Fonte da verdade deve ser a pasta de VÍDEOS, não JSONs
+    videos_dir = root / "videos"
+    if not videos_dir.exists():
+        # Fallback se não existir pasta videos (caso raro de apenas jsons)
+        logger.warning(f"[BATCH ANNOTATE] Pasta videos não encontrada em {videos_dir}, usando jsons como fallback (menos confiável).")
+        source_files = list(jsons_path.glob("*.json"))
+        is_video_source = False
+    else:
+        # Pega todos os vídeos suportados
+        video_exts = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
+        source_files = [p for p in videos_dir.iterdir() if p.suffix.lower() in video_exts]
+        is_video_source = True
     
     saved_count = 0
-    for jf in json_files:
-        # video_stem é o nome do arquivo sem extensão (ex: cena-normal-00000_30fps)
-        video_stem = jf.stem
+    import re
+
+    for src_file in source_files:
+        # Se a fonte é vídeo, o stem é o nome correto (ex: cena-normal-00000)
+        # Se a fonte é json (fallback), tentamos limpar
+        if is_video_source:
+             video_stem = src_file.stem
+        else:
+             video_stem = re.sub(r'(_pose|_pred|_tracking)+$', '', src_file.stem)
         
         # Pula se já foi anotado
         if video_stem in todas_labels:
             continue
+            
+        # Tenta encontrar o JSON correspondente
+        # Ordem de prioridade: video_stem + _pose.json, video_stem + .json, video_stem + _pred.json
+        candidate_jsons = [
+            jsons_path / f"{video_stem}_pose.json",
+            jsons_path / f"{video_stem}.json",
+            jsons_path / f"{video_stem}_pred.json"
+        ]
         
+        target_json = None
+        for cand in candidate_jsons:
+            if cand.exists():
+                target_json = cand
+                break
+        
+        if not target_json:
+            # logger.warning(f"[BATCH ANNOTATE] JSON não encontrado para vídeo {video_stem}")
+            continue
+
         # Carrega o JSON e conta IDs (lógica inline)
         try:
-            with open(jf, "r", encoding="utf-8") as f:
+            with open(target_json, "r", encoding="utf-8") as f:
                 records = json.load(f)
             
             # Conta ocorrências de cada ID persistente
             from collections import Counter
             id_counter = Counter()
             for r in records:
-                gid = r.get("id_persistente", -1)
-                if gid is not None and gid >= 0:
+                # Tenta recuperar ID de varias fontes
+                gid = r.get("id_persistente")
+                if gid is None: gid = r.get("BoTSORT_id")
+                if gid is None: gid = r.get("botsort_id")
+                if gid is None: gid = r.get("DeepOCSORT_id") 
+                if gid is None: gid = r.get("deepocsort_id")
+                if gid is None: gid = r.get("track_id")
+                
+                if gid is not None and int(gid) >= 0:
                     id_counter[int(gid)] += 1
             
             # Cria anotações com classe default para IDs com frames suficientes
@@ -2322,9 +2362,10 @@ def save_all_pending(req: BatchAnnotationRequest):
                     annotations[str(gid)] = req.default_class
             
             if annotations:
-                todas_labels[video_stem] = annotations
+                todas_labels[video_stem] = annotations # Chave agora é GARANTIDAMENTE o nome do vídeo
                 saved_count += 1
-                logger.info(f"[BATCH ANNOTATE] Salvando {video_stem} com {len(annotations)} IDs como {req.default_class}")
+                if saved_count % 50 == 0:
+                    logger.info(f"[BATCH ANNOTATE] Processados {saved_count} vídeos...")
         except Exception as e:
             logger.warning(f"[BATCH ANNOTATE] Erro ao processar {video_stem}: {e}")
             continue

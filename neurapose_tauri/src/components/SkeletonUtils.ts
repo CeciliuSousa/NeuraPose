@@ -25,9 +25,10 @@ export function drawSkeleton(
     scaleX: number,
     scaleY: number,
     offsetX: number,
-    offsetY: number
+    offsetY: number,
+    overrideColor?: string
 ) {
-    const color = getColorForId(id);
+    const color = overrideColor || getColorForId(id);
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 2; // Linha fina como pedido
