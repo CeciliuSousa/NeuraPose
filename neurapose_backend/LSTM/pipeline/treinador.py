@@ -200,7 +200,7 @@ def main():
     # Metadata shape: [scene, clip, pid, sample_idx]
     
     if meta_all is not None:
-        print(Fore.BLUE + "[INFO] Utilizando Split por GRUPO (IDs Únicos) para validação rigorosa.")
+        # print(Fore.BLUE + "[INFO] Utilizando Split por GRUPO (IDs Únicos) para validação rigorosa.")
         # [CORRECTION] IDs are local to video (e.g., ID 1 exists in many videos).
         # We need a global unique ID: Scene + Clip + PID
         # Metadata: [scene, clip, pid, sample_idx]
@@ -213,17 +213,18 @@ def main():
         
         from sklearn.model_selection import GroupShuffleSplit
         # GroupShuffleSplit garante que o mesmo grupo não apareça em train e test
-        gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+        # [UPDATED] USER REQUEST: 85% Treino / 15% Validação
+        gss = GroupShuffleSplit(n_splits=1, test_size=0.15, random_state=42)
         train_idx, val_idx = next(gss.split(X_all, y_all, groups=groups))
         
         # Loga quantidade de IDs únicos
         unique_train = np.unique(groups[train_idx])
         unique_val = np.unique(groups[val_idx])
-        print(Fore.YELLOW + f"[SPLIT] IDs ÚNICOS Treino: {len(unique_train)} | IDs ÚNICOS Validação: {len(unique_val)}")
+        # print(Fore.YELLOW + f"[SPLIT] IDs ÚNICOS Treino: {len(unique_train)} | IDs ÚNICOS Validação: {len(unique_val)}")
     else:
         print(Fore.YELLOW + "[AVISO] Metadata não encontrado. Usando Split Aleatório (pode haver vazamento de ID).")
         # Fallback para StratifiedShuffleSplit se não houver metadata
-        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
+        sss = StratifiedShuffleSplit(n_splits=1, test_size=0.15, random_state=42)
         train_idx, val_idx = next(sss.split(np.zeros(len(y_all)), y_all.cpu().numpy()))
     
     X_train, y_train = X_all[train_idx], y_all[train_idx]
@@ -266,7 +267,8 @@ def main():
     print(Fore.CYAN + f"[VALID]  TOTAL    : {total_val}\n")
 
     # Sampler ponderado se desbalanceado
-    if ratio > 1.1:
+    # Sampler ponderado se desbalanceado (User Request: Equilibrar 1:1 sempre)
+    if ratio > 1.0:
         # print(Fore.YELLOW + f"[INFO] Aplicando sampler ponderado para corrigir desbalanceamento.")
         weights_per_class = torch.tensor([1.0 / n0, 1.0 / n1])
         sample_weights = weights_per_class[y_train]
@@ -350,7 +352,7 @@ def main():
                 num_classes=args.num_classes
             ).to(DEVICE)
 
-    print(Fore.BLUE + f"[INFO] Modelo instanciado com Hidden={args.hidden_size}, Layers={args.num_layers}, Heads={args.num_heads}")
+    # print(Fore.BLUE + f"[INFO] Modelo instanciado com Hidden={args.hidden_size}, Layers={args.num_layers}, Heads={args.num_heads}")
 
     optimizer = optim.AdamW(model.parameters(), lr=min(args.lr, 3e-4), weight_decay=1e-2)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=12, min_lr=1e-6)
@@ -478,10 +480,10 @@ def main():
         f.write(f"Val Acc (ID-level): {accuracy_percent:.1f}%\n")
         f.write(f"Val F1 (ID-level): {best_val_f1:.4f}\n")
         # Podemos adicionar contagem de IDs corretos
-        if final_val_report_id:
-            ok_count = sum(1 for x in final_val_report_id if x['ok'])
-            total_ids = len(final_val_report_id)
-            f.write(f"\nIDs Corretos: {ok_count}/{total_ids} ({(ok_count/total_ids)*100:.1f}%)\n")
+        # if final_val_report_id:
+        #     ok_count = sum(1 for x in final_val_report_id if x['ok'])
+        #     total_ids = len(final_val_report_id)
+        #     f.write(f"\nIDs Corretos: {ok_count}/{total_ids} ({(ok_count/total_ids)*100:.1f}%)\n")
 
     with open(hist_json_path, "w", encoding="utf-8") as jf:
         json.dump(history, jf, indent=2)

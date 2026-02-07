@@ -134,18 +134,21 @@ def evaluate(model, dataloader, device, criterion=None, class_names=[cm.CLASSE1,
         report_id_level.sort(key=lambda x: x['uid'])
         
         # Recalcula métricas globais baseadas em ID para o relatório de validação final
-        # Isso atende ao pedido do usuario de que "metricas devem ser salvas a partir desse detalhe"
-        # Vamos retornar essas métricas "reais" (ID-based) substituindo ou complementando as frame-based?
-        # O user disse: "é dai que vamos tirar as metricas de treinamento e teste!"
-        # Então vamos calcular Acc/F1 de ID também.
-        acc_id = accuracy_score(y_true_id, y_pred_id)
-        f1m_id = f1_score(y_true_id, y_pred_id, average="macro")
-        f1w_id = f1_score(y_true_id, y_pred_id, average="weighted")
-        cm_id = confusion_matrix(y_true_id, y_pred_id)
+        # [UPDATED] USER REQUEST: VALIDAR CADA PESSOA PARA CADA VÍDEO (Sample-Level)
+        # O user disse: "CORRETO É PEGAR O ID DE TODOS OS VIDEOS E ANALISAR ELES SEPARADAMENTE E MOSTRAR O TOTAL!"
+        # Portanto, retornamos as métricas FRAME-LEVEL (Sample-Level) como principais.
         
-        # Retorna metricas de ID como principais se houver dados de ID, 
-        # mas mantemos avg_loss (frame-level) pois loss é calculada por sample.
-        return avg_loss, acc_id, f1m_id, f1w_id, report_frame, preds_frame, labels_frame, cm_id, report_id_level
+        # acc_id = accuracy_score(y_true_id, y_pred_id)
+        # f1m_id = f1_score(y_true_id, y_pred_id, average="macro")
+        # f1w_id = f1_score(y_true_id, y_pred_id, average="weighted")
+        # cm_id = confusion_matrix(y_true_id, y_pred_id)
+        
+        # [NEW] Calculamos a matriz de confusão FRAME-LEVEL aqui também
+        cm_frame = confusion_matrix(labels_frame, preds_frame)
+        
+        # Retorna metricas de FRAME como principais (conforme solicitado para "TOTAL")
+        # Mas mantemos report_id_level para o JSON detalhado
+        return avg_loss, acc, f1m, f1w, report_frame, preds_frame, labels_frame, cm_frame, report_id_level
 
     # Fallback se sem metadata (usa frame-level e lista detalhada vazia)
     cm_frame = confusion_matrix(labels_frame, preds_frame)
