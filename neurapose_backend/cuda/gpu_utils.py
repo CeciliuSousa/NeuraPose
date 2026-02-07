@@ -2,6 +2,7 @@ import torch
 import gc
 from typing import Dict, Tuple
 from contextlib import contextmanager
+import neurapose_backend.config_master as cm
 
 
 class GPUManager:
@@ -12,7 +13,7 @@ class GPUManager:
     Big-O (init): O(1) - apenas configurações
     """
 
-    def __init__(self, device: str = 'cuda:0', memory_fraction: float = 0.90) -> None:
+    def __init__(self, device: str = cm.DEVICE, memory_fraction: float = 0.90) -> None:
         """
         Inicializa gerenciador GPU com alocação eficiente.
         
@@ -35,6 +36,21 @@ class GPUManager:
                 torch.cuda.set_per_process_memory_fraction(memory_fraction, device=gpu_id)
             except RuntimeError:
                 print(f"Aviso: Não foi possível limitar memória GPU a {memory_fraction*100}%")
+
+    def update_device(self, device: str) -> None:
+        """
+        Atualiza o dispositivo ativo (ex: troca CPU/GPU em tempo de execução).
+        IMPORTANTE: Chamar isso se cm.DEVICE mudar.
+        """
+        self.device = device
+        self.is_cuda = 'cuda' in device and torch.cuda.is_available()
+        
+        if self.is_cuda:
+            try:
+                gpu_id = int(device.split(':')[1]) if ':' in device else 0
+                torch.cuda.set_device(gpu_id)
+            except:
+                pass
 
     def enable_mixed_precision(self) -> None:
         """
@@ -245,4 +261,9 @@ class GPUMemoryPool():
         self.pool_tensors.clear()
         if self.is_cuda:
             torch.cuda.empty_cache()
+
+
+# Singleton Global Instance
+# Permite importacao direta: from neurapose_backend.cuda.gpu_utils import gpu_manager
+gpu_manager = GPUManager(device=cm.DEVICE)
 

@@ -34,11 +34,12 @@ import neurapose_backend.config_master as cm
 JSONS_DIR = cm.PROCESSING_JSONS_DIR
 LABELS_PATH = cm.PROCESSING_ANNOTATIONS_DIR / "labels.json"
 
-# Saída: sempre dentro de <pasta_do_labels>/../data/
-OUTPUT_BASE = LABELS_PATH.parent.parent
-OUT_PT = OUTPUT_BASE / "data" / "data.pt"
-LOG_FILE = OUTPUT_BASE / "data" / "frames_invalidos.txt"
-DEBUG_LOG = OUTPUT_BASE / "data" / "debug_log.txt"
+# Saída: Usar configuração central de Dataset
+OUT_PT = cm.TRAINING_DATA_PATH
+OUTPUT_BASE = OUT_PT.parent # .../dataset/treino/data
+
+LOG_FILE = OUTPUT_BASE / "frames_invalidos.txt"
+DEBUG_LOG = OUTPUT_BASE / "debug_log.txt"
 
 OUT_PT.parent.mkdir(parents=True, exist_ok=True)
 
@@ -147,11 +148,11 @@ def extract_sequence(records, target_id, interval=None, max_seq_len=60, min_seq_
     if total_frames < min_seq_len:
         return None
 
-    # [NOVO] Lógica de Stride Temporal (5s -> 10 steps)
+    # [NOVO] Lógica de Stride Temporal
     # Calculamos quantos frames do video original precisamos para cobrir TEMPORAL_CONTEXT_SECONDS
-    # Ex: 5s * 10fps = 50 frames.
-    # Temos MAX_SEQ_LEN = 10 steps de entrada pro modelo.
-    # Stride = 50 / 10 = 5.
+    # Ex: 5s * 10fps = 50 frames (se FPS_TARGET=10) ou 150 frames (se FPS_TARGET=30).
+    # Temos MAX_SEQ_LEN steps de entrada pro modelo.
+    # Stride = frames_needed / max_seq_len.
     
     target_duration = getattr(cm, "TEMPORAL_CONTEXT_SECONDS", 5.0)
     fps_target = getattr(cm, "FPS_TARGET", 30.0)

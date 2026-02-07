@@ -11,6 +11,7 @@ from ultralytics.utils.plotting import save_one_box
 
 import torchvision.transforms as T
 import neurapose_backend.config_master as cm
+from neurapose_backend.cuda.gpu_utils import gpu_manager
 from colorama import Fore
 
 
@@ -124,7 +125,7 @@ class CustomReID:
         if self.use_fp16:
             batch_t = batch_t.half()
 
-        with torch.no_grad():
+        with gpu_manager.inference_mode():
             batch_feats = self.model(batch_t)
         
         # Se estiver em FP16, converte de volta para Float32 antes de sair

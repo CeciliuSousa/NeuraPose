@@ -21,10 +21,11 @@ os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 
 
 import neurapose_backend.config_master as cm
+from neurapose_backend.cuda.gpu_utils import gpu_manager
 from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomDeepOCSORT, save_temp_tracker_yaml
 from neurapose_backend.rtmpose.extracao_pose_rtmpose import ExtratorPoseRTMPose
 from neurapose_backend.nucleo.visualizacao import desenhar_esqueleto_unificado, color_for_id
-from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
+# from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
 from neurapose_backend.nucleo.video_utils import normalizar_video
 # Import optional integration
 try:
@@ -38,6 +39,7 @@ try:
 except ImportError:
     sanitizar_dados = None
 
+@gpu_manager.inference_mode()
 def processar_video(video_path: Path, output_dir: Path, show: bool = False):
     """
     Processa vídeo para geração de dataset.
@@ -57,13 +59,11 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
     jsons_dir.mkdir(parents=True, exist_ok=True)
     videos_norm_dir.mkdir(parents=True, exist_ok=True)
 
-    # 2. NORMALIZAÇÃO (REMOVIDO POR PERFORMANCE)
-    # OBS: Otimização solicitada para reduzir overhead de ffmpeg.
-    # Usaremos LOGICAL SKIP para processar apenas os frames alvo (10fps) do vídeo original.
-    
-    # video_norm_path, t_norm = normalizar_video(video_path, videos_norm_dir)
-    t_norm = 0.0
-    video_norm_path = video_path # Usa original
+    # 2. NORMALIZAÇÃO (REATIVADO)
+    # Garante padrao de 30 FPS independente da entrada
+    video_norm_path, t_norm = normalizar_video(video_path, videos_norm_dir, target_fps=cm.INPUT_NORM_FPS)
+    # t_norm = 0.0
+    # video_norm_path = video_path # Usa original
 
     # 3. EXTRAÇÃO (Lê o vídeo ORIGINAL 30fps e aplica SKIP)
     cap = cv2.VideoCapture(str(video_norm_path))
@@ -128,6 +128,13 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
     t_yolo_acc = 0.0
     t_pose_acc = 0.0
     last_logged_percent = -1
+
+    t_yolo_acc = 0.0
+    t_pose_acc = 0.0
+    last_logged_percent = -1
+
+    # Atualiza Status GPU (caso tenha mudado no frontend)
+    gpu_manager.update_device(cm.DEVICE)
 
     try:
         while cap.isOpened():
@@ -250,32 +257,31 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
         cap.release()
         writer.release()
         if yolo_model and hasattr(yolo_model, 'tracker'): del yolo_model.tracker
-        if torch.cuda.is_available(): torch.cuda.empty_cache()
+        gpu_manager.clear_cache()
 
     # 7. POS-PROC
     if sanitizar_dados:
         records = sanitizar_dados(records)
         
     # --- SALVA JSON DE POSE PADRÃO ---
-    # Formato: <nome do video>_pose.json (como solicitado)
-    # Contém lista flat de detecções
+    # Formato: <nome do video>_pose.json
     json_pose_name = f"{video_path.stem}_pose.json"
     json_pose_path = jsons_dir / json_pose_name
     
-    # Adicionar chave dinâmica do tracker para conformidade com o request
-    # O request pede "<tracker configurado>: 1"
     tracker_key = "deepocsort_id" if USING_DEEPOCSORT else "botsort_id"
     
     records_final = []
+    
     for r in records:
-        # Copia para não alterar o original se for usado depois
+        # Copia e enriquece
         new_r = r.copy()
-        # Adiciona a chave especifica do tracker alem do id_persistente
         new_r[tracker_key] = r["id_persistente"]
+        # Mantém info de classe se existir (já adicionado no loop principal)
         records_final.append(new_r)
 
     with open(json_pose_path, "w", encoding="utf-8") as f:
-        json.dump(records_final, f, indent=2, ensure_ascii=False)
+        # json.dump(records_final, f)
+        json.dump(records_final, f, indent=2, ensure_ascii=False) # Legível conforme solicitado
         
     # --- SALVA JSON DE TRACKING REPORT ---
     # Formato: <nome do video>_tracking.json
@@ -327,7 +333,7 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
     total_time = t_norm + t_yolo_acc + t_pose_acc
     
     print("\n" + "="*60)
-    # print(f"{'Normalização video 10 FPS':<45} {t_norm:>10.2f} seg")
+    print(f"{'Normalização video 10 FPS':<45} {t_norm:>10.2f} seg")
     print(f"{f'YOLO + {cm.TRACKER_NAME} + OSNet':<45} {t_yolo_acc:>10.2f} seg")
     print(f"{'RTMPose':<45} {t_pose_acc:>10.2f} seg")
     print("-" * 60)

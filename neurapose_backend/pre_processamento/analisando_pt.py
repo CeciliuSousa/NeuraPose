@@ -12,7 +12,7 @@ import neurapose_backend.config_master as cm
 
 
 # --- Configuração da Animação ---
-FPS = 30
+FPS = getattr(cm, "FPS_TARGET", 30)
 DELAY = 1 / FPS 
 fig = None
 ax = None

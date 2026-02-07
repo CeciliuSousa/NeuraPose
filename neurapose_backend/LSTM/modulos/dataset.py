@@ -4,6 +4,7 @@
 
 import torch
 from torch.utils.data import TensorDataset
+import neurapose_backend.config_master as cm
 
 def load_data_pt(path):
     """
@@ -17,11 +18,11 @@ def load_data_pt(path):
     X = data_dict["data"]  # Shape: (N, C=2, T=30, V=17)
     y = data_dict["labels"] # Shape: (N)
 
-    # Verifica o shape para garantir que o T=30 está correto
-    if X.dim() != 4 or X.shape[2] != 30:
+    # Verifica o shape para garantir que o T está correto conforme config
+    if X.dim() != 4 or X.shape[2] != cm.TIME_STEPS:
         raise ValueError(
-            f"O tensor X_data carregado tem shape {X.shape}, mas o formato esperado é (N, C, T=30, V). "
-            "Verifique se o script de conversão usou max_frames=30 e salvou corretamente."
+            f"O tensor X_data carregado tem shape {X.shape}, mas o formato esperado é (N, C, T={cm.TIME_STEPS}, V). "
+            f"Verifique se o script de conversão usou max_frames={cm.TIME_STEPS} e salvou corretamente."
         )
     
     # 1. Permutar: (N, C, T, V) -> (N, T, C, V)

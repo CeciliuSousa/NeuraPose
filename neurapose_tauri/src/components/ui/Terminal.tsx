@@ -94,7 +94,8 @@ function TerminalBase({
             log.includes('[ALERT]') ||
             log.includes('[BALANCEANDO]') ||
             log.includes('[TREINANDO]') ||
-            log.includes('[PROCESSAMENTO]');
+            log.includes('[PROCESSAMENTO]') ||
+            log.includes('[APP]');
 
         // Info e Headers (Azul)
         // Verifica [INFO] ou padrão [1/10] ou ENCONTRADOS

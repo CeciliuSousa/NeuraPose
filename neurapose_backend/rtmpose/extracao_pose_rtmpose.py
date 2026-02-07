@@ -225,14 +225,18 @@ class ExtratorPoseRTMPose:
             # Suavização
             kps_suavizados = self.smoother.step(meta["pid"], kps_final)
             
+            # [OTIMIZAÇÃO] Arredondamento Vetorizado antes de converter para lista
+            # Muito mais rápido que iterar depois
+            kps_rounded = np.round(kps_suavizados, 2).tolist()
+            
             # Registro
             registros.append({
                 "frame": frame_idx,
                 f"{cm.TRACKER_NAME}_id": meta["raw_tid"],
                 "id_persistente": meta["pid"],
-                "bbox": meta["box"], # <--- [AUDIT] GARANTIDO: USANDO BOX SUAVIZADA DO TRACKER (NÃO RECALCULAR)
-                "confidence": meta["conf"],
-                "keypoints": kps_suavizados.tolist()
+                "bbox": [round(x, 2) for x in meta["box"]],
+                "confidence": round(float(meta["conf"]), 2),
+                "keypoints": kps_rounded
             })
 
             # Desenho (Opcional)

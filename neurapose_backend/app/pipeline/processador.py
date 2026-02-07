@@ -28,6 +28,7 @@ logging.getLogger("ultralytics").addFilter(TaskWarningFilter())
 
 # Importações do projeto
 import neurapose_backend.config_master as cm
+from neurapose_backend.cuda.gpu_utils import gpu_manager
 from neurapose_backend.rtmpose.extracao_pose_rtmpose import ExtratorPoseRTMPose
 from neurapose_backend.nucleo.visualizacao import desenhar_esqueleto_unificado, color_for_id
 from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
@@ -35,6 +36,7 @@ from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomDeepOCSORT
 from neurapose_backend.temporal.inferencia_temporal import ClassificadorAcao
 
 from neurapose_backend.temporal.inferencia_temporal import ClassificadorAcao
+from neurapose_backend.nucleo.video_utils import normalizar_video
 
 # Import Sanitizer e State
 try:
@@ -47,7 +49,8 @@ try:
 except ImportError:
     state = None
 
-def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, show_preview=False, output_dir: Path = None, labels_path: Path = None):
+@gpu_manager.inference_mode()
+def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, show_preview=False, output_dir: Path = None, labels_path: Path = None):
     """
     Processa um vídeo usando LOGICAL SKIP + INFERÊNCIA EM TEMPO REAL.
     Renderiza vídeo de saída na mesma taxa de quadros do processamento (10 FPS).
@@ -55,19 +58,35 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
 
     if not output_dir: raise ValueError("output_dir obrigatório")
     
-    # Preparação de Pastas
+    # 0. SETUP DIRS
     predicoes_dir = output_dir / "predicoes"
     jsons_dir = output_dir / "jsons"
+    anotacoes_dir = output_dir / "anotacoes"
+    videos_norm_dir = output_dir / "videos" # [FIX] Re-adicionado
+    
     predicoes_dir.mkdir(parents=True, exist_ok=True)
     jsons_dir.mkdir(parents=True, exist_ok=True)
+    anotacoes_dir.mkdir(parents=True, exist_ok=True)
+    videos_norm_dir.mkdir(parents=True, exist_ok=True) # [FIX] Cria dir
+    
+    tempos = {"detector_total": 0, "rtmpose_total": 0, "normalizacao": 0}
 
-    tempos = {
-        "detector_total": 0.0, "rtmpose_total": 0.0, "temporal_total": 0.0,
-        "video_total": 0.0, "yolo": 0.0, "rtmpose": 0.0, "total": 0.0, "normalizacao": 0.0
-    }
+    # Normalização de FPS (Garanta 30 FPS no input)
+    t_start_norm = time.time()
+    try:
+        # [FIX] Passa output_dir e faz unpacking
+        video_norm_path, t_norm_internal = normalizar_video(video_path, videos_norm_dir, target_fps=cm.INPUT_NORM_FPS)
+        if video_norm_path is None: raise Exception("Retorno None da normalização")
+    except Exception as e:
+        print(Fore.RED + f"[ERRO] Falha na normalização: {e}")
+        return {}
 
-    # 1. SETUP VIDEO (Lê 30 FPS Originais)
-    cap = cv2.VideoCapture(str(video_path))
+    # Usamos o tempo retornado pela função ou o medido aqui? 
+    # A função normalizar_video retorna o tempo de processamento real (excluindo check de skip)
+    tempos["normalizacao"] = t_norm_internal
+
+    # 1. SETUP VIDEO (Lê do Normalizado)
+    cap = cv2.VideoCapture(str(video_norm_path))
     original_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -102,7 +121,9 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
     if not model_file.exists() and hasattr(cm, 'TRAINED_MODELS_DIR'):
          candidates = list(cm.TRAINED_MODELS_DIR.glob("**/*.pt"))
          if candidates: model_file = candidates[0]
-    brain = ClassificadorAcao(str(model_file), window_size=cm.TIME_STEPS)
+    
+    # [FIX] Classificador usa o modelo carregado se disponivel
+    brain = ClassificadorAcao(str(model_file), model_instance=lstm_model, window_size=cm.TIME_STEPS)
 
     # Tracker
     USING_DEEPOCSORT = (cm.TRACKER_NAME.upper() == "DEEPOCSORT")
@@ -125,6 +146,10 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
     registros_totais = [] 
     pred_stats = {} 
     id_final_preds = {} 
+    last_logged_percent = -1 # [FIX] Inicialização correta 
+
+    # Atualiza Device
+    gpu_manager.update_device(cm.DEVICE)
 
     try:
         while cap.isOpened():
@@ -201,7 +226,7 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
                     
                     # O Cérebro processa e diz a probabilidade
                     prob = brain.predict_single(pid, kps)
-                    rec['theft_prob'] = prob
+                    rec['theft_prob'] = round(prob, 2) # [OTIMIZAÇÃO] Arredonda aqui na fonte
                     rec['is_theft'] = prob >= cm.CLASSE2_THRESHOLD
                     
                     if pid not in pred_stats: pred_stats[pid] = 0.0
@@ -279,7 +304,7 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
         cap.release()
         writer.release()
         if not USING_DEEPOCSORT and yolo_model: del yolo_model.tracker
-        if torch.cuda.is_available(): torch.cuda.empty_cache()
+        gpu_manager.clear_cache()
 
     total_time = time.time() - start_time_global
     tempos["video_total"] = total_time
@@ -302,7 +327,7 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
     model_name = cm.TEMPORAL_MODEL.upper() if getattr(cm, 'TEMPORAL_MODEL', None) else "TEMPORAL MODEL"
     
     print("\n" + "="*60)
-    # print(f"{'Normalização video 10 FPS':<45} {t_norm:>10.2f} seg")
+    print(f"{'Normalização video 10 FPS':<45} {t_norm:>10.2f} seg")
     print(f"{f'YOLO + {cm.TRACKER_NAME} + OSNet':<45} {t_yolo:>10.2f} seg")
     print(f"{'RTMPose':<45} {t_pose:>10.2f} seg")
     print(f"{model_name:<45} {t_temp:>10.2f} seg")
@@ -323,15 +348,16 @@ def processar_video(video_path: Path, model_ignored, mu_ignored, sigma_ignored, 
     tracker_key = "deepocsort_id" if USING_DEEPOCSORT else "botsort_id"
     
     records_final = []
+    
     for r in registros_totais:
         # Copia e enriquece
         new_r = r.copy()
         new_r[tracker_key] = r["id_persistente"]
-        # Mantém info de classe se existir (já adicionado no loop principal)
         records_final.append(new_r)
 
     with open(json_pose_path, "w", encoding="utf-8") as f:
-        json.dump(records_final, f, indent=2, ensure_ascii=False)
+        json.dump(records_final, f, indent=2, ensure_ascii=False) # Legível conforme solicitado
+        # json.dump(records_final, f, indent=None, separators=(',', ':')) # Minificado
 
     # --- SALVA JSON DE TRACKING REPORT ---
     # Formato: <nome do video>_tracking.json

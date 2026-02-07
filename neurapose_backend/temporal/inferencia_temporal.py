@@ -4,18 +4,30 @@ from collections import deque, defaultdict
 import neurapose_backend.config_master as cm
 
 class ClassificadorAcao:
-    def __init__(self, model_path, window_size=30, num_joints=17):
+    def __init__(self, model_path, model_instance=None, window_size=None, num_joints=17):
         self.device = cm.DEVICE
-        self.window_size = window_size
+        self.window_size = window_size if window_size is not None else cm.TIME_STEPS
         self.input_dim = num_joints * 2 # 34 features (X, Y)
         
-        print(f"[CEREBRO] Carregando modelo temporal de: {model_path}")
-        try:
-            self.model = torch.load(model_path, map_location=self.device)
-            if hasattr(self.model, 'eval'): self.model.eval()
-        except Exception as e:
-            print(f"[ERRO] Falha ao carregar modelo temporal: {e}")
-            self.model = None
+        if model_instance is not None:
+            #  print(f"[CEREBRO] Usando modelo pré-carregado em memória.")
+             self.model = model_instance
+             self.model.to(self.device)
+             self.model.eval()
+        else:
+            # print(f"[CEREBRO] Carregando modelo temporal de: {model_path}")
+            pass
+            try:
+                # Tenta carregar objeto completo (Legacy)
+                self.model = torch.load(model_path, map_location=self.device)
+                if isinstance(self.model, dict):
+                    print(f"[ERRO] CHECKPOINT CONTEM APENAS STATE_DICT! Use a Factory para carregar.")
+                    self.model = None
+                elif hasattr(self.model, 'eval'): 
+                    self.model.eval()
+            except Exception as e:
+                print(f"[ERRO] Falha ao carregar modelo temporal: {e}")
+                self.model = None
 
         # Buffer: {track_id: deque([[x,y...], ...])}
         self.buffers = defaultdict(lambda: deque(maxlen=window_size))

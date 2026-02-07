@@ -135,6 +135,17 @@ def startup_event():
     """Inicializa monitoramento e prioridade."""
     configurar_prioridade_alta()
     hw_monitor.start()
+    
+    # Inicializa Otimizações GPU
+    try:
+        from neurapose_backend.cuda.gpu_utils import gpu_manager
+        gpu_manager.enable_cudnn_benchmarking()
+        if cm.USE_FP16:
+            gpu_manager.enable_mixed_precision()
+        logger.info("[GPU] Otimizações globais ativadas.")
+    except Exception as e:
+        logger.warning(f"[GPU] Falha ao configurar otimizações: {e}")
+
     logger.info("Hardware Monitor Started")
 
 @atexit.register

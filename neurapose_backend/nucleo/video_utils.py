@@ -122,10 +122,12 @@ def _normalizar_com_opencv(input_path: Path, output_path: Path, target_fps: floa
     return True
 
 def normalizar_video(input_path: Path, output_dir: Path, target_fps: float = None, tolerancia: float = 0.5) -> (Path, float):
-    if target_fps is None: target_fps = cm.FPS_TARGET
+    if target_fps is None: 
+        target_fps = cm.INPUT_NORM_FPS
         
     start_time = time.time()
-    out_name = f"{input_path.stem}_{int(target_fps)}fps.mp4"
+    # out_name = f"{input_path.stem}_{int(target_fps)}fps.mp4"
+    out_name = f"{input_path.stem}.mp4"
     output_path = output_dir / out_name
     
     cap = cv2.VideoCapture(str(input_path))

@@ -19,7 +19,7 @@ ASYNC_BUFFER_SIZE = 64              # Tamanho do buffer de leitura
 USE_PREFETCH = False                # Legacy flag (substituido por USE_ASYNC_LOADER)
 PREFETCH_BUFFER_SIZE = 32           # Legacy param
 YOLO_SKIP_FRAME_INTERVAL = 1        # Intervalo de frames para inferencia YOLO (1=sem skip)
-YOLO_BATCH_SIZE = 256
+YOLO_BATCH_SIZE = 512
 RTMPOSE_BATCH_SIZE = 256
 
 try:
@@ -87,7 +87,7 @@ TEST_SPLIT = "teste"
 TIME_STEPS = 50
 NUM_JOINTS = 17
 NUM_CHANNELS = 2
-BATCH_SIZE = 64
+BATCH_SIZE = 256
 LEARNING_RATE = 0.0003
 EPOCHS = 5000
 
@@ -137,7 +137,8 @@ RTMPOSE_PREPROCESSING_PATH = RTMPOSE_PATH
 # Parâmetros sequência
 MAX_FRAMES_PER_SEQUENCE = 9000  # Para streaming de vídeo (inferência)
 TRAIN_SEQUENCE_LENGTH = 50      # Para treinamento/conversão de dataset (modelo espera T=10)
-FPS_TARGET = 30.0
+FPS_TARGET = 10.0               # Taxa de processamento/inferência (Stride=3 se input=30)
+INPUT_NORM_FPS = 30.0           # Taxa de quadros para normalização de vídeo
 FRAME_DISPLAY_W = 1280
 FRAME_DISPLAY_H = 720
 TEMPORAL_CONTEXT_SECONDS = 5.0 # Janela de tempo real (5s) que os 10/30 steps representam
@@ -147,6 +148,22 @@ TRAINING_INPUT_DIR = PROCESSING_OUTPUT_DIR
 TRAINED_MODELS_DIR = ROOT / "modelos-temporais" # User: Modelos temporais
 TRAINED_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_SAVE_DIR = TRAINED_MODELS_DIR / f"{TEMPORAL_MODEL}-{TRAINED_MODEL_NAME}"
+
+# [AUTO-DISCOVERY] Se a pasta constuída não existir, tenta encontrar o modelo real
+if not MODEL_SAVE_DIR.exists() and TRAINED_MODELS_DIR.exists():
+    # Procura pastas que contenham .pt
+    candidates = [d for d in TRAINED_MODELS_DIR.iterdir() if d.is_dir() and (d / "model_best.pt").exists()]
+    
+    if candidates:
+        # Tenta casar com o nome do dataset se possível
+        best_candidate = candidates[0]
+        for c in candidates:
+            if TRAINED_MODEL_NAME in c.name or TEMPORAL_MODEL in c.name:
+                best_candidate = c
+                break # Pega o primeiro que der match parcial
+        
+        MODEL_SAVE_DIR = best_candidate
+        # print(f"[CONFIG] Modelo redirecionado para: {MODEL_SAVE_DIR.name}")
 
 # Teste
 DATASETS_ROOT = ROOT / "datasets" # User: Root of all datasets

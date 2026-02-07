@@ -298,7 +298,60 @@ def main():
     criterion = FocalLoss(alpha=weights, gamma=2.0).to(DEVICE)
 
     # Modelo e otimizador
-    model = ModelClass(input_size=X_train.shape[2]).to(DEVICE)
+    # Modelo e otimizador
+    # [FIX] Instanciação corretam com os argumentos do args
+    if "tft" in args.model.lower():
+        model = ModelClass(
+            input_size=X_train.shape[2],
+            d_model=args.hidden_size,
+            n_heads=args.num_heads,
+            num_encoder_layers=args.num_layers,
+            num_decoder_layers=1, # Default fixo por enquanto
+            dropout=args.dropout,
+            num_classes=args.num_classes
+        ).to(DEVICE)
+    elif "transformer" in args.model.lower():
+        model = ModelClass(
+            input_size=X_train.shape[2],
+            hidden_size=args.hidden_size,
+            num_layers=args.num_layers,
+            num_classes=args.num_classes,
+            num_heads=args.num_heads,
+            dropout=args.dropout
+        ).to(DEVICE)
+    elif "tcn" in args.model.lower() or "wavenet" in args.model.lower():
+         # TCN/WaveNet podem ter assinaturas diferentes, mas vamos tentar o padrao basico
+         # TCN aceita kwargs para kernel_size
+         model = ModelClass(
+             input_size=X_train.shape[2], 
+             num_classes=args.num_classes,
+             kernel_size=args.kernel_size,
+             dropout=args.dropout
+             # channels/dilations padrao por enquanto
+         ).to(DEVICE)
+    else:
+        # LSTMs (Robust, BiLSTM, etc)
+        # Assinatura padrao: input_size, hidden_size, num_layers, dropout, num_classes
+        # Mas alguns (LSTM simples) nao tem dropout no init se não for configurado
+        try:
+            model = ModelClass(
+                input_size=X_train.shape[2],
+                hidden_size=args.hidden_size,
+                num_layers=args.num_layers,
+                dropout=args.dropout,
+                num_classes=args.num_classes
+            ).to(DEVICE)
+        except TypeError:
+            # Fallback para LSTM simples que pode n aceitar dropout ou algo assim
+            model = ModelClass(
+                input_size=X_train.shape[2],
+                hidden_size=args.hidden_size,
+                num_layers=args.num_layers,
+                num_classes=args.num_classes
+            ).to(DEVICE)
+
+    print(Fore.BLUE + f"[INFO] Modelo instanciado com Hidden={args.hidden_size}, Layers={args.num_layers}, Heads={args.num_heads}")
+
     optimizer = optim.AdamW(model.parameters(), lr=min(args.lr, 3e-4), weight_decay=1e-2)
     scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=12, min_lr=1e-6)
 

@@ -12,15 +12,15 @@ from neurapose_backend.LSTM.models.models import (
 
 
 class ClassifierFactory:
-    def __init__(self):
-        self.device = cm.DEVICE
+    def __init__(self, device: str = None):
+        self.device = device if device else cm.DEVICE
         
         self.hp = dict(
             input_size=cm.NUM_CHANNELS * cm.NUM_JOINTS,
-            hidden_size=cm.HIDDEN_SIZE,
-            num_layers=cm.NUM_LAYERS,
-            num_heads=cm.NUM_HEADS,
-            dropout=cm.DROPOUT,
+            hidden_size=cm.LSTM_HIDDEN_SIZE,
+            num_layers=cm.LSTM_NUM_LAYERS,
+            num_heads=cm.LSTM_NUM_HEADS,
+            dropout=cm.LSTM_DROPOUT,
             num_classes=cm.NUM_CLASSES,
             time_steps=cm.TIME_STEPS
         )

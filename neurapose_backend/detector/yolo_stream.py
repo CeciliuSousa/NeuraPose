@@ -218,6 +218,8 @@ class YoloStreamDetector:
             self.model.tracker = tracker
             tracker_yaml_path = save_temp_tracker_yaml()
         
+        from neurapose_backend.cuda.gpu_utils import gpu_manager
+
         print(Fore.CYAN + f"[INFO] STREAMING VIDEO YOLO ({batch_size} batch) | Tracker: {cm.TRACKER_NAME}...")
         
         track_data = {}
@@ -225,10 +227,12 @@ class YoloStreamDetector:
         last_progress = 0
         
         try:
-            while True:
-                if state.stop_requested:
-                    print(Fore.YELLOW + "[STOP] Detecção interrompida.")
-                    break
+            # Contexto de Inferencia Otimizada (Mixed Precision + NoGrad)
+            with gpu_manager.inference_mode():
+                while True:
+                    if state.stop_requested:
+                        print(Fore.YELLOW + "[STOP] Detecção interrompida.")
+                        break
                     
                 frames_batch = []
                 for _ in range(batch_size):
@@ -479,7 +483,7 @@ class YoloStreamDetector:
             if not USING_DEEPOCSORT:
                  del self.model.tracker
             if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+                gpu_manager.clear_cache()
                 
         # Retorna metadados finais (track_data para o merge posterior)
         # Como é um generator, podemos lançar isso via exceção controlada ou propriedade,
