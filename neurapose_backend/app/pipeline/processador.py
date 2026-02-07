@@ -69,7 +69,10 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
     anotacoes_dir.mkdir(parents=True, exist_ok=True)
     videos_norm_dir.mkdir(parents=True, exist_ok=True) # [FIX] Cria dir
     
-    tempos = {"detector_total": 0, "rtmpose_total": 0, "normalizacao": 0}
+    tempos = {
+        "detector_total": 0.0, "rtmpose_total": 0.0, "temporal_total": 0.0,
+        "video_total": 0.0, "yolo": 0.0, "rtmpose": 0.0, "total": 0.0, "normalizacao": 0.0
+    }
 
     # Normalização de FPS (Garanta 30 FPS no input)
     t_start_norm = time.time()
@@ -123,7 +126,7 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
          if candidates: model_file = candidates[0]
     
     # [FIX] Classificador usa o modelo carregado se disponivel
-    brain = ClassificadorAcao(str(model_file), model_instance=lstm_model, window_size=cm.TIME_STEPS)
+    brain = ClassificadorAcao(str(model_file), model_instance=lstm_model, window_size=cm.TIME_STEPS, mu=mu_ignored, sigma=sigma_ignored)
 
     # Tracker
     USING_DEEPOCSORT = (cm.TRACKER_NAME.upper() == "DEEPOCSORT")

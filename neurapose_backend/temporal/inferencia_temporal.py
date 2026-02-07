@@ -4,20 +4,24 @@ from collections import deque, defaultdict
 import neurapose_backend.config_master as cm
 
 class ClassificadorAcao:
-    def __init__(self, model_path, model_instance=None, window_size=None, num_joints=17):
+    def __init__(self, model_path, model_instance=None, window_size=None, num_joints=cm.NUM_JOINTS, mu=None, sigma=None):
         self.device = cm.DEVICE
         self.window_size = window_size if window_size is not None else cm.TIME_STEPS
         self.input_dim = num_joints * 2 # 34 features (X, Y)
         
+        # Normalização
+        self.mu = mu.to(self.device) if mu is not None else None
+        self.sigma = sigma.to(self.device) if sigma is not None else None
+        
         if model_instance is not None:
-            #  print(f"[CEREBRO] Usando modelo pré-carregado em memória.")
+             # print(f"[CEREBRO] Usando modelo pré-carregado em memória.")
              self.model = model_instance
              self.model.to(self.device)
              self.model.eval()
         else:
-            # print(f"[CEREBRO] Carregando modelo temporal de: {model_path}")
-            pass
-            try:
+             # ... (Legacy loading code)
+             pass
+             try:
                 # Tenta carregar objeto completo (Legacy)
                 self.model = torch.load(model_path, map_location=self.device)
                 if isinstance(self.model, dict):
@@ -25,7 +29,7 @@ class ClassificadorAcao:
                     self.model = None
                 elif hasattr(self.model, 'eval'): 
                     self.model.eval()
-            except Exception as e:
+             except Exception as e:
                 print(f"[ERRO] Falha ao carregar modelo temporal: {e}")
                 self.model = None
 
@@ -55,7 +59,11 @@ class ClassificadorAcao:
             
         # 3. Inferência
         seq = np.array(list(self.buffers[track_id]), dtype=np.float32)
-        tensor_in = torch.tensor(seq).unsqueeze(0).to(self.device)
+        tensor_in = torch.tensor(seq).unsqueeze(0).to(self.device) # (1, T, F)
+        
+        # Aplica normalização se disponível
+        if self.mu is not None and self.sigma is not None:
+            tensor_in = (tensor_in - self.mu) / self.sigma
         
         with torch.no_grad():
             output = self.model(tensor_in)
