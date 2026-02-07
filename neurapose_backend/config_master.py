@@ -84,7 +84,7 @@ VAL_SPLIT = "validacao"
 TEST_SPLIT = "teste"
 
 # -- HIPERPARÂMETROS TREINO --
-TIME_STEPS = 10
+TIME_STEPS = 50
 NUM_JOINTS = 17
 NUM_CHANNELS = 2
 BATCH_SIZE = 64
@@ -136,10 +136,11 @@ RTMPOSE_PREPROCESSING_PATH = RTMPOSE_PATH
 
 # Parâmetros sequência
 MAX_FRAMES_PER_SEQUENCE = 9000  # Para streaming de vídeo (inferência)
-TRAIN_SEQUENCE_LENGTH = 10      # Para treinamento/conversão de dataset (modelo espera T=10)
-FPS_TARGET = 10.0
+TRAIN_SEQUENCE_LENGTH = 50      # Para treinamento/conversão de dataset (modelo espera T=10)
+FPS_TARGET = 30.0
 FRAME_DISPLAY_W = 1280
 FRAME_DISPLAY_H = 720
+TEMPORAL_CONTEXT_SECONDS = 5.0 # Janela de tempo real (5s) que os 10/30 steps representam
 
 # Treinamento
 TRAINING_INPUT_DIR = PROCESSING_OUTPUT_DIR

@@ -12,18 +12,17 @@ from neurapose_backend.LSTM.models.models import (
 
 
 class ClassifierFactory:
-    def __init__(self, device):
-        self.device = device
+    def __init__(self):
+        self.device = cm.DEVICE
         
-        # Hyperparâmetros base, onde input_size=C*V e T=TIME_STEPS (30)
         self.hp = dict(
             input_size=cm.NUM_CHANNELS * cm.NUM_JOINTS,
-            hidden_size=128,
-            num_layers=2,
-            num_heads=8,
-            dropout=0.3,
-            num_classes=2,
-            time_steps=cm.TIME_STEPS # 30
+            hidden_size=cm.HIDDEN_SIZE,
+            num_layers=cm.NUM_LAYERS,
+            num_heads=cm.NUM_HEADS,
+            dropout=cm.DROPOUT,
+            num_classes=cm.NUM_CLASSES,
+            time_steps=cm.TIME_STEPS
         )
 
     def _resolve_key(self, name: str) -> str:
@@ -79,8 +78,8 @@ class ClassifierFactory:
         # Seu modelo TFT/LSTM usa Pooling/Last State, então a lógica é simplificada.
 
         match key:
-            case "tcn": return TCN(input_size=self.hp["input_size"], num_classes=2)
-            case "wavenet": return WaveNet(input_size=self.hp["input_size"], num_classes=2)
+            case "tcn": return TCN(input_size=self.hp["input_size"], num_classes=cm.NUM_CLASSES)
+            case "wavenet": return WaveNet(input_size=self.hp["input_size"], num_classes=cm.NUM_CLASSES)
             case "lstm": return LSTM(self.hp["input_size"], self.hp["hidden_size"], self.hp["num_layers"], self.hp["num_classes"])
             case "robustlstm": return RobustLSTM(self.hp["input_size"], self.hp["hidden_size"], self.hp["num_layers"], self.hp["dropout"])
             case "pooledlstm": return PooledLSTM(self.hp["input_size"], self.hp["hidden_size"], self.hp["num_layers"], self.hp["dropout"])

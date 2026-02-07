@@ -147,17 +147,30 @@ def extract_sequence(records, target_id, interval=None, max_seq_len=60, min_seq_
     if total_frames < min_seq_len:
         return None
 
-    # Normaliza para max_seq_len (padding com ultimo frame ou corte)
+    # [NOVO] Lógica de Stride Temporal (5s -> 10 steps)
+    # Calculamos quantos frames do video original precisamos para cobrir TEMPORAL_CONTEXT_SECONDS
+    # Ex: 5s * 10fps = 50 frames.
+    # Temos MAX_SEQ_LEN = 10 steps de entrada pro modelo.
+    # Stride = 50 / 10 = 5.
+    
+    target_duration = getattr(cm, "TEMPORAL_CONTEXT_SECONDS", 5.0)
+    fps_target = getattr(cm, "FPS_TARGET", 30.0)
+    
+    frames_needed = int(target_duration * fps_target)
+    stride = max(1, int(frames_needed / max_seq_len))
+    
+    # Normaliza para max_seq_len com Stride
     seq = np.zeros((max_seq_len, V, C), dtype=np.float32)
-    num_frames = min(total_frames, max_seq_len)
 
-    for t in range(num_frames):
-        seq[t, :, :] = frames[t]
-
-    if num_frames < max_seq_len:
-        last = frames[-1]
-        for t in range(num_frames, max_seq_len):
-            seq[t, :, :] = last
+    for t in range(max_seq_len):
+        src_idx = t * stride
+        
+        if src_idx < total_frames:
+            # Frame existe na fonte
+            seq[t, :, :] = frames[src_idx]
+        else:
+            # Padding com ultimo frame disponivel (congelamento)
+            seq[t, :, :] = frames[-1]
 
     # Transpoe para formato (C, T, V) esperada pelo modelo
     return np.transpose(seq, (2, 0, 1))
