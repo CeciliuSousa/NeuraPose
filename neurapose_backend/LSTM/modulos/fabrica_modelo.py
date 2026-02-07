@@ -71,6 +71,12 @@ class ClassifierFactory:
         elif "classifier.weight" in state_dict:
              self.hp["num_classes"] = state_dict["classifier.weight"].shape[0]
 
+        # Lógica para TCN (Kernel Size)
+        # weight shape: [out_channels, in_channels, kernel_size]
+        if "tcn.0.conv1.weight" in state_dict:
+            self.hp["kernel_size"] = state_dict["tcn.0.conv1.weight"].shape[2]
+            # print(f"[INFO] Inferido kernel_size={self.hp['kernel_size']} do checkpoint.")
+
     def _build_model(self, key: str):
         # Mapeamento do nome da chave para a classe (adaptado para TIME_STEPS, se necessário)
         
@@ -78,7 +84,7 @@ class ClassifierFactory:
         # Seu modelo TFT/LSTM usa Pooling/Last State, então a lógica é simplificada.
 
         match key:
-            case "tcn": return TCN(input_size=self.hp["input_size"], num_classes=cm.NUM_CLASSES)
+            case "tcn": return TCN(input_size=self.hp["input_size"], num_classes=cm.NUM_CLASSES, kernel_size=self.hp["kernel_size"])
             case "wavenet": return WaveNet(input_size=self.hp["input_size"], num_classes=cm.NUM_CLASSES)
             case "lstm": return LSTM(self.hp["input_size"], self.hp["hidden_size"], self.hp["num_layers"], self.hp["num_classes"])
             case "robustlstm": return RobustLSTM(self.hp["input_size"], self.hp["hidden_size"], self.hp["num_layers"], self.hp["dropout"])

@@ -37,11 +37,21 @@ class ClassificadorAcao:
         self.buffers = defaultdict(lambda: deque(maxlen=window_size))
         
     def _flatten_kps(self, keypoints):
-        """Converte [[x,y,c]..] -> [x,y,x,y..] (34 floats)."""
-        flat = []
+        """
+        Converte keypoints para o formato do treino: [x0...x16, y0...y16] (34 floats).
+        Treino: (N, C, T, V) -> permute(0,2,1,3) -> (N, T, C, V) -> reshape(N, T, C*V)
+        Isso agrupa por Canal primeiro (todos X, depois todos Y).
+        """
+        xs = []
+        ys = []
         for kp in keypoints:
-            flat.extend(kp[:2]) 
-        # Padding se necessário
+            xs.append(kp[0])
+            ys.append(kp[1])
+            
+        # Concatena [x0..x16, y0..y16]
+        flat = xs + ys
+        
+        # Padding se faltar (ex: 17 juntas * 2 = 34)
         if len(flat) < self.input_dim:
             flat.extend([0.0] * (self.input_dim - len(flat)))
         return flat[:self.input_dim]
@@ -54,11 +64,23 @@ class ClassificadorAcao:
         features = self._flatten_kps(keypoints_raw)
         self.buffers[track_id].append(features)
         
-        # 2. Cold Start Check
-        if len(self.buffers[track_id]) < self.window_size: return 0.0
-            
+        # 2. Prepare Sequence (Pad if needed for Cold Start)
+        buffer_len = len(self.buffers[track_id])
+        if buffer_len < 1: return 0.0
+        
+        # Se buffer não está cheio, repete o primeiro frame (padding à esquerda ou repetição)
+        # Strategy: Repeat content to fill window_size
+        if buffer_len < self.window_size:
+            missing = self.window_size - buffer_len
+            # Opção A: Pad com zeros (pode ser estranho para TCN)
+            # Opção B: Repetir o primeiro frame (mais estável para pose parada)
+            first_frame = self.buffers[track_id][0]
+            padded_seq = [first_frame] * missing + list(self.buffers[track_id])
+            seq = np.array(padded_seq, dtype=np.float32)
+        else:
+            seq = np.array(list(self.buffers[track_id]), dtype=np.float32)
+
         # 3. Inferência
-        seq = np.array(list(self.buffers[track_id]), dtype=np.float32)
         tensor_in = torch.tensor(seq).unsqueeze(0).to(self.device) # (1, T, F)
         
         # Aplica normalização se disponível

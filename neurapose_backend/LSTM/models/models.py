@@ -678,7 +678,7 @@ class TemporalFusionTransformer(nn.Module):
 #       NVIDIA NeMo (vocoder WaveNet-like): https://github.com/NVIDIA/NeMo
 # =============================================================================
 class GatedResidualBlock(nn.Module):
-    def __init__(self, channels, kernel_size, dilation):
+    def __init__(self, channels, kernel_size, dilation, dropout=0.0):
         super().__init__()
         padding = (kernel_size - 1) * dilation
         self.filter = nn.Conv1d(channels, channels, kernel_size, padding=padding, dilation=dilation)
@@ -686,11 +686,13 @@ class GatedResidualBlock(nn.Module):
         self.chomp = Chomp1d(padding)
         self.res = nn.Conv1d(channels, channels, 1)
         self.skip = nn.Conv1d(channels, channels, 1)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
         f = torch.tanh(self.chomp(self.filter(x)))
         g = torch.sigmoid(self.chomp(self.gate(x)))
         z = f * g
+        z = self.dropout(z)
         res = self.res(z) + x
         skip = self.skip(z)
         return res, skip
@@ -712,13 +714,13 @@ class GatedResidualBlock(nn.Module):
 #       NVIDIA NeMo: https://github.com/NVIDIA/NeMo
 # =============================================================================
 class WaveNet(nn.Module):
-    def __init__(self, input_size=34, channels=64, kernel_size=2, dilations=(1, 2, 4, 8, 16, 32), num_classes=2):
+    def __init__(self, input_size=34, channels=64, kernel_size=2, dilations=(1, 2, 4, 8, 16, 32), num_classes=2, dropout=0.2):
         super().__init__()
         self.input_size = input_size
         self.input_proj = nn.Conv1d(input_size, channels, 1)
 
         self.blocks = nn.ModuleList([
-            GatedResidualBlock(channels, kernel_size, d) for d in dilations
+            GatedResidualBlock(channels, kernel_size, d, dropout) for d in dilations
         ])
         self.relu = nn.ReLU()
         self.out1 = nn.Conv1d(channels, channels, 1)

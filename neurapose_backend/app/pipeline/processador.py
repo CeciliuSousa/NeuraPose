@@ -100,7 +100,7 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
     skip_interval = max(1, int(round(original_fps / target_fps)))
     
     print(Fore.CYAN + f"[APP] Vídeo: {video_path.name}")
-    print(Fore.WHITE + f"      Input: {original_fps:.2f}fps | Process & Render: {target_fps:.2f}fps")
+    # print(Fore.WHITE + f"      Input: {original_fps:.2f}fps | Process & Render: {target_fps:.2f}fps")
 
     # 2. SETUP WRITER (Output 10 FPS)
     # Regra: renderizar na qualidade de frames escolhido (10 frames)
@@ -238,7 +238,7 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
                     if rec['is_theft']:
                         id_final_preds[pid] = 1
                         # ALERTA DE FURTO: Fura o bloqueio de logs!
-                        print(Fore.RED + f"[ALERTA 🚨] Frame {frame_idx}: ID {pid} - FURTO DETECTADO ({prob:.1%})")
+                        # print(Fore.RED + f"[ALERTA 🚨] Frame {frame_idx}: ID {pid} - FURTO DETECTADO ({prob:.1%})")
                     elif pid not in id_final_preds:
                         id_final_preds[pid] = 0
 
@@ -258,37 +258,70 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
                     prob = rec.get("theft_prob", 0.0)
                     is_theft = rec.get("is_theft", False)
                     
-                    # 1. Esqueletos Coloridos (Random ID Color)
-                    pid_color = color_for_id(pid)
-                    desenhar_esqueleto_unificado(viz_frame, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=pid_color)
-                    
-                    # 2. Cor da BBox (Verde=Normal, Vermelho=Classe2)
-                    color = (0, 0, 255) if is_theft else (0, 255, 0)
+                    # 1. Esqueletos Coloridos (Baseado na Classe)
+                    # [UPDATED] USER REQUEST: Verde=Normal, Vermelho=Furto
+                    base_color = (0, 0, 255) if is_theft else (0, 255, 0)
+                    desenhar_esqueleto_unificado(viz_frame, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
+                     
+                    # 2. Cor da BBox
+                    color = base_color
                     
                     if bbox is not None:
                         x1, y1, x2, y2 = map(int, bbox)
                         cv2.rectangle(viz_frame, (x1, y1), (x2, y2), color, 2)
                         
-                        # 3. Label de 2 Linhas (Fundo Branco, Texto Preto)
+                        # 3. Label Dividida (Formato Solicitado)
+                        # LINHA 1: ID: <ID> | Conf: <CONF YOLO>
+                        # LINHA 2: Classe: <CLASSE PREDITA> | Conf: <CONF DA PREDIÇÃO>
+                        
+                        display_prob = prob if is_theft else (1.0 - prob)
                         class_name = cm.CLASSE2 if is_theft else cm.CLASSE1
-                        line1 = f"ID: {pid} | Pessoa: {conf:.2f}"
-                        line2 = f"Classe: {class_name} ({prob:.1%})"
+                        
+                        # Box 1: ID + Confiança YOLO (Fundo Branco, Texto Preto)
+                        line1_text = f"ID: {pid} | Conf: {conf:.2f}"
+                        
+                        # Box 2: Classe + Confiança Modelo (Fundo Color, Texto Branco)
+                        line2_text = f"Classe: {class_name} | Conf: {display_prob:.1%}"
                         
                         font_scale = 0.6
                         thick = 2
+                        font = cv2.FONT_HERSHEY_SIMPLEX
                         
-                        (w1, h1), _ = cv2.getTextSize(line1, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thick)
-                        (w2, h2), _ = cv2.getTextSize(line2, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thick)
+                        (w1, h1), _ = cv2.getTextSize(line1_text, font, font_scale, thick)
+                        (w2, h2), _ = cv2.getTextSize(line2_text, font, font_scale, thick)
                         
-                        w_box = max(w1, w2) + 10
-                        h_box = h1 + h2 + 20
+                        # Padding
+                        pad = 5
+                        w_box1 = w1 + 2*pad
+                        h_box1 = h1 + 2*pad
                         
-                        # Retângulo Branco Cheio
-                        cv2.rectangle(viz_frame, (x1, y1 - h_box), (x1 + w_box, y1), (255, 255, 255), -1)
+                        w_box2 = w2 + 2*pad
+                        h_box2 = h2 + 2*pad
                         
-                        # Texto Preto
-                        cv2.putText(viz_frame, line1, (x1 + 5, y1 - h2 - 10), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), thick)
-                        cv2.putText(viz_frame, line2, (x1 + 5, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), thick)
+                        # Desenha Box ID (Topo)
+                        # Posicao: Acima da bbox
+                        y_id_bot = y1 - h_box2 # Acima da box de classe
+                        y_id_top = y_id_bot - h_box1
+                        
+                        # Box Classe (Logo acima da bbox)
+                        y_cls_bot = y1
+                        y_cls_top = y1 - h_box2
+                        
+                        # Se sair da tela, joga pra dentro
+                        if y_id_top < 0:
+                            y_id_top = y1 + 5
+                            y_id_bot = y_id_top + h_box1
+                            y_cls_top = y_id_bot
+                            y_cls_bot = y_cls_top + h_box2
+                            
+                        # Render Box 1 (ID - Branco)
+                        cv2.rectangle(viz_frame, (x1, y_id_top), (x1 + w_box1, y_id_bot), (255, 255, 255), -1)
+                        cv2.putText(viz_frame, line1_text, (x1 + pad, y_id_bot - pad), font, font_scale, (0, 0, 0), thick)
+                        
+                        # Render Box 2 (Classe - Colorida)
+                        cv2.rectangle(viz_frame, (x1, y_cls_top), (x1 + w_box2, y_cls_bot), color, -1)
+                        # Texto
+                        cv2.putText(viz_frame, line2_text, (x1 + pad, y_cls_bot - pad), font, font_scale, (255, 255, 255), thick)
                 
                 # Grava frame (10 FPS)
                 writer.write(viz_frame)
@@ -315,7 +348,7 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
     tempos["yolo"] = tempos["detector_total"]
     tempos["rtmpose"] = tempos["rtmpose_total"]
 
-    print(Fore.GREEN + f"\n[CONCLUIDO] Processamento Finalizado em {total_time:.2f}s")
+    print(Fore.GREEN + f"\n[OK] Processamento Finalizado em {total_time:.2f}s")
     
     # RELATORIO DE TEMPOS (Formato Solicitado)
     # Tempos acumulados durante o loop
