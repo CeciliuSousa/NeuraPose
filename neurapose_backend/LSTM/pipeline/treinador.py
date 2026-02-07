@@ -191,8 +191,8 @@ def main():
     
     # Verifica dimensao temporal
     time_dimension = X_all.shape[1]
-    if time_dimension != 30:
-        print(Fore.RED + f"[ERRO] Dimensao T={time_dimension}, esperado T=30")
+    if time_dimension != cm.TIME_STEPS:
+        print(Fore.RED + f"[ERRO] Dimensao T={time_dimension}, esperado T={cm.TIME_STEPS}")
         return
 
     # [UPDATED] Split treino/validacao por GRUPO (ID) para evitar vazamento

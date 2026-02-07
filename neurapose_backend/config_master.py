@@ -44,7 +44,7 @@ OSNET_MODEL = "osnet_x0_5_msmt17_combineall_256x128_amsgrad_ep150_stp60_lr0.0015
 # OSNET_MODEL = "osnet_ain_x1_0_msmt17_256x128_amsgrad_ep50_lr0.0015_coslr_b64_fb10_softmax_labsmth_flip_jitter.pth"
 
 
-TRACKER_NAME = "BoTSORT" # "BoTSORT" ou "DeepOCSORT"
+TRACKER_NAME = "DeepOCSORT" # "BoTSORT" ou "DeepOCSORT"
 TEMPORAL_MODEL = "tft"
 # -- PARÂMETROS PRE-PROC --
 DETECTION_CONF = 0.55
@@ -84,7 +84,7 @@ VAL_SPLIT = "validacao"
 TEST_SPLIT = "teste"
 
 # -- HIPERPARÂMETROS TREINO --
-TIME_STEPS = 30
+TIME_STEPS = 10
 NUM_JOINTS = 17
 NUM_CHANNELS = 2
 BATCH_SIZE = 64
@@ -136,7 +136,7 @@ RTMPOSE_PREPROCESSING_PATH = RTMPOSE_PATH
 
 # Parâmetros sequência
 MAX_FRAMES_PER_SEQUENCE = 9000  # Para streaming de vídeo (inferência)
-TRAIN_SEQUENCE_LENGTH = 10      # Para treinamento/conversão de dataset (modelo espera T=30)
+TRAIN_SEQUENCE_LENGTH = 10      # Para treinamento/conversão de dataset (modelo espera T=10)
 FPS_TARGET = 10.0
 FRAME_DISPLAY_W = 1280
 FRAME_DISPLAY_H = 720
