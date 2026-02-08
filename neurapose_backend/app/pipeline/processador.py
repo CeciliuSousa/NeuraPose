@@ -294,12 +294,23 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
             t2 = time.time()
             tempos["rtmpose_total"] += (t2 - t1)
             
-            # --- CLASSIFICAÇÃO ---
+            # --- CLASSIFICAÇÃO (BATCH) ---
             t3_start = time.time()
+            
+            # 1. Coleta dados para Batch
+            track_ids = [r["id_persistente"] for r in pose_records]
+            kps_list = [r["keypoints"] for r in pose_records]
+            
+            # 2. Inferência em Batch (1 chamada GPU)
+            probs_map = brain.predict_batch(track_ids, kps_list)
+            
+            # 3. Atribui resultados
             for rec in pose_records:
                 pid = rec["id_persistente"]
-                kps = rec["keypoints"]
-                prob = brain.predict_single(pid, kps)
+                
+                # Se por algum motivo o ID não voltar (ex: buffer < 1 frame), assume 0.0
+                prob = probs_map.get(pid, 0.0)
+                
                 rec['theft_prob'] = round(prob, 2)
                 rec['is_theft'] = prob >= cm.CLASSE2_THRESHOLD
                 
@@ -324,8 +335,8 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
                 bbox = rec["bbox"]
                 kps = np.array(rec["keypoints"])
                 conf = rec["confidence"]
-                prob = rec.get("theft_prob", 0.0)
-                is_theft = rec.get("is_theft", False)
+                prob = rec.get(f"{cm.CLASSE2.lower()}_prob", 0.0)
+                is_theft = rec.get(f"is_{cm.CLASSE2.lower()}", False)
                 
                 base_color = (0, 0, 255) if is_theft else (0, 255, 0)
                 desenhar_esqueleto_unificado(viz_frame, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
@@ -408,7 +419,7 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
     print(f"{f'Normalização video {cm.INPUT_NORM_FPS} FPS':<45} {t_norm:>10.2f} seg")
     print(f"{f'YOLO + {cm.TRACKER_NAME} + OSNet':<45} {t_yolo:>10.2f} seg")
     print(f"{'RTMPose':<45} {t_pose:>10.2f} seg")
-    print(f"{model_name:<45} {t_temp:>10.2f} seg")
+    print(f"{cm.TEMPORAL_MODEL.upper():<45} {t_temp:>10.2f} seg")
     print("-" * 60)
     print(f"{'TOTAL':<45} {calc_total:>10.2f} seg")
     print("="*60 + "\n")

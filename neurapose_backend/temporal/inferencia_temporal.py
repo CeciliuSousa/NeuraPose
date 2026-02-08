@@ -57,7 +57,7 @@ class ClassificadorAcao:
         return flat[:self.input_dim]
 
     def predict_single(self, track_id, keypoints_raw):
-        """Retorna probabilidade de furto (0.0 a 1.0)"""
+        """Retorna probabilidade da CLASSE2 (0.0 a 1.0)"""
         if self.model is None: return 0.0
         
         # 1. Pipeline de Dados
@@ -89,9 +89,68 @@ class ClassificadorAcao:
         
         with torch.no_grad():
             output = self.model(tensor_in)
-            # Softmax (Assume classe 1 = Furto)
             if output.shape[-1] >= 2:
                 prob = torch.softmax(output, dim=1)[0][cm.POSITIVE_CLASS_ID].item()
             else:
                 prob = torch.sigmoid(output).item()
         return prob
+
+    def predict_batch(self, track_ids, keypoints_list):
+        """
+        Realiza inferência em BATCH para N pessoas simultaneamente (O(1) GPU overhead).
+        Args:
+            track_ids (list): Lista de IDs.
+            keypoints_list (list): Lista de keypoints raw [(17,2), ...].
+        Returns:
+            dict: {track_id: prob}
+        """
+        if self.model is None or not track_ids: return {}
+        
+        # 1. Pipeline de Dados em Batch (CPU)
+        valid_seqs = []
+        valid_ids = []
+        
+        for tid, kps in zip(track_ids, keypoints_list):
+            features = self._flatten_kps(kps)
+            self.buffers[tid].append(features)
+            
+            buffer_len = len(self.buffers[tid])
+            if buffer_len < 1: continue 
+
+            # Padding Logic (Mesma do predict_single)
+            if buffer_len < self.window_size:
+                missing = self.window_size - buffer_len
+                first_frame = self.buffers[tid][0]
+                padded_seq = [first_frame] * missing + list(self.buffers[tid])
+                seq = np.array(padded_seq, dtype=np.float32)
+            else:
+                seq = np.array(list(self.buffers[tid]), dtype=np.float32)
+            
+            valid_seqs.append(seq)
+            valid_ids.append(tid)
+
+        if not valid_seqs: return {}
+
+        # 2. Construção do Tensor Batch (N, T, F)
+        tensor_batch = torch.tensor(np.array(valid_seqs)).to(self.device)
+        
+        # Normalização Batch
+        if self.mu is not None and self.sigma is not None:
+             tensor_batch = (tensor_batch - self.mu) / self.sigma
+
+        # 3. Inferência Única
+        probs_map = {}
+        with torch.no_grad():
+            output = self.model(tensor_batch)
+            
+            # Processa saídas
+            if output.shape[-1] >= 2:
+                probs = torch.softmax(output, dim=1)[:, cm.POSITIVE_CLASS_ID].cpu().numpy()
+            else:
+                 probs = torch.sigmoid(output).flatten().cpu().numpy()
+            
+            # Mapeia de volta para IDs
+            for tid, p in zip(valid_ids, probs):
+                probs_map[tid] = float(p)
+                
+        return probs_map
