@@ -164,13 +164,13 @@ def main():
                 out.write(f"        normal | TP={conf['normal'][0]}  FN={conf['normal'][1]}\n")
                 out.write(f"         furto | FP={conf['furto'][0]}  TN={conf['furto'][1]}\n")
 
-            out.write(f"\n  Relatório: {m['report']}\n")
+            # out.write(f"\n  Relatório: {m['report']}\n")
 
-            if m["imgs"]:
-                out.write("  Imagens  :\n")
-                for img in m["imgs"]:
-                    out.write(f"    - {img}\n")
-            out.write("\n")
+            # if m["imgs"]:
+            #     out.write("  Imagens  :\n")
+            #     for img in m["imgs"]:
+            #         out.write(f"    - {img}\n")
+            # out.write("\n")
 
     # exibe resumo no terminal
     print(Fore.CYAN + f"\n==== RANKING DE MODELOS ({len(models_info)} encontrados) ====")

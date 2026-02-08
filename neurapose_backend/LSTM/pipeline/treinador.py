@@ -434,15 +434,15 @@ def main():
     # Nomenclatura final do diretório
     def get_model_abbr(m):
         m = m.lower()
-        if "temporal fusion" in m or m == "tft": return "tft"
+        if "temporal fusion" in m or m == "tft": return "TFT"
         if "robust" in m: return "RobustLSTM"
         if "pooled" in m: return "PooledLSTM"
         if "bilstm" in m: return "BiLSTM"
         if "attention" in m: return "AttentionLSTM"
-        if "tcn" in m: return "tcn"
-        if "transformer" in m: return "trans"
-        if "wavenet" in m: return "wave"
-        if "lstm" in m: return "lstm"
+        if "tcn" in m: return "TCN"
+        if "transformer" in m: return "Transformer"
+        if "wavenet" in m: return "WaveNet"
+        if "lstm" in m: return "LSTM"
         return m
 
     abbr = get_model_abbr(args.model)

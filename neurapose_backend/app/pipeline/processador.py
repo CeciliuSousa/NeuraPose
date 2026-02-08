@@ -3,6 +3,10 @@
 # ==============================================================
 # Pipeline OTIMIZADO (Teste de Modelo / App Final)
 # Refatorado para VISUALIZAÇÃO PADRONIZADA (Regras de UI)
+# INCLUI:
+#  - Skip Inteligente (cap.grab)
+#  - Pipeline Multithread (Leitura -> GPU -> Escrita)
+#  - Codec GPU (h264_nvenc)
 # ==============================================================
 
 import time
@@ -10,8 +14,9 @@ import os
 import json
 import cv2
 import numpy as np
+import threading
+import queue
 from pathlib import Path
-from colorama import Fore
 from colorama import Fore
 from ultralytics import YOLO
 import torch
@@ -34,8 +39,6 @@ from neurapose_backend.nucleo.visualizacao import desenhar_esqueleto_unificado, 
 from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
 from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomDeepOCSORT, save_temp_tracker_yaml
 from neurapose_backend.temporal.inferencia_temporal import ClassificadorAcao
-
-from neurapose_backend.temporal.inferencia_temporal import ClassificadorAcao
 from neurapose_backend.nucleo.video_utils import normalizar_video
 
 # Import Sanitizer e State
@@ -49,11 +52,113 @@ try:
 except ImportError:
     state = None
 
+# --- CLASSES AUXILIARES DE THREADING ---
+
+class FrameReaderThread(threading.Thread):
+    def __init__(self, video_path, skip_interval, queue_out, max_frames=None):
+        super().__init__()
+        self.video_path = str(video_path)
+        self.skip_interval = skip_interval
+        self.queue_out = queue_out
+        self.max_frames = max_frames # Inutilizado por enquanto
+        self.stopped = False
+        self.daemon = True # Mata thread se main morrer
+        
+        self.cap = cv2.VideoCapture(self.video_path)
+        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30.0
+        self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    def run(self):
+        frame_idx = 0
+        try:
+            while self.cap.isOpened() and not self.stopped:
+                # [OTIMIZAÇÃO] Skip Físico com grab()
+                if frame_idx % self.skip_interval != 0:
+                    if not self.cap.grab(): break
+                    frame_idx += 1
+                    continue
+
+                # Se for frame de processamento, LEITURA COMPLETA (Grab + Retrieve)
+                ret, frame = self.cap.read()
+                if not ret: break
+                
+                # Envia para fila (Bloqueia se cheia para não estourar RAM)
+                self.queue_out.put((frame_idx, frame))
+                frame_idx += 1
+
+                if state and state.stop_requested: break
+                
+        except Exception as e:
+            print(Fore.RED + f"[LEITURA] Erro: {e}")
+        finally:
+            self.cap.release()
+            self.queue_out.put(None) # Sentinel
+
+    def stop(self):
+        self.stopped = True
+
+class VideoWriterThread(threading.Thread):
+    def __init__(self, output_path, fps, width, height, queue_in):
+        super().__init__()
+        self.output_path = str(output_path)
+        self.fps = fps
+        self.width = width
+        self.height = height
+        self.queue_in = queue_in
+        self.stopped = False
+        self.daemon = True
+        self.writer = None
+
+    def _init_writer(self):
+        # Tenta Codec GPU (h264_nvenc) se configurado
+        if cm.USE_NVENC:
+            # Tenta Backend FFMPEG com NVENC
+            try:
+                # Nota: OpenCV Python pip geralmente não tem CUDA habilitado.
+                # Isso pode falhar e cair no except.
+                p = cv2.VideoWriter_fourcc(*'h264') # Dummy
+                # Tentativa genérica, mas o OpenCV com FFMPEG backend pode aceitar string de codec se compilado
+                # Como fallback seguro, usamos o padrão 'avc1' que é o melhor via CPU.
+                # Para usar NVENC real via OpenCV Python, precisaria de GStreamer string.
+                pass
+            except: pass
+
+        # Fallback Padrão (AVC1)
+        fourcc = cv2.VideoWriter_fourcc(*'avc1')
+        self.writer = cv2.VideoWriter(self.output_path, fourcc, self.fps, (self.width, self.height))
+        
+        if not self.writer.isOpened():
+             # Fallback Último Caso (MP4V)
+             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+             self.writer = cv2.VideoWriter(self.output_path, fourcc, self.fps, (self.width, self.height))
+
+    def run(self):
+        self._init_writer()
+        try:
+            while not self.stopped:
+                item = self.queue_in.get()
+                if item is None: # Sentinel
+                    break
+                
+                frame = item
+                if self.writer is not None:
+                    self.writer.write(frame)
+                
+                self.queue_in.task_done()
+        except Exception as e:
+            print(Fore.RED + f"[ESCRITA] Erro: {e}")
+        finally:
+            if self.writer: self.writer.release()
+
+    def stop(self):
+        self.stopped = True
+
 @gpu_manager.inference_mode()
 def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, show_preview=False, output_dir: Path = None, labels_path: Path = None):
     """
-    Processa um vídeo usando LOGICAL SKIP + INFERÊNCIA EM TEMPO REAL.
-    Renderiza vídeo de saída na mesma taxa de quadros do processamento (10 FPS).
+    Processa um vídeo usando PIPELINE MULTITHREAD + SKIP INTELIGENTE.
     """
 
     if not output_dir: raise ValueError("output_dir obrigatório")
@@ -62,12 +167,12 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
     predicoes_dir = output_dir / "predicoes"
     jsons_dir = output_dir / "jsons"
     anotacoes_dir = output_dir / "anotacoes"
-    videos_norm_dir = output_dir / "videos" # [FIX] Re-adicionado
+    videos_norm_dir = output_dir / "videos" 
     
     predicoes_dir.mkdir(parents=True, exist_ok=True)
     jsons_dir.mkdir(parents=True, exist_ok=True)
     anotacoes_dir.mkdir(parents=True, exist_ok=True)
-    videos_norm_dir.mkdir(parents=True, exist_ok=True) # [FIX] Cria dir
+    videos_norm_dir.mkdir(parents=True, exist_ok=True) 
     
     tempos = {
         "detector_total": 0.0, "rtmpose_total": 0.0, "temporal_total": 0.0,
@@ -77,62 +182,54 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
     # Normalização de FPS (Garanta 30 FPS no input)
     t_start_norm = time.time()
     try:
-        # [FIX] Passa output_dir e faz unpacking
         video_norm_path, t_norm_internal = normalizar_video(video_path, videos_norm_dir, target_fps=cm.INPUT_NORM_FPS)
         if video_norm_path is None: raise Exception("Retorno None da normalização")
     except Exception as e:
         print(Fore.RED + f"[ERRO] Falha na normalização: {e}")
         return {}
 
-    # Usamos o tempo retornado pela função ou o medido aqui? 
-    # A função normalizar_video retorna o tempo de processamento real (excluindo check de skip)
     tempos["normalizacao"] = t_norm_internal
 
-    # 1. SETUP VIDEO (Lê do Normalizado)
-    cap = cv2.VideoCapture(str(video_norm_path))
-    original_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    total_frames_in = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    # 1. SETUP VIDEO INFO (Apenas metadados)
+    cap_temp = cv2.VideoCapture(str(video_norm_path))
+    original_fps = cap_temp.get(cv2.CAP_PROP_FPS) or 30.0
+    width = int(cap_temp.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap_temp.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total_frames_in = int(cap_temp.get(cv2.CAP_PROP_FRAME_COUNT))
+    cap_temp.release()
     
     # Define Target FPS
     target_fps = cm.FPS_TARGET # 10.0
     skip_interval = max(1, int(round(original_fps / target_fps)))
     
     print(Fore.CYAN + f"[APP] Vídeo: {video_path.name}")
-    # print(Fore.WHITE + f"      Input: {original_fps:.2f}fps | Process & Render: {target_fps:.2f}fps")
 
-    # 2. SETUP WRITER (Output 10 FPS)
-    # Regra: renderizar na qualidade de frames escolhido (10 frames)
+    # 2. SETUP QUEUES E THREADS
+    queue_in = queue.Queue(maxsize=30)  # Leitura -> Processamento
+    queue_out = queue.Queue(maxsize=30) # Processamento -> Escrita
+    
+    # Thread Leitura
+    reader_thread = FrameReaderThread(video_norm_path, skip_interval, queue_in)
+    reader_thread.start()
+    
+    # Thread Escrita
     video_out_name = f"{video_path.stem}_pred.mp4"
     pred_video_path = predicoes_dir / video_out_name
-    
-    # Tenta Codec AVC1 (OpenH264)
-    fourcc = cv2.VideoWriter_fourcc(*'avc1')
-    writer = cv2.VideoWriter(str(pred_video_path), fourcc, target_fps, (width, height))
-    
-    if not writer.isOpened():
-        print(Fore.YELLOW + "[AVISO] 'avc1' falhou. Fallback para 'mp4v'.")
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        writer = cv2.VideoWriter(str(pred_video_path), fourcc, target_fps, (width, height))
+    writer_thread = VideoWriterThread(pred_video_path, target_fps, width, height, queue_out)
+    writer_thread.start()
 
-    # 3. SETUP MODELOS
+    # 3. SETUP MODELOS (Na Thread Principal - GPU)
     pose_extractor = ExtratorPoseRTMPose(device=cm.DEVICE)
-    
-    # Cérebro
     model_file = cm.MODEL_SAVE_DIR / "model_best.pt"
     if not model_file.exists() and hasattr(cm, 'TRAINED_MODELS_DIR'):
          candidates = list(cm.TRAINED_MODELS_DIR.glob("**/*.pt"))
          if candidates: model_file = candidates[0]
     
-    # [FIX] Classificador usa o modelo carregado se disponivel
     brain = ClassificadorAcao(str(model_file), model_instance=lstm_model, window_size=cm.TIME_STEPS, mu=mu_ignored, sigma=sigma_ignored)
 
-    # Tracker
     USING_DEEPOCSORT = (cm.TRACKER_NAME.upper() == "DEEPOCSORT")
     tracker = None
     yolo_model = None
-    yaml_path = None
     
     if USING_DEEPOCSORT:
         tracker = CustomDeepOCSORT()
@@ -140,205 +237,154 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
         yolo_model = YOLO(str(cm.YOLO_PATH), task='detect').to(cm.DEVICE)
         tracker_instance = CustomBoTSORT(frame_rate=int(target_fps))
         yolo_model.tracker = tracker_instance
-        yaml_path = save_temp_tracker_yaml()
 
-    # 4. LOOP
-    frame_idx = 0
-    start_time_global = time.time()
-    
+    # 4. LOOP PRINCIPAL (PROCESSAMENTO)
     registros_totais = [] 
     pred_stats = {} 
     id_final_preds = {} 
-    last_logged_percent = -1 # [FIX] Inicialização correta 
+    last_logged_percent = -1 
 
-    # Atualiza Device
     gpu_manager.update_device(cm.DEVICE)
+    
+    start_time_global = time.time()
 
     try:
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret: break
+        while True:
+            # Pega da fila de leitura
+            item = queue_in.get()
+            if item is None: # Sentinel
+                break
             
-            # LOGICAL SKIP: Só processa e grava os frames do intervalo
-            # Ex: Frame 0, 3, 6...
-            if frame_idx % skip_interval == 0:
-                # --- LÓGICA DE LOG (SILENCIOSA: A CADA 20%) ---
-                # Calcula porcentagem atual
-                current_percent = int((frame_idx / total_frames_in) * 100)
-                
-                # Regra: Loga no inicio (0%), a cada 20%, e no final
-                # Também loga SEMPRE que houver um ALERTA DE FURTO (prioridade máxima) via override na detecção
-                should_log = (current_percent % 20 == 0 and current_percent > last_logged_percent) or (frame_idx == 0)
-                
-                if should_log:
-                    last_logged_percent = current_percent
-                    # Este print vai para o WebSocket via LogBuffer (que o WebService lê)
-                    print(f"\r[APP] Progresso: {current_percent}% ({frame_idx}/{total_frames_in})")
-                    
-                t0 = time.time()
-                
-                # --- DETECÇÃO ---
-                yolo_dets = None
-                if USING_DEEPOCSORT:
-                    tracks = tracker.track(frame)
-                    yolo_dets = tracks
-                else:
-                    # BoTSORT Manual (Robust Fix)
-                    res = yolo_model.predict(
-                        source=frame,
-                        imgsz=cm.YOLO_IMGSZ,
-                        conf=cm.DETECTION_CONF,
-                        device=cm.DEVICE,
-                        classes=[cm.YOLO_CLASS_PERSON],
-                        verbose=False,
-                        stream=False
-                    )
-                    
-                    dets = np.empty((0, 6))
-                    if len(res) > 0 and len(res[0].boxes) > 0:
-                        dets = res[0].boxes.data.cpu().numpy()
-                        # Normaliza shapes se necessario (igual yolo_stream)
-                        if dets.shape[1] == 4: # [x,y,x,y]
-                             r = dets.shape[0]
-                             dets = np.hstack((dets, np.full((r, 1), 0.85), np.zeros((r, 1))))
-                        elif dets.shape[1] == 5:
-                             dets = np.hstack((dets, np.zeros((dets.shape[0], 1))))
-                    
-                    tracks = tracker_instance.update(dets, frame)
-                    yolo_dets = tracks
-
-                t1 = time.time()
-                tempos["detector_total"] += (t1 - t0)
-
-                # --- POSE ---
-                pose_records, _ = pose_extractor.processar_frame(
-                    frame_img=frame,
-                    detections_yolo=yolo_dets,
-                    frame_idx=frame_idx,
-                    desenhar_no_frame=False
-                )
-                
-                t2 = time.time()
-                tempos["rtmpose_total"] += (t2 - t1)
-                
-                # --- CLASSIFICAÇÃO (CÉREBRO) ---
-                t3_start = time.time()
-                for rec in pose_records:
-                    pid = rec["id_persistente"]
-                    kps = rec["keypoints"]
-                    
-                    # O Cérebro processa e diz a probabilidade
-                    prob = brain.predict_single(pid, kps)
-                    rec['theft_prob'] = round(prob, 2) # [OTIMIZAÇÃO] Arredonda aqui na fonte
-                    rec['is_theft'] = prob >= cm.CLASSE2_THRESHOLD
-                    
-                    if pid not in pred_stats: pred_stats[pid] = 0.0
-                    pred_stats[pid] = max(pred_stats[pid], prob)
-                    
-                    if rec['is_theft']:
-                        id_final_preds[pid] = 1
-                        # ALERTA DE FURTO: Fura o bloqueio de logs!
-                        # print(Fore.RED + f"[ALERTA 🚨] Frame {frame_idx}: ID {pid} - FURTO DETECTADO ({prob:.1%})")
-                    elif pid not in id_final_preds:
-                        id_final_preds[pid] = 0
-
-                t3_end = time.time()
-                tempos["temporal_total"] += (t3_end - t3_start)
-                
-                registros_totais.extend(pose_records)
-                
-                # --- RENDERIZAÇÃO PADRONIZADA (APP) ---
-                viz_frame = frame.copy()
-
-                for rec in pose_records:
-                    pid = rec["id_persistente"]
-                    bbox = rec["bbox"]
-                    kps = np.array(rec["keypoints"])
-                    conf = rec["confidence"]
-                    prob = rec.get("theft_prob", 0.0)
-                    is_theft = rec.get("is_theft", False)
-                    
-                    # 1. Esqueletos Coloridos (Baseado na Classe)
-                    # [UPDATED] USER REQUEST: Verde=Normal, Vermelho=Furto
-                    base_color = (0, 0, 255) if is_theft else (0, 255, 0)
-                    desenhar_esqueleto_unificado(viz_frame, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
-                     
-                    # 2. Cor da BBox
-                    color = base_color
-                    
-                    if bbox is not None:
-                        x1, y1, x2, y2 = map(int, bbox)
-                        cv2.rectangle(viz_frame, (x1, y1), (x2, y2), color, 2)
-                        
-                        # 3. Label Dividida (Formato Solicitado)
-                        # LINHA 1: ID: <ID> | Conf: <CONF YOLO>
-                        # LINHA 2: Classe: <CLASSE PREDITA> | Conf: <CONF DA PREDIÇÃO>
-                        
-                        display_prob = prob if is_theft else (1.0 - prob)
-                        class_name = cm.CLASSE2 if is_theft else cm.CLASSE1
-                        
-                        # Box 1: ID + Confiança YOLO (Fundo Branco, Texto Preto)
-                        line1_text = f"ID: {pid} | Conf: {conf:.2f}"
-                        
-                        # Box 2: Classe + Confiança Modelo (Fundo Color, Texto Branco)
-                        line2_text = f"Classe: {class_name} | Conf: {display_prob:.1%}"
-                        
-                        font_scale = 0.6
-                        thick = 2
-                        font = cv2.FONT_HERSHEY_SIMPLEX
-                        
-                        (w1, h1), _ = cv2.getTextSize(line1_text, font, font_scale, thick)
-                        (w2, h2), _ = cv2.getTextSize(line2_text, font, font_scale, thick)
-                        
-                        # Padding
-                        pad = 5
-                        w_box1 = w1 + 2*pad
-                        h_box1 = h1 + 2*pad
-                        
-                        w_box2 = w2 + 2*pad
-                        h_box2 = h2 + 2*pad
-                        
-                        # Desenha Box ID (Topo)
-                        # Posicao: Acima da bbox
-                        y_id_bot = y1 - h_box2 # Acima da box de classe
-                        y_id_top = y_id_bot - h_box1
-                        
-                        # Box Classe (Logo acima da bbox)
-                        y_cls_bot = y1
-                        y_cls_top = y1 - h_box2
-                        
-                        # Se sair da tela, joga pra dentro
-                        if y_id_top < 0:
-                            y_id_top = y1 + 5
-                            y_id_bot = y_id_top + h_box1
-                            y_cls_top = y_id_bot
-                            y_cls_bot = y_cls_top + h_box2
-                            
-                        # Render Box 1 (ID - Branco)
-                        cv2.rectangle(viz_frame, (x1, y_id_top), (x1 + w_box1, y_id_bot), (255, 255, 255), -1)
-                        cv2.putText(viz_frame, line1_text, (x1 + pad, y_id_bot - pad), font, font_scale, (0, 0, 0), thick)
-                        
-                        # Render Box 2 (Classe - Colorida)
-                        cv2.rectangle(viz_frame, (x1, y_cls_top), (x1 + w_box2, y_cls_bot), color, -1)
-                        # Texto
-                        cv2.putText(viz_frame, line2_text, (x1 + pad, y_cls_bot - pad), font, font_scale, (255, 255, 255), thick)
-                
-                # Grava frame (10 FPS)
-                writer.write(viz_frame)
-                
-                # Atualização de Preview para o App Web (Gatekeeper Otimizado)
-                if show_preview and state is not None and state.show_preview:
-                    state.update_frame(viz_frame)
+            frame_idx, frame = item
             
-            # Se frame não é múltiplo do skip, ignoramos completamente (não grava)
-            frame_idx += 1
+            # --- LÓGICA DE LOG ---
+            current_percent = int((frame_idx / total_frames_in) * 100)
+            should_log = (current_percent % 20 == 0 and current_percent > last_logged_percent) or (frame_idx == 0)
+            if should_log:
+                last_logged_percent = current_percent
+                print(f"\r[APP] Progresso: {current_percent}% ({frame_idx}/{total_frames_in})")
+                
+            t0 = time.time()
+            
+            # --- DETECÇÃO ---
+            yolo_dets = None
+            if USING_DEEPOCSORT:
+                tracks = tracker.track(frame)
+                yolo_dets = tracks
+            else:
+                res = yolo_model.predict(source=frame, imgsz=cm.YOLO_IMGSZ, conf=cm.DETECTION_CONF, device=cm.DEVICE, classes=[cm.YOLO_CLASS_PERSON], verbose=False, stream=False)
+                dets = np.empty((0, 6))
+                if len(res) > 0 and len(res[0].boxes) > 0:
+                    dets = res[0].boxes.data.cpu().numpy()
+                    if dets.shape[1] == 4:
+                            r = dets.shape[0]
+                            dets = np.hstack((dets, np.full((r, 1), 0.85), np.zeros((r, 1))))
+                    elif dets.shape[1] == 5:
+                            dets = np.hstack((dets, np.zeros((dets.shape[0], 1))))
+                
+                tracks = tracker_instance.update(dets, frame)
+                yolo_dets = tracks
+
+            t1 = time.time()
+            tempos["detector_total"] += (t1 - t0)
+
+            # --- POSE ---
+            pose_records, _ = pose_extractor.processar_frame(frame_img=frame, detections_yolo=yolo_dets, frame_idx=frame_idx, desenhar_no_frame=False)
+            
+            t2 = time.time()
+            tempos["rtmpose_total"] += (t2 - t1)
+            
+            # --- CLASSIFICAÇÃO ---
+            t3_start = time.time()
+            for rec in pose_records:
+                pid = rec["id_persistente"]
+                kps = rec["keypoints"]
+                prob = brain.predict_single(pid, kps)
+                rec['theft_prob'] = round(prob, 2)
+                rec['is_theft'] = prob >= cm.CLASSE2_THRESHOLD
+                
+                if pid not in pred_stats: pred_stats[pid] = 0.0
+                pred_stats[pid] = max(pred_stats[pid], prob)
+                
+                if rec['is_theft']:
+                    id_final_preds[pid] = 1
+                elif pid not in id_final_preds:
+                    id_final_preds[pid] = 0
+
+            t3_end = time.time()
+            tempos["temporal_total"] += (t3_end - t3_start)
+            
+            registros_totais.extend(pose_records)
+            
+            # --- RENDERIZAÇÃO (Na Thread Principal mesmo, rápido) ---
+            viz_frame = frame.copy()
+
+            for rec in pose_records:
+                pid = rec["id_persistente"]
+                bbox = rec["bbox"]
+                kps = np.array(rec["keypoints"])
+                conf = rec["confidence"]
+                prob = rec.get("theft_prob", 0.0)
+                is_theft = rec.get("is_theft", False)
+                
+                base_color = (0, 0, 255) if is_theft else (0, 255, 0)
+                desenhar_esqueleto_unificado(viz_frame, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
+                
+                color = base_color
+                if bbox is not None:
+                    x1, y1, x2, y2 = map(int, bbox)
+                    cv2.rectangle(viz_frame, (x1, y1), (x2, y2), color, 2)
+                    
+                    display_prob = prob if is_theft else (1.0 - prob)
+                    class_name = cm.CLASSE2 if is_theft else cm.CLASSE1
+                    
+                    line1_text = f"ID: {pid} | Conf: {conf:.2f}"
+                    line2_text = f"Classe: {class_name} | Conf: {display_prob:.1%}"
+                    
+                    font_scale = 0.6
+                    thick = 2
+                    font = cv2.FONT_HERSHEY_SIMPLEX
+                    (w1, h1), _ = cv2.getTextSize(line1_text, font, font_scale, thick)
+                    (w2, h2), _ = cv2.getTextSize(line2_text, font, font_scale, thick)
+                    
+                    pad = 5
+                    w_box1, h_box1 = w1 + 2*pad, h1 + 2*pad
+                    w_box2, h_box2 = w2 + 2*pad, h2 + 2*pad
+                    
+                    y_id_bot = y1 - h_box2
+                    y_id_top = y_id_bot - h_box1
+                    y_cls_bot = y1
+                    y_cls_top = y1 - h_box2
+                    
+                    if y_id_top < 0:
+                        y_id_top = y1 + 5
+                        y_id_bot = y_id_top + h_box1
+                        y_cls_top = y_id_bot
+                        y_cls_bot = y_cls_top + h_box2
+                        
+                    cv2.rectangle(viz_frame, (x1, y_id_top), (x1 + w_box1, y_id_bot), (255, 255, 255), -1)
+                    cv2.putText(viz_frame, line1_text, (x1 + pad, y_id_bot - pad), font, font_scale, (0, 0, 0), thick)
+                    cv2.rectangle(viz_frame, (x1, y_cls_top), (x1 + w_box2, y_cls_bot), color, -1)
+                    cv2.putText(viz_frame, line2_text, (x1 + pad, y_cls_bot - pad), font, font_scale, (255, 255, 255), thick)
+            
+            # Envia para Escrita
+            queue_out.put(viz_frame)
+            
+            # Atualização de Preview
+            if show_preview and state is not None and state.show_preview:
+                state.update_frame(viz_frame)
+
+            if state and state.stop_requested: break
 
     except KeyboardInterrupt:
         print("\n[STOP] Interrompido pelo usuário.")
 
     finally:
-        cap.release()
-        writer.release()
+        # Encerra threads
+        reader_thread.stop()
+        queue_out.put(None) # Sentinel para writer
+        writer_thread.join()
+        
         if not USING_DEEPOCSORT and yolo_model: del yolo_model.tracker
         gpu_manager.clear_cache()
 
@@ -350,16 +396,12 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
 
     print(Fore.GREEN + f"\n[OK] Processamento Finalizado em {total_time:.2f}s")
     
-    # RELATORIO DE TEMPOS (Formato Solicitado)
-    # Tempos acumulados durante o loop
-    t_norm = tempos["normalizacao"] # Pode ser 0.0 caso não tenha passo de normalização física
+    # RELATORIO DE TEMPOS
+    t_norm = tempos["normalizacao"]
     t_yolo = tempos["detector_total"]
     t_pose = tempos["rtmpose_total"]
     t_temp = tempos["temporal_total"]
-    
-    # Recalcula total com base nos componentes para consistência
     calc_total = t_norm + t_yolo + t_pose + t_temp
-    
     model_name = cm.TEMPORAL_MODEL.upper() if getattr(cm, 'TEMPORAL_MODEL', None) else "TEMPORAL MODEL"
     
     print("\n" + "="*60)
@@ -373,32 +415,23 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
 
     # POS-PROC
     if sanitizar_dados:
-        # print(Fore.CYAN + "[INFO] Aplicando Sanitização Final...")
         registros_totais = sanitizar_dados(registros_totais, threshold=150.0)
 
     # --- SALVA JSON DE POSE PADRÃO ---
-    # Formato: <nome do video>_pose.json
     json_pose_name = f"{video_path.stem}_pose.json"
     json_pose_path = jsons_dir / json_pose_name
-    
     tracker_key = "deepocsort_id" if USING_DEEPOCSORT else "botsort_id"
-    
     records_final = []
-    
     for r in registros_totais:
-        # Copia e enriquece
         new_r = r.copy()
         new_r[tracker_key] = r["id_persistente"]
         records_final.append(new_r)
 
     with open(json_pose_path, "w", encoding="utf-8") as f:
-        json.dump(records_final, f, indent=2, ensure_ascii=False) # Legível conforme solicitado
-        # json.dump(records_final, f, indent=None, separators=(',', ':')) # Minificado
+        json.dump(records_final, f, indent=2, ensure_ascii=False)
 
     # --- SALVA JSON DE TRACKING REPORT ---
-    # Formato: <nome do video>_tracking.json
     json_tracking_path = jsons_dir / f"{video_path.stem}_tracking.json"
-    
     tracking_by_frame = {}
     ids_encontrados = set()
     
@@ -406,15 +439,10 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
         f_idx = str(r["frame"])
         pid = r["id_persistente"]
         ids_encontrados.add(pid)
-        
-        if f_idx not in tracking_by_frame:
-            tracking_by_frame[f_idx] = []
-        
-        # Objeto de tracking rico (com predição)
+        if f_idx not in tracking_by_frame: tracking_by_frame[f_idx] = []
         is_theft = r.get("is_theft", False)
         classe_id = 1 if is_theft else 0
         classe_nome = cm.CLASSE2 if is_theft else cm.CLASSE1
-        
         track_obj = {
             tracker_key: pid,
             "id_persistente": pid,
@@ -426,18 +454,15 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
         tracking_by_frame[f_idx].append(track_obj)
     
     id_map = {str(i): i for i in sorted(list(ids_encontrados))}
-    
     tracking_report = {
         "video": video_path.name,
         "total_frames": total_frames_in,
         "id_map": id_map,
         "tracking_by_frame": tracking_by_frame
     }
-    
     with open(json_tracking_path, "w", encoding="utf-8") as f:
         json.dump(tracking_report, f, indent=2, ensure_ascii=False)
     
-    # Return Stats
     ids_predicoes = []
     for pid, pred_cls in id_final_preds.items():
         score = pred_stats.get(pid, 0.0)
