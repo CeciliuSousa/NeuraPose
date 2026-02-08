@@ -5,7 +5,7 @@
 """
 Ferramenta interativa para anotacao de classes.
 Le pastas de predicoes e jsons, exibe videos e permite
-classificar cada ID1 como normal ou furto.
+classificar cada ID1 como CLASSE1 ou CLASSE2.
 """
 
 import os
@@ -178,9 +178,9 @@ def main():
     parser.add_argument("--min-frames", type=int, default=cm.MIN_FRAMES_PER_ID,
                         help=f"Minimo de frames por ID (default: {cm.MIN_FRAMES_PER_ID})")
     parser.add_argument("--positive-class", default=cm.CLASSE2.lower(),
-                        help="Classe positiva (default: furto)")
+                        help=f"Classe positiva (default: {cm.CLASSE2.lower()})")
     parser.add_argument("--negative-class", default=cm.CLASSE1.lower(),
-                        help="Classe negativa (default: normal)")
+                        help=f"Classe negativa (default: {cm.CLASSE1.lower()})")
 
     parser.add_argument("--labels-out", default=str(cm.PROCESSING_ANNOTATIONS_DIR / "labels.json"),
                         help=f"Caminho para labels de saida (default: {cm.PROCESSING_ANNOTATIONS_DIR / 'labels.json'})")

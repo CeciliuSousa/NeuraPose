@@ -370,7 +370,7 @@ def exibir_video_interativo(video_path: Path, frames_index, title="Review", max_
                 x2, y2 = int(bbox["x2"] * scale), int(bbox["y2"] * scale)
                 
                 # Cores
-                color = (0, 255, 0) # Verde (Normal)
+                color = (0, 255, 0) # Verde (CLASSE1)
                 label = f"ID:{gid}"
                 
                 # Determina se este ID foi marcado para deletar NESTE FRAME

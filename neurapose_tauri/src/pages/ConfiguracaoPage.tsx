@@ -5,6 +5,7 @@ import { PageHeader } from '../components/ui/PageHeader';
 import { APIService } from '../services/api';
 import { FileExplorerModal } from '../components/FileExplorerModal';
 import { PathSelector } from '../components/ui/PathSelector';
+import { CLASSE1, CLASSE2 } from '../constants';
 
 export default function ConfiguracaoPage() {
     const [config, setConfig] = useState<any>(null);
@@ -147,8 +148,8 @@ export default function ConfiguracaoPage() {
             title: "Classes de Detecção",
             description: "Nomes das classes para classificação de comportamento.",
             items: [
-                { key: "CLASSE1", label: "Classe Negativa (Normal)", type: "text" },
-                { key: "CLASSE2", label: "Classe Positiva (Anomalia)", type: "text" },
+                { key: "CLASSE1", label: `Classe Negativa (${CLASSE1})`, type: "text" },
+                { key: "CLASSE2", label: `Classe Positiva (${CLASSE2})`, type: "text" },
                 { key: "CLASSE2_THRESHOLD", label: "Threshold da Classe Positiva", type: "number", step: 0.01 },
             ]
         },

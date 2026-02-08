@@ -224,7 +224,7 @@ class AnnotationComplex(BaseModel):
 
 class AnnotationRequest(BaseModel):
     video_stem: str
-    # Suporta anotação simples ("FURTO") ou complexa ({classe: "FURTO", intervals: [...]})
+    # Suporta anotação simples ("CLASSE2") ou complexa ({classe2: "ANOMALIA", intervals: [...]})
     annotations: Dict[str, Union[str, AnnotationComplex]]
     root_path: str  # Pasta raiz do dataset
 
@@ -1589,7 +1589,7 @@ def get_reid_data(video_id: str, root_path: Optional[str] = None):
         # Tenta variantes
         tracking_path = root / "jsons" / f"{clean_id}_pose_tracking.json"
 
-    # 2. Tenta pose normal
+    # 2. Tenta pose da CLASSE1
     keypoints_path = root / "jsons" / f"{clean_id}.json"
     if not keypoints_path.exists():
         keypoints_path = root / "jsons" / f"{clean_id}_pose.json"
@@ -2267,15 +2267,15 @@ def save_annotations(req: AnnotationRequest):
 class BatchAnnotationRequest(BaseModel):
     """Request para salvar todos vídeos pendentes com classe default."""
     root_path: str
-    default_class: str = "NORMAL"
+    default_class: str = cm.CLASSE1
 
 
 @app.post("/annotate/save-all-pending")
 def save_all_pending(req: BatchAnnotationRequest):
     """Salva todos os vídeos pendentes com a classe default.
     
-    Útil para datasets com muitos vídeos normais: anota-se apenas os de furto,
-    depois usa este endpoint para salvar todos os restantes como NORMAL.
+    Útil para datasets com muitos vídeos normais: anota-se apenas os de CLASSE2,
+    depois usa este endpoint para salvar todos os restantes como CLASSE1.
     """
     root = Path(req.root_path).resolve()
     
@@ -2317,7 +2317,6 @@ def save_all_pending(req: BatchAnnotationRequest):
     import re
 
     for src_file in source_files:
-        # Se a fonte é vídeo, o stem é o nome correto (ex: cena-normal-00000)
         # Se a fonte é json (fallback), tentamos limpar
         if is_video_source:
              video_stem = src_file.stem

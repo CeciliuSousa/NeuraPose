@@ -23,6 +23,8 @@ import { StatusMessage } from '../components/ui/StatusMessage';
 import { TerminalModal } from '../components/ui/TerminalModal';
 import { PathSelector } from '../components/ui/PathSelector';
 
+import { CLASSE1, CLASSE2 } from '../constants';
+
 interface VideoItem {
     video_id: string;
     video_name: string;
@@ -63,8 +65,8 @@ export default function AnotacaoPage() {
     // Config
     const [inputPath, setInputPath] = useState('');
     const [roots, setRoots] = useState<Record<string, string>>({});
-    const [classe1, setClasse1] = useState('NORMAL');
-    const [classe2, setClasse2] = useState('FURTO');
+    const [classe1, setClasse1] = useState(CLASSE1);
+    const [classe2, setClasse2] = useState(CLASSE2);
 
     // Filtro e UI
     const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'annotated'>('all');
@@ -105,8 +107,8 @@ export default function AnotacaoPage() {
                 setInputPath(''); // Inicia vazio
 
                 if (data.classes) {
-                    setClasse1(data.classes.classe1 || 'NORMAL');
-                    setClasse2(data.classes.classe2 || 'FURTO');
+                    setClasse1(data.classes.classe1 || CLASSE1);
+                    setClasse2(data.classes.classe2 || CLASSE2);
                 }
             }
         });
@@ -245,13 +247,13 @@ export default function AnotacaoPage() {
 
         // Validação Modo Temporal
         if (temporalMode) {
-            // Verifica se tem furto marcado sem intervalo
-            const hasOpenFurto = Object.entries(annotations).some(([id, cls]) => {
+            // Verifica se tem classe2 marcado sem intervalo
+            const hasOpenclasse2 = Object.entries(annotations).some(([id, cls]) => {
                 const intervals = idIntervals[id] || [];
                 return cls === classe2 && intervals.length === 0;
             });
 
-            if (hasOpenFurto) {
+            if (hasOpenclasse2) {
                 if (!confirm(`Existem IDs marcados como ${classe2} sem intervalos de tempo definidos. Eles serão salvos como "Vídeo Inteiro". Deseja continuar?`)) {
                     return;
                 }

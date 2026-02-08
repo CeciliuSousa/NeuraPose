@@ -54,9 +54,9 @@ def calcular_pesos(labels_json_path):
         return classe1_count, classe2_count, [1.0, 1.0]
 
     total = classe1_count + classe2_count
-    weight_furto = total / (2 * classe2_count)
-    weight_normal = total / (2 * classe1_count)
-    return classe1_count, classe2_count, [weight_furto, weight_normal]
+    weight_classe2 = total / (2 * classe2_count)
+    weight_classe1 = total / (2 * classe1_count)
+    return classe1_count, classe2_count, [weight_classe2, weight_classe1]
 
 
 def main():

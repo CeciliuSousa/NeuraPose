@@ -6,7 +6,7 @@
 Split dataset por IDs (não por vídeos).
 
 Garante:
-1. Treino balanceado 1:1 por ID (mesma quantidade NORMAL e FURTO)
+1. Treino balanceado 1:1 por ID (mesma quantidade CLASSE1: "NORMAL" e CLASSE2: "ANOMALIA")
 2. Sem duplicação - cada ID aparece em exatamente 1 destino
 3. Sem deleção - dados originais intactos
 4. Labels consistentes com JSONs
@@ -21,9 +21,9 @@ import neurapose_backend.config_master as cm
 
 
 def extract_class_from_label(label_info):
-    """Extrai classe de label simples ('FURTO') ou complexo ({'classe': 'FURTO', ...})."""
+    """Extrai classe de label simples CLASSE2 ou complexo ({'classe': 'ANOMALIA', ...})."""
     if isinstance(label_info, dict):
-        return label_info.get("classe", "NORMAL").lower()
+        return label_info.get("classe", cm.CLASSE1).lower()
     return str(label_info).lower()
 
 
@@ -49,7 +49,7 @@ def flatten_labels(labels: dict, class1: str, class2: str):
 def find_file(base_dir: Path, video_name: str, exts):
     """Procura arquivo por nome com várias extensões."""
     patterns = {video_name, video_name.replace("_", ""),
-                video_name.replace("normal", "normal_").replace("furto", "furto_"),
+                video_name.replace(cm.CLASSE1.lower(), f"{cm.CLASSE1.lower()}_").replace(cm.CLASSE2.lower(), f"{cm.CLASSE2.lower()}_"),
                 video_name.replace("_pose", ""),     # Handle Dirty Key -> Clean File
                 video_name + "_pose"                 # Handle Clean Key -> Dirty File
                }
@@ -121,8 +121,8 @@ def run_split(root_path: Path, dataset_name: str, output_root: Path,
     for d in [train_dados, train_anotacoes, test_videos_dir, test_anotacoes]:
         d.mkdir(parents=True, exist_ok=True)
 
-    class1 = cm.CLASSE1.lower()  # normal
-    class2 = cm.CLASSE2.lower()  # furto
+    class1 = cm.CLASSE1.lower()
+    class2 = cm.CLASSE2.lower()
 
     # ============================================================
     # PASSO 1: Agrupar IDs por Vídeo
@@ -152,12 +152,12 @@ def run_split(root_path: Path, dataset_name: str, output_root: Path,
     # ============================================================
     # PASSO 2: Seleção de VÍDEOS para Treino
     # ============================================================
-    _log("[2/6] Selecionando VÍDEOS para treino (Alvo: ~85% Furto)...")
+    _log("[2/6] Selecionando VÍDEOS para treino (Alvo: ~85% ANOMALIA)...")
     
-    # Alvo de IDs de Furto no treino
+    # Alvo de IDs de ANOMALIA no treino
     target_train_class2 = int(total_class2_global * train_ratio)
     
-    # Separa vídeos que tem furto dos que só tem normal
+    # Separa vídeos que tem "ANOMALIA" dos que só tem "NORMAL"
     videos_with_class2 = [v for v, dados in videos_map.items() if len(dados["class2"]) > 0]
     videos_only_class1 = [v for v, dados in videos_map.items() if len(dados["class2"]) == 0]
     
@@ -169,7 +169,7 @@ def run_split(root_path: Path, dataset_name: str, output_root: Path,
     train_videos = []
     current_train_class2 = 0
     
-    # Greedy: Adiciona vídeos com furto até atingir meta
+    # Greedy: Adiciona vídeos com ANOMALIA até atingir meta
     for v in videos_with_class2:
         if current_train_class2 < target_train_class2:
             train_videos.append(v)
@@ -179,16 +179,16 @@ def run_split(root_path: Path, dataset_name: str, output_root: Path,
             pass
             
     # [FIX 353 vs 261] Supplementation Strategy
-    # Se os vídeos de furto não tiverem normais suficientes para 1:1,
+    # Se os vídeos de ANOMALIA não tiverem normais suficientes para 1:1,
     # precisamos pegar vídeos EXCLUSIVAMENTE normais para completar.
     
     # Recalcula quantas classes temos nos vídeos selecionados
     current_train_class1 = sum(len(videos_map[v]["class1"]) for v in train_videos)
     
-    # Se faltar Normals para atingir a quantidade de Furtos (1:1)
+    # Se faltar CLASSE1 para atingir a quantidade de ANOMALIAs (1:1)
     if current_train_class1 < current_train_class2:
         needed = current_train_class2 - current_train_class1
-        _log(f"[BALANCE] Faltam {needed} IDs Normais para parear. Buscando em vídeos sem furto...")
+        _log(f"[BALANCE] Faltam {needed} IDs Normais para parear. Buscando em vídeos sem ANOMALIA...")
         
         for v in videos_only_class1:
             if current_train_class1 >= current_train_class2:
@@ -204,7 +204,7 @@ def run_split(root_path: Path, dataset_name: str, output_root: Path,
     
     _log(f"[SPLIT] Vídeos Treino: {len(train_videos)}")
     _log(f"[SPLIT] Vídeos Teste: {len(test_videos)}")
-    _log(f"[SPLIT] IDs Furto no Treino: {current_train_class2}/{total_class2_global} ({current_train_class2/total_class2_global*100:.1f}%)")
+    _log(f"[SPLIT] IDs {cm.POSITIVE_CLASS_ID} no Treino: {current_train_class2}/{total_class2_global} ({current_train_class2/total_class2_global*100:.1f}%)")
 
     # ============================================================
     # PASSO 3: Balanceamento 1:1 INTERNO no Treino
@@ -221,10 +221,10 @@ def run_split(root_path: Path, dataset_name: str, output_root: Path,
         for pid in videos_map[v]["class2"]:
             train_pool_class2.append((v, pid))
             
-    # O numero de furtos no treino é o limitante
+    # O numero de ANOMALIA no treino é o limitante
     limit = len(train_pool_class2)
     
-    # Seleciona Normals randomicamente para igualar Furtos
+    # Seleciona CLASSE1 randomicamente para igualar ANOMALIA
     if len(train_pool_class1) > limit:
         np.random.shuffle(train_pool_class1)
         selected_train_class1 = train_pool_class1[:limit]

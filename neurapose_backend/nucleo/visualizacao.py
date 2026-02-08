@@ -76,9 +76,9 @@ def desenhar_info_predicao_padrao(frame, bbox, pid, conf, pred_name=None, classe
     x1, y1, x2, y2 = map(int, bbox)
     
     # ============================================================
-    # CORES DINÂMICAS: Verde para NORMAL, Vermelho para CLASSE2
+    # CORES DINÂMICAS: Verde para CLASSE1, Vermelho para CLASSE2
     # ============================================================
-    if classe_id == 1:    # CLASSE2 (ex: FURTO)
+    if classe_id == 1:    # CLASSE2 (ex: ANOMALIA)
         cor_bbox = (0, 0, 255)       # vermelho
         cor_label = (0, 0, 255)      # vermelho
     else:                # CLASSE1 (ex: NORMAL)
@@ -93,7 +93,7 @@ def desenhar_info_predicao_padrao(frame, bbox, pid, conf, pred_name=None, classe
     label_linha1 = f"ID: {pid} | Pessoa: {conf:.2f}"
 
     # ============================================================
-    # LINHA 2: Classe: NORMAL/FURTO (apenas se existir pred_name)
+    # LINHA 2: Classe: NORMAL/ANOMALIA (apenas se existir pred_name)
     # ============================================================
     
     # Desenha fundo da linha 1 (branco)

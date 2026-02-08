@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useMemo } from 'react';
 import { drawSkeleton } from './SkeletonUtils';
 import { RotateCcw, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Play, Pause } from 'lucide-react';
+import { CLASSE1, CLASSE2 } from '../constants';
 
 interface AnnotationPlayerProps {
     src: string;
@@ -17,8 +18,8 @@ export function AnnotationPlayer({
     src,
     frameData,
     annotations,
-    classe1 = 'NORMAL',
-    classe2 = 'FURTO',
+    classe1 = CLASSE1,
+    classe2 = CLASSE2,
     fps = 30,
     playbackRate = 0.5,
     onFrameChange

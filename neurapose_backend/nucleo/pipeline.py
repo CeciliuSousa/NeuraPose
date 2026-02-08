@@ -91,7 +91,6 @@ class PipelineParalelo:
                 if self.error:
                     break
                     
-                # Yield normal: (idx, batch_results)
                 # Envia para consumidor
                 self.queue.put(item)
                 final_frame_idx = item[0] + len(item[1])

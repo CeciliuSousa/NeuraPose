@@ -67,9 +67,15 @@ def renomear_videos(input_dir_name, classe1, classe2):
     print(f"Log gerado em: {log_file}")
 
 if __name__ == "__main__":
+    import sys
+    ROOT = Path(__file__).resolve().parent.parent.parent
+    if str(ROOT) not in sys.path: sys.path.append(str(ROOT))
+    
+    import neurapose_backend.config_master as cm
+
     # Configuração das classes conforme solicitado
-    CLASSE1 = "furto"
-    CLASSE2 = "normal"
+    CLASSE1 = cm.CLASSE2.lower() # CLASSE2
+    CLASSE2 = cm.CLASSE1.lower() # CLASSE1
     
     # Nome da pasta de entrada
     PASTA_ENTRADA = "labex-furtos-2026"

@@ -258,12 +258,12 @@ def main():
     print(Fore.WHITE + f"   TREINAMENTO    : {total_train} (Aprox. {total_train/(total_train+total_val or 1)*100:.0f}%)")
     print(Fore.WHITE + f"   VALIDAÇÃO      : {total_val} (Aprox. {total_val/(total_train+total_val or 1)*100:.0f}%)")
     print(Fore.WHITE + "-"*40)
-    print(Fore.YELLOW + f"[TREINO] NORMAL   : {n0}")
-    print(Fore.YELLOW + f"[TREINO] FURTO    : {n1}")
+    print(Fore.YELLOW + f"[TREINO] {cm.CLASSE1}   : {n0}")
+    print(Fore.YELLOW + f"[TREINO] {cm.CLASSE2}    : {n1}")
     print(Fore.YELLOW + f"[TREINO] RAZÃO    : {ratio:.2f}x")
     print(Fore.WHITE + "-"*40)
-    print(Fore.CYAN + f"[VALID]  NORMAL   : {n0_val}")
-    print(Fore.CYAN + f"[VALID]  FURTO    : {n1_val}")
+    print(Fore.CYAN + f"[VALID]  {cm.CLASSE1}   : {n0_val}")
+    print(Fore.CYAN + f"[VALID]  {cm.CLASSE2}    : {n1_val}")
     print(Fore.CYAN + f"[VALID]  TOTAL    : {total_val}\n")
 
     # Sampler ponderado se desbalanceado

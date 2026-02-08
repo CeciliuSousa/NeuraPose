@@ -194,7 +194,7 @@ export default function ProcessamentoPage() {
         <div className="space-y-6">
             <PageHeader
                 title="Processamento de Vídeo"
-                description="Analise vídeos para detectar furtos e anomalias de comportamento em tempo real."
+                description="Analise vídeos para detectar ANOMALIAS e COMPORTAMENTOS SUSPEITOS em tempo real."
                 icon={Video}
             />
 

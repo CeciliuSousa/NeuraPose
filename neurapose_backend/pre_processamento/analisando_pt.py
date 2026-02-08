@@ -151,13 +151,13 @@ def listar_amostras(data):
     print(f"\n📊 Quantidade de amostras: {len(data)}")
 
 def detalhar_amostras(data):
-    furto_count = sum(1 for keypoints_tensor, label, *rest in data if label == 1)
+    classe2_count = sum(1 for keypoints_tensor, label, *rest in data if label == 1)
     
-    normal_count = len(data) - furto_count
+    classe1_count = len(data) - classe2_count
     print(f"\n📊 Totais Gerais:")
     print(f" - Total:  {len(data)}")
-    print(f" - {primeiraClasse}: {normal_count}")
-    print(f" - {segundaClasse}:  {furto_count}")
+    print(f" - {primeiraClasse}: {classe1_count}")
+    print(f" - {segundaClasse}:  {classe2_count}")
 
 # =======================================================================
 # EXECUÇÃO PRINCIPAL

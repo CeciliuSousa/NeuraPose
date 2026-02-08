@@ -8,8 +8,8 @@ Entrada: JSONs do pre-processamento + labels.json
 Saida: data.pt com tensores de sequencias normalizadas
 
 [NOVO] Suporta Anotação Temporal:
-- Se label for String ("FURTO"): Pega sequencia inteira.
-- Se label for Dict ({"classe": "FURTO", "intervals": [[10, 50], [90, 120]]}): 
+- Se label for String ("{cm.CLASSE2}"): Pega sequencia inteira.
+- Se label for Dict ({{"classe": "{cm.CLASSE2}", "intervals": [[10, 50], [90, 120]]}}): 
   Gera MÚLTIPLAS sequencias (samples), uma para cada intervalo.
 """
 
@@ -82,8 +82,8 @@ def safe_load_json(path: Path):
 
 def find_json(base_dir: Path, stem: str):
     """Procura JSON correspondente ao video."""
-    variants = {stem, stem.replace("_", ""), stem.replace("furto", "furto_"),
-                stem.replace("normal", "normal_"), stem.replace("__", "_")}
+    variants = {stem, stem.replace("_", ""), stem.replace(cm.CLASSE2.lower(), f"{cm.CLASSE2.lower()}_"),
+                stem.replace(cm.CLASSE1.lower(), f"{cm.CLASSE1.lower()}_"), stem.replace("__", "_")}
     for v in variants:
         p = base_dir / f"{v}.json"
         if p.exists():
@@ -195,7 +195,7 @@ def main():
     processed_videos = 0
     total_samples = 0
     
-    positive_class = cm.CLASS_NAMES[1].lower()  # ex: "furto"
+    positive_class = cm.CLASS_NAMES[1].lower()  # ex: "anomalia"
 
     for video_stem, id_map in sorted(labels.items()):
         processed_videos += 1
@@ -217,18 +217,13 @@ def main():
             # Normaliza Label (String vs Dict)
             if isinstance(label_info, dict):
                 # Anotação Complexa (Temporal)
-                classe = label_info.get("classe", "NORMAL")
+                classe = label_info.get("classe", cm.CLASSE1)
                 intervals = label_info.get("intervals", [])
             else:
                 # Anotação Simples (Legado)
                 classe = str(label_info)
                 intervals = []
 
-            # Se for normal ou furto sem intervalo, processa como video inteiro (interval=None)
-            # MAS: Se for FURTO e tiver intervalos, gera 1 sample por intervalo.
-            # Se for NORMAL, geralmente é o video todo, exceto se eu quiser normalizar trechos? 
-            # R: Para normal, pega tudo (None). Para furto complexo, pega intervalos.
-            
             is_positive = (classe.lower() == positive_class)
             
             # Lista de tarefas para extração: [(intervalo, sufixo_meta)]

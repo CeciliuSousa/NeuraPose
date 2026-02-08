@@ -7,6 +7,12 @@ import re
 from colorama import Fore, init
 from datetime import datetime
 
+import sys
+from pathlib import Path
+ROOT = Path(__file__).resolve().parent.parent.parent
+if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
+import neurapose_backend.config_master as cm
+
 init(autoreset=True)
 
 BASE_DIR = "neurapose_backend/modelos-temporais"
@@ -27,9 +33,12 @@ def extract_metrics_from_txt(file_path):
         loss_match = re.search(r"Loss[^:\d]*[: ]+([\d\.]+)", text)
         epoch_match = re.search(r"Melhor epoca: (\d+)", text)
         
+        c1 = cm.CLASSE1.lower()
+        c2 = cm.CLASSE2.lower()
+
         # tenta extrair matriz de confusão (formato textual)
         matrix_match = re.search(
-            r"Matriz de Confusão.*?normal.*?(\d+).*?(\d+).*?furto.*?(\d+).*?(\d+)",
+            rf"Matriz de Confusão.*?{c1}.*?(\d+).*?(\d+).*?{c2}.*?(\d+).*?(\d+)",
             text,
             flags=re.S | re.I
         )
@@ -42,8 +51,8 @@ def extract_metrics_from_txt(file_path):
             metrics["Loss"] = float(loss_match.group(1))
         if matrix_match:
             metrics["conf_matrix"] = {
-                "normal": [int(matrix_match.group(1)), int(matrix_match.group(2))],
-                "furto": [int(matrix_match.group(3)), int(matrix_match.group(4))]
+                c1: [int(matrix_match.group(1)), int(matrix_match.group(2))],
+                c2: [int(matrix_match.group(3)), int(matrix_match.group(4))]
             }
 
         # Se Loss for None, tenta buscar no JSON de histórico usando a melhor época
@@ -161,8 +170,8 @@ def main():
 
             if conf:
                 out.write("\n  --- Matriz de Confusão (Validação) ---\n")
-                out.write(f"        normal | TP={conf['normal'][0]}  FN={conf['normal'][1]}\n")
-                out.write(f"         furto | FP={conf['furto'][0]}  TN={conf['furto'][1]}\n")
+                out.write(f"        {cm.CLASSE1.lower()} | TP={conf[cm.CLASSE1.lower()][0]}  FN={conf[cm.CLASSE1.lower()][1]}\n")
+                out.write(f"         {cm.CLASSE2.lower()} | FP={conf[cm.CLASSE2.lower()][0]}  TN={conf[cm.CLASSE2.lower()][1]}\n")
 
             # out.write(f"\n  Relatório: {m['report']}\n")
 
@@ -187,8 +196,8 @@ def main():
               f"Loss: {colorize_metric(loss, is_loss=True)}")
 
         if conf:
-            print(f"      {Fore.MAGENTA}Matriz Confusão -> normal:[{conf['normal'][0]},{conf['normal'][1]}]  "
-                  f"furto:[{conf['furto'][0]},{conf['furto'][1]}]")
+            print(f"      {Fore.MAGENTA}Matriz Confusão -> {cm.CLASSE1.lower()}:[{conf[cm.CLASSE1.lower()][0]},{conf[cm.CLASSE1.lower()][1]}]  "
+                  f"{cm.CLASSE2.lower()}:[{conf[cm.CLASSE2.lower()][0]},{conf[cm.CLASSE2.lower()][1]}]")
 
     print(Fore.GREEN + f"\n📊 Ranking completo salvo em: {OUT_PATH}")
 

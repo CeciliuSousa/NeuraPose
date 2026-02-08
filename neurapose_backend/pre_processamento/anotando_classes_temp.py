@@ -171,8 +171,8 @@ def desenhar_status_com_fundo(frame, status_data, window_w):
     status_lines = [
         f"Frame: {status_data['frame']}/{status_data['total_frames']} [{status_data['mode']}]",
         f"ID Foco: {status_data['target_id']}",
-        f"Inicio Furto: {status_data['start_frame'] if status_data['start_frame'] is not None else 'N/A'}",
-        f"Fim Furto: {status_data['end_frame'] if status_data['end_frame'] is not None else 'N/A'}",
+        f"Inicio {cm.CLASSE2}: {status_data['start_frame'] if status_data['start_frame'] is not None else 'N/A'}",
+        f"Fim {cm.CLASSE2}: {status_data['end_frame'] if status_data['end_frame'] is not None else 'N/A'}",
         f"Comandos: (ESPAÇO) Play/Pause | (Q) CONFIRMAR | (R) Resetar"
     ]
     
@@ -231,7 +231,7 @@ def mark_action_frames(video_path: Path, video_size, total_frames: int, target_i
     end_frame = None
     playing = False # Começa PAUSADO
 
-    window_title = f"ANOTAR FURTO - ID: {target_id} - {video_path.stem}"
+    window_title = f"ANOTAR {cm.CLASSE2} - ID: {target_id} - {video_path.stem}"
     
     cv2.namedWindow(window_title, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_title, target_w, target_h)
@@ -353,9 +353,9 @@ def main():
     parser.add_argument("--min-frames", type=int, default=cm.MIN_FRAMES_PER_ID,
                         help=f"Minimo de frames por ID (default: {cm.MIN_FRAMES_PER_ID})")
     parser.add_argument("--positive-class", default=cm.CLASSE2.lower(),
-                        help="Classe positiva (default: furto)")
+                        help=f"Classe positiva (default: {cm.CLASSE2.lower()})")
     parser.add_argument("--negative-class", default=cm.CLASSE1.lower(),
-                        help="Classe negativa (default: normal)")
+                        help=f"Classe negativa (default: {cm.CLASSE1.lower()})")
 
     parser.add_argument("--labels-out", default=str(cm.PROCESSING_ANNOTATIONS_DIR / "labels.json"),
                         help=f"Caminho para labels de saida (default: {cm.PROCESSING_ANNOTATIONS_DIR / 'labels.json'})")
@@ -450,8 +450,8 @@ def main():
         removed_ids = set(candidatos.keys()) - present_ids
         exibir_video_com_bboxes(vpath, frames_index, present_ids=present_ids, removed_ids=removed_ids, title=f"Review - {stem}")
 
-        furto_ids_input = input(Fore.MAGENTA + f"\nIDs que são '{args.positive_class}' (entre {sorted(kept_ids)}): ").strip()
-        furto_ids = [int(x) for x in furto_ids_input.split(",") if x.strip().isdigit() and int(x) in kept_ids]
+        classe2_ids_input = input(Fore.MAGENTA + f"\nIDs que são '{args.positive_class}' (entre {sorted(kept_ids)}): ").strip()
+        classe2_ids = [int(x) for x in classe2_ids_input.split(",") if x.strip().isdigit() and int(x) in kept_ids]
 
 
         # PASSO 2: MARCAÇÃO DE TEMPO POR ID
@@ -461,8 +461,8 @@ def main():
             "acoes": []
         }
         
-        # 2a. Anotar IDs de FURTO
-        for target_id in furto_ids:
+        # 2a. Anotar IDs de ANOMALIAS E COMPORTAMENTOS SUSPEITOS
+        for target_id in classe2_ids:
             # Chama a função de anotação com o tamanho correto do vídeo
             start, end = mark_action_frames(vpath, video_size, total_frames, target_id)
             
@@ -477,9 +477,9 @@ def main():
                  print(Fore.RED + f"❌ Marcação de tempo para ID {target_id} foi ignorada ou incompleta.")
         
         # 2b. Anotar IDs NORMAIS (FUNDO)
-        normal_ids = [pid for pid in kept_ids if pid not in furto_ids]
+        classe1_ids = [pid for pid in kept_ids if pid not in classe2_ids]
         
-        for target_id in normal_ids:
+        for target_id in classe1_ids:
              video_anotacoes['acoes'].append({
                 "id": target_id,
                 "classe": args.negative_class,
@@ -488,8 +488,8 @@ def main():
             })
 
         # Finalização e Salvamento
-        if not furto_ids and normal_ids:
-            video_anotacoes['status'] = 'COMPLETO (SOMENTE NORMAL)'
+        if not classe2_ids and classe1_ids:
+            video_anotacoes['status'] = 'COMPLETO'
         elif video_anotacoes['acoes']:
              video_anotacoes['status'] = 'COMPLETO'
         else:
