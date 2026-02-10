@@ -22,9 +22,11 @@ YOLO_SKIP_FRAME_INTERVAL = 1        # Intervalo de frames para inferencia YOLO (
 YOLO_BATCH_SIZE = 512
 RTMPOSE_BATCH_SIZE = 256
 
-try:
-    import onnxruntime as ort
-    # -- OTIMIZAÇÃO & SEGURANÇA (SAFE MODE) --
+# try:
+#     import onnxruntime as ort
+# except ImportError:
+#     ort = None
+
 SAFE_MODE = True                        # Ativa limitadores de CPU/GPU para evitar superaquecimento
 MAX_CPU_WORKERS = 2                     # Limite de threads/processos (Safe Mode)
 LOOP_SLEEP_INTERVAL = 0.01              # Sleep em loops infinitos (s) para aliviar CPU
@@ -104,7 +106,7 @@ LSTM_NUM_HEADS = 8
 LSTM_KERNEL_SIZE = 5
 
 # -- TESTE --
-CLASSE2_THRESHOLD = 0.75
+CLASSE2_THRESHOLD = 0.55
 
 # -- PATHS --
 

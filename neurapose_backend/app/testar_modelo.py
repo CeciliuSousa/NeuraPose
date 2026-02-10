@@ -5,8 +5,7 @@ import json
 import time
 from pathlib import Path
 from colorama import Fore, init as colorama_init
-from sklearn.metrics import (accuracy_score, f1_score, precision_score, recall_score,
-                             confusion_matrix, balanced_accuracy_score, matthews_corrcoef)
+from sklearn.metrics import (accuracy_score, f1_score, confusion_matrix)
 import warnings
 warnings.filterwarnings("ignore")
 

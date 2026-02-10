@@ -34,11 +34,6 @@ if hasattr(cm, "RTMPOSE_INPUT_SIZE"):
         cm.SIMCC_W = cm.RTMPOSE_INPUT_SIZE[0]
         cm.SIMCC_H = cm.RTMPOSE_INPUT_SIZE[1]
 
-# Importa tudo do cm atualizado para o namespace local
-# Isso garante que quem importa de config.py pegue os valores atualizados
-# Importa tudo do cm atualizado para o namespace local
-# Isso garante que quem importa de config.py pegue os valores atualizados
-# Recarregamos vars() do cm para o globals() local
 cm_vars = {k: v for k, v in vars(cm).items() if not k.startswith("__")}
 globals().update(cm_vars)
 

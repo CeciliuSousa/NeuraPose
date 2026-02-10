@@ -49,7 +49,10 @@ class ExtratorPoseRTMPose:
             providers = ['CPUExecutionProvider']
             
         try:
-            sess = ort.InferenceSession(self.model_path, providers=providers)
+            sess_options = ort.SessionOptions()
+            sess_options.log_severity_level = 3
+            
+            sess = ort.InferenceSession(self.model_path, providers=providers, sess_options=sess_options)
             input_name = sess.get_inputs()[0].name
             return sess, input_name
         except Exception as e:

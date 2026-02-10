@@ -37,9 +37,8 @@ from neurapose_backend.otimizador.cuda.gpu_utils import gpu_manager
 from neurapose_backend.otimizador.cpu import core as cpu_opt
 from neurapose_backend.otimizador.ram import memory as ram_opt
 from neurapose_backend.rtmpose.extracao_pose_rtmpose import ExtratorPoseRTMPose
-from neurapose_backend.nucleo.visualizacao import desenhar_esqueleto_unificado, color_for_id
-# from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
-from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomDeepOCSORT, save_temp_tracker_yaml
+from neurapose_backend.nucleo.visualizacao import desenhar_esqueleto_unificado
+from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomDeepOCSORT
 from neurapose_backend.temporal.inferencia_temporal import ClassificadorAcao
 from neurapose_backend.nucleo.video_utils import normalizar_video
 
@@ -317,13 +316,13 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
                 # Se por algum motivo o ID não voltar (ex: buffer < 1 frame), assume 0.0
                 prob = probs_map.get(pid, 0.0)
                 
-                rec['theft_prob'] = round(prob, 2)
-                rec['is_theft'] = prob >= cm.CLASSE2_THRESHOLD
+                rec['anomalia_prob'] = round(prob, 2)
+                rec['anomalia'] = prob >= cm.CLASSE2_THRESHOLD
                 
                 if pid not in pred_stats: pred_stats[pid] = 0.0
                 pred_stats[pid] = max(pred_stats[pid], prob)
                 
-                if rec['is_theft']:
+                if rec['anomalia']:
                     id_final_preds[pid] = 1
                 elif pid not in id_final_preds:
                     id_final_preds[pid] = 0
@@ -341,10 +340,10 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
                 bbox = rec["bbox"]
                 kps = np.array(rec["keypoints"])
                 conf = rec["confidence"]
-                prob = rec.get(f"{cm.CLASSE2.lower()}_prob", 0.0)
-                is_theft = rec.get(f"is_{cm.CLASSE2.lower()}", False)
+                prob = rec.get("anomalia_prob", 0.0)
+                anomalia = rec.get("anomalia", False)
                 
-                base_color = (0, 0, 255) if is_theft else (0, 255, 0)
+                base_color = (0, 0, 255) if anomalia else (0, 255, 0)
                 desenhar_esqueleto_unificado(viz_frame, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
                 
                 color = base_color
@@ -352,8 +351,8 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
                     x1, y1, x2, y2 = map(int, bbox)
                     cv2.rectangle(viz_frame, (x1, y1), (x2, y2), color, 2)
                     
-                    display_prob = prob if is_theft else (1.0 - prob)
-                    class_name = cm.CLASSE2 if is_theft else cm.CLASSE1
+                    display_prob = prob if anomalia else (1.0 - prob)
+                    class_name = cm.CLASSE2 if anomalia else cm.CLASSE1
                     
                     line1_text = f"ID: {pid} | Conf: {conf:.2f}"
                     line2_text = f"Classe: {class_name} | Conf: {display_prob:.1%}"
@@ -460,9 +459,9 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
         pid = r["id_persistente"]
         ids_encontrados.add(pid)
         if f_idx not in tracking_by_frame: tracking_by_frame[f_idx] = []
-        is_theft = r.get("is_theft", False)
-        classe_id = 1 if is_theft else 0
-        classe_nome = cm.CLASSE2 if is_theft else cm.CLASSE1
+        anomalia = r.get("anomalia", False)
+        classe_id = 1 if anomalia else 0
+        classe_nome = cm.CLASSE2 if anomalia else cm.CLASSE1
         track_obj = {
             tracker_key: pid,
             "id_persistente": pid,

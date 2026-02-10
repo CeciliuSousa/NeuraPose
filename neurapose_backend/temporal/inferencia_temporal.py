@@ -13,6 +13,28 @@ class ClassificadorAcao:
         self.mu = mu.to(self.device) if mu is not None else None
         self.sigma = sigma.to(self.device) if sigma is not None else None
         
+        # [RESOLUÇÃO] Estima escala do treino baseada no MU (Média das coordenadas X e Y)
+        # Se max(mu_x) > 1.0, assumimos coordenadas em pixels.
+        self.train_mean_x = 1.0
+        self.fix_resolution = False
+        
+        if self.mu is not None:
+            # mu tem shape (1, 1, 34) ou (1, 34) dependendo
+            # Assumindo flatten (X...X, Y...Y) com 17 joints
+            # Indices 0..16 = X, 17..33 = Y
+            try:
+                flat_mu = self.mu.flatten()
+                if len(flat_mu) >= 17:
+                    # Pega a média dos primeiros 17 valores (X)
+                    self.train_mean_x = flat_mu[:17].mean().item()
+                    
+                    # Heurística: Se média X > 100, é pixel.
+                    if self.train_mean_x > 100:
+                        self.fix_resolution = True
+                        # print(Fore.BLUE + f"[TCN] Escala de Treino Detectada: X_mean={self.train_mean_x:.1f}")
+            except Exception as e:
+                print(f"[AVISO] Falha ao estimar escala de treino: {e}")
+
         if model_instance is not None:
              # print(f"[CEREBRO] Usando modelo pré-carregado em memória.")
              self.model = model_instance
@@ -83,6 +105,18 @@ class ClassificadorAcao:
         # 3. Inferência
         tensor_in = torch.tensor(seq).unsqueeze(0).to(self.device) # (1, T, F)
         
+        # [RESOLUÇÃO] Aplica escala se necessário
+        if self.fix_resolution:
+            # Estima escala do input atual
+            input_x = tensor_in[:, :, :17]
+            input_mean_x = input_x[input_x > 0].float().mean() # Ignora zeros
+            
+            if not torch.isnan(input_mean_x) and input_mean_x > 10: # Se for válido
+                 ratio_x = self.train_mean_x / input_mean_x.item()
+                 # Se a diferença for significativa (>20%), aplica correção
+                 if ratio_x < 0.8 or ratio_x > 1.2:
+                      tensor_in = tensor_in * ratio_x
+        
         # Aplica normalização se disponível
         if self.mu is not None and self.sigma is not None:
             tensor_in = (tensor_in - self.mu) / self.sigma
@@ -106,7 +140,6 @@ class ClassificadorAcao:
         """
         if self.model is None or not track_ids: return {}
         
-        # 1. Pipeline de Dados em Batch (CPU)
         valid_seqs = []
         valid_ids = []
         
@@ -117,7 +150,6 @@ class ClassificadorAcao:
             buffer_len = len(self.buffers[tid])
             if buffer_len < 1: continue 
 
-            # Padding Logic (Mesma do predict_single)
             if buffer_len < self.window_size:
                 missing = self.window_size - buffer_len
                 first_frame = self.buffers[tid][0]
@@ -131,25 +163,36 @@ class ClassificadorAcao:
 
         if not valid_seqs: return {}
 
-        # 2. Construção do Tensor Batch (N, T, F)
         tensor_batch = torch.tensor(np.array(valid_seqs)).to(self.device)
         
+        # [RESOLUÇÃO] Aplica escala dinâmica se detectado descasamento
+        if self.fix_resolution:
+             # Calcula média X do batch atual (considerando apenas > 0 para ignorar padding/miss)
+             batch_x = tensor_batch[:, :, :17]
+             input_mean_x = batch_x[batch_x > 1].float().mean()
+             
+             if not torch.isnan(input_mean_x) and input_mean_x > 10:
+                  ratio_x = self.train_mean_x / input_mean_x.item()
+                  
+                  # Aplica se desvio > 20%
+                  if ratio_x < 0.8 or ratio_x > 1.2:
+                       # Multiplica todo o tensor pelo ratio (assumindo escala uniforme X/Y)
+                       # print(f"[DEBUG] Scaling input by {ratio_x:.2f} (Train={self.train_mean_x:.0f}, Input={input_mean_x:.0f})")
+                       tensor_batch = tensor_batch * ratio_x
+
         # Normalização Batch
         if self.mu is not None and self.sigma is not None:
              tensor_batch = (tensor_batch - self.mu) / self.sigma
 
-        # 3. Inferência Única
         probs_map = {}
         with torch.no_grad():
             output = self.model(tensor_batch)
             
-            # Processa saídas
             if output.shape[-1] >= 2:
                 probs = torch.softmax(output, dim=1)[:, cm.POSITIVE_CLASS_ID].cpu().numpy()
             else:
                  probs = torch.sigmoid(output).flatten().cpu().numpy()
             
-            # Mapeia de volta para IDs
             for tid, p in zip(valid_ids, probs):
                 probs_map[tid] = float(p)
                 
