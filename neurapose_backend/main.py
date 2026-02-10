@@ -138,7 +138,7 @@ def startup_event():
     
     # Inicializa Otimizações GPU
     try:
-        from neurapose_backend.cuda.gpu_utils import gpu_manager
+        from neurapose_backend.otimizador.cuda.gpu_utils import gpu_manager
         gpu_manager.enable_cudnn_benchmarking()
         if cm.USE_FP16:
             gpu_manager.enable_mixed_precision()
@@ -152,8 +152,11 @@ def startup_event():
 def cleanup_on_exit():
     """Último recurso para garantir encerramento limpo."""
     hw_monitor.stop()
-    if state.is_running:
-        state.force_stop()
+    # Limpeza Otimizada
+    from neurapose_backend.otimizador.ram import memory as ram_opt
+    from neurapose_backend.otimizador.cuda import gpu_utils as gpu_opt
+    ram_opt.force_gc()
+    gpu_opt.clear_gpu_cache()
 
 @app.on_event("shutdown")
 def shutdown_event():
@@ -161,7 +164,12 @@ def shutdown_event():
     hw_monitor.stop()
     logger.info("Recebido sinal de desligamento. Forçando parada de tarefas...")
     state.force_stop()
-
+    
+    # Limpeza Otimizada
+    from neurapose_backend.otimizador.ram import memory as ram_opt
+    from neurapose_backend.otimizador.cuda import gpu_utils as gpu_opt
+    ram_opt.force_gc()
+    gpu_opt.clear_gpu_cache()
 
 # ==============================================================
 # CORS

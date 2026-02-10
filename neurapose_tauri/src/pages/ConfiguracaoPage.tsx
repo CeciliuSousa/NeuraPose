@@ -236,6 +236,13 @@ export default function ConfiguracaoPage() {
                 { key: "USE_NVENC", label: "NVENC (Decodificação GPU)", type: "boolean" },
                 { key: "NVENC_PRESET", label: "Preset NVENC", type: "select", options: ["p1", "p4", "p7"] },
                 { key: "USE_FP16", label: "Precisão FP16", type: "boolean" },
+                // OTIMIZAÇÃO & SEGURANÇA
+                { key: "SAFE_MODE", label: "Modo de Segurança (Safe Mode)", type: "boolean" },
+                { key: "MAX_CPU_WORKERS", label: "Máx. Threads CPU (Safe Mode)", type: "number" },
+                { key: "LOOP_SLEEP_INTERVAL", label: "Intervalo Sleep (s)", type: "number", step: 0.001 },
+                { key: "GC_COLLECT_INTERVAL", label: "Intervalo GC (Frames)", type: "number" },
+                { key: "MAX_VRAM_USAGE_RATIO", label: "Limite VRAM (0-1)", type: "number", step: 0.05 },
+                { key: "MEMORY_SAFETY_MARGIN_MB", label: "Margem Segurança VRAM (MB)", type: "number" },
             ]
         },
         {

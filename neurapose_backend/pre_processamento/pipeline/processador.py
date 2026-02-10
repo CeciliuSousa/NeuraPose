@@ -25,7 +25,9 @@ import torch
 os.environ["OPENCV_LOG_LEVEL"] = "OFF"
 
 import neurapose_backend.config_master as cm
-from neurapose_backend.cuda.gpu_utils import gpu_manager
+from neurapose_backend.otimizador.cuda.gpu_utils import gpu_manager, check_gpu_memory
+from neurapose_backend.otimizador.cpu import core as cpu_opt
+from neurapose_backend.otimizador.ram import memory as ram_opt
 from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomDeepOCSORT, save_temp_tracker_yaml
 from neurapose_backend.rtmpose.extracao_pose_rtmpose import ExtratorPoseRTMPose
 from neurapose_backend.nucleo.visualizacao import desenhar_esqueleto_unificado, color_for_id
@@ -249,6 +251,10 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
                 last_logged_percent = current_percent
                 print(f"\r[PROCESSAMENTO] Progresso: {current_percent}% ({frame_idx}/{total_frames})")
 
+            # SAFE MODE: Throttling & GC (Centralizado)
+            cpu_opt.throttle()
+            ram_opt.smart_cleanup(frame_idx)
+
             t0 = time.time()
             
             # --- DETECÇÃO ---
@@ -359,6 +365,9 @@ def processar_video(video_path: Path, output_dir: Path, show: bool = False):
         
         if yolo_model and hasattr(yolo_model, 'tracker'): del yolo_model.tracker
         gpu_manager.clear_cache()
+        # Full Cleanup
+        from neurapose_backend.otimizador.ram import memory as ram_opt
+        ram_opt.force_gc()
 
     # 7. POS-PROC
     if sanitizar_dados:

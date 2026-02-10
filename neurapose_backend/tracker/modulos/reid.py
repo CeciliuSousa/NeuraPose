@@ -11,7 +11,7 @@ from ultralytics.utils.plotting import save_one_box
 
 import torchvision.transforms as T
 import neurapose_backend.config_master as cm
-from neurapose_backend.cuda.gpu_utils import gpu_manager
+from neurapose_backend.otimizador.cuda.gpu_utils import gpu_manager
 from colorama import Fore
 
 

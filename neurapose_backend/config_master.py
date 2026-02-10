@@ -24,8 +24,13 @@ RTMPOSE_BATCH_SIZE = 256
 
 try:
     import onnxruntime as ort
-    ort.set_default_logger_severity(3) # 3=ERROR
-except ImportError: pass
+    # -- OTIMIZAÇÃO & SEGURANÇA (SAFE MODE) --
+SAFE_MODE = True                        # Ativa limitadores de CPU/GPU para evitar superaquecimento
+MAX_CPU_WORKERS = 2                     # Limite de threads/processos (Safe Mode)
+LOOP_SLEEP_INTERVAL = 0.01              # Sleep em loops infinitos (s) para aliviar CPU
+GC_COLLECT_INTERVAL = 50                # Executa gc.collect a cada X iterações/frames processados batch
+MAX_VRAM_USAGE_RATIO = 0.85             # Limite de VRAM seguro (85%)
+MEMORY_SAFETY_MARGIN_MB = 1024          # Deixar pelo menos 1GB livre na GPU
 
 # -- MODELOS --
 # YOLO (Detecção)

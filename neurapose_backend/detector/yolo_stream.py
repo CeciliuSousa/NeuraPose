@@ -218,7 +218,9 @@ class YoloStreamDetector:
             self.model.tracker = tracker
             tracker_yaml_path = save_temp_tracker_yaml()
         
-        from neurapose_backend.cuda.gpu_utils import gpu_manager
+        from neurapose_backend.otimizador.cuda.gpu_utils import gpu_manager
+from neurapose_backend.otimizador.cpu import core as cpu_opt
+from neurapose_backend.otimizador.ram import memory as ram_opt
 
         print(Fore.CYAN + f"[INFO] STREAMING VIDEO YOLO ({batch_size} batch) | Tracker: {cm.TRACKER_NAME}...")
         
@@ -233,6 +235,9 @@ class YoloStreamDetector:
                     if state.stop_requested:
                         print(Fore.YELLOW + "[STOP] Detecção interrompida.")
                         break
+                    
+                    cpu_opt.throttle()
+                    ram_opt.smart_cleanup(frame_idx_global)
                     
                 frames_batch = []
                 for _ in range(batch_size):

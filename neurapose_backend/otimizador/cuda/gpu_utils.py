@@ -13,7 +13,7 @@ class GPUManager:
     Big-O (init): O(1) - apenas configurações
     """
 
-    def __init__(self, device: str = cm.DEVICE, memory_fraction: float = 0.90) -> None:
+    def __init__(self, device: str = cm.DEVICE, memory_fraction: float = None) -> None:
         """
         Inicializa gerenciador GPU com alocação eficiente.
         
@@ -23,6 +23,9 @@ class GPUManager:
         
         Big-O: O(1) - configuração de variáveis
         """
+        if memory_fraction is None:
+            memory_fraction = getattr(cm, 'MAX_VRAM_USAGE_RATIO', 0.85)
+
         self.device: str = device
         self.is_cuda: bool = 'cuda' in device and torch.cuda.is_available()
         
@@ -75,18 +78,11 @@ class GPUManager:
         """
         Compila modelo com torch.compile (Torch 2.0+).
         Modo: 'reduce-overhead' para minimizar latência de python/cuda calls.
-        
-        Args:
-            model: Modelo PyTorch
-        
-        Returns:
-            Modelo compilado otimizado
         """
         if hasattr(torch, 'compile') and self.is_cuda:
             print("Compilando modelo com torch.compile (reduce-overhead)...")
             try:
                 # 'reduce-overhead' usa CUDA Graphs (ótimo para loops pequenos)
-                # 'max-autotune' demora muito para compilar mas é o mais rápido
                 return torch.compile(model, mode='reduce-overhead')
             except Exception as e:
                 print(f"Aviso: Falha ao compilar modelo: {e}")
@@ -98,7 +94,6 @@ class GPUManager:
         """
         Context manager para inferência otimizada.
         Desabilita gradientes e view tracking.
-        Mais rápido que no_grad().
         """
         if torch.cuda.is_available():
              with torch.inference_mode():
@@ -125,7 +120,6 @@ class GPUManager:
     def clear_cache(self) -> None:
         """
         Limpa cache GPU e garbage collection Python.
-        Big-O: O(C) onde C = cache size
         """
         if self.is_cuda:
             torch.cuda.empty_cache()
@@ -134,10 +128,7 @@ class GPUManager:
     def get_memory_stats(self) -> Dict[str, float]:
         """
         Retorna estatísticas de memória GPU.
-        Big-O: O(1) - leitura de registros GPU
-        
-        Returns:
-            Dict com allocated, reserved, free (em MB)
+        Returns: Dict com allocated, reserved, free (em MB)
         """
         if not self.is_cuda:
             return {'allocated_mb': 0, 'reserved_mb': 0, 'free_mb': 0}
@@ -156,26 +147,13 @@ class GPUManager:
         }
 
     def synchronize(self) -> None:
-        """
-        Sincroniza GPU (aguarda conclusão de operações).
-        Use antes de medir tempo.
-        
-        Big-O: O(P) onde P = pending ops (geralmente < 1ms)
-        """
+        """Sincroniza GPU (aguarda conclusão de operações)."""
         if self.is_cuda:
             torch.cuda.synchronize()
 
     @contextmanager
     def profile_memory(self, name: str = "Operation"):
-        """
-        Context manager para profile memória GPU.
-        
-        Usage:
-            with gpu_manager.profile_memory("frame_processing"):
-                # código aqui
-        
-        Big-O: O(1)
-        """
+        """Context manager para profile memória GPU."""
         if self.is_cuda:
             torch.cuda.reset_peak_memory_stats()
             torch.cuda.synchronize()
@@ -184,53 +162,69 @@ class GPUManager:
         
         if self.is_cuda:
             torch.cuda.synchronize()
-            # peak_mem = torch.cuda.max_memory_allocated() / 1e6
-            # print(f"[{name}] Pico memória: {peak_mem:.2f} MB") - Removido para não poluir UI
 
     def reset_peak_memory_stats(self) -> None:
-        """
-        Reseta estatísticas de pico de memória.
-        Big-O: O(1)
-        """
+        """Reseta estatísticas de pico de memória."""
         if self.is_cuda:
             torch.cuda.reset_peak_memory_stats()
 
     def get_peak_memory_stats(self) -> float:
-        """
-        Retorna o pico de memória alocada desde o último reset (em MB).
-        Big-O: O(1)
-        """
+        """Retorna o pico de memória alocada desde o último reset (em MB)."""
         if self.is_cuda:
             return torch.cuda.max_memory_allocated() / 1e6
         return 0.0
 
 
 def enable_cudnn_auto_tuning() -> None:
-    """
-    Ativa CUDNN auto-tuning global.
-    Big-O: O(1)
-    """
+    """Ativa CUDNN auto-tuning global."""
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
         torch.backends.cudnn.enabled = True
 
 
 def clear_gpu_cache() -> None:
-    """
-    Limpa cache GPU + Python garbage collection.
-    Big-O: O(C)
-    """
+    """Limpa cache GPU + Python garbage collection."""
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
     gc.collect()
 
 
+def check_gpu_memory(min_free_mb=None, margin_mb=None):
+    """
+    Verifica memória livre na GPU de forma leve (sem alocação de teste).
+    Retorna (ok, msg, free_mb).
+    Smart Check: Usa mem_get_info driver call (custo zero).
+    """
+    if not torch.cuda.is_available():
+        return False, "GPU não disponível", 0
+
+    if min_free_mb is None:
+        min_free_mb = cm.RTMPOSE_BATCH_SIZE * 2  # Estimativa
+    
+    if margin_mb is None:
+        margin_mb = getattr(cm, 'MEMORY_SAFETY_MARGIN_MB', 1024)
+
+    try:
+        # Usa torch.cuda.mem_get_info() que é leve (driver call)
+        free_bytes, total_bytes = torch.cuda.mem_get_info()
+        free_mb = free_bytes / (1024 * 1024)
+        total_mb = total_bytes / (1024 * 1024)
+        
+        needed_mb = min_free_mb + margin_mb
+        
+        if free_mb < needed_mb:
+            return False, f"VRAM Insuficiente: {free_mb:.0f}MB livres (Precisa {needed_mb:.0f}MB)", free_mb
+            
+        return True, f"VRAM OK: {free_mb:.0f}MB livres de {total_mb:.0f}MB", free_mb
+
+    except Exception as e:
+        return False, f"Erro check VRAM: {str(e)}", 0
+
+
 class GPUMemoryPool():
     """
     Pool de alocação de tensores GPU pré-alocados (memory pooling).
-    Reduz fragmentação e overhead de alocação.
-    
-    Big-O (alloc): O(1) reutilização, O(N) primeira alocação
+    reduz fragmentação e overhead de alocação.
     """
 
     def __init__(self, device: str = 'cuda:0', pool_size_mb: int = 512) -> None:
@@ -254,10 +248,7 @@ class GPUMemoryPool():
             print(f"Pool GPU alocado: {pool_size_mb}MB em {num_tensors} tensores")
 
     def clear_pool(self) -> None:
-        """
-        Libera pool.
-        Big-O: O(P) onde P = número de tensores no pool
-        """
+        """Libera pool."""
         self.pool_tensors.clear()
         if self.is_cuda:
             torch.cuda.empty_cache()
@@ -266,4 +257,3 @@ class GPUMemoryPool():
 # Singleton Global Instance
 # Permite importacao direta: from neurapose_backend.cuda.gpu_utils import gpu_manager
 gpu_manager = GPUManager(device=cm.DEVICE)
-

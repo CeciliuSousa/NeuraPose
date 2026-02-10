@@ -33,10 +33,12 @@ logging.getLogger("ultralytics").addFilter(TaskWarningFilter())
 
 # Importações do projeto
 import neurapose_backend.config_master as cm
-from neurapose_backend.cuda.gpu_utils import gpu_manager
+from neurapose_backend.otimizador.cuda.gpu_utils import gpu_manager
+from neurapose_backend.otimizador.cpu import core as cpu_opt
+from neurapose_backend.otimizador.ram import memory as ram_opt
 from neurapose_backend.rtmpose.extracao_pose_rtmpose import ExtratorPoseRTMPose
 from neurapose_backend.nucleo.visualizacao import desenhar_esqueleto_unificado, color_for_id
-from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
+# from neurapose_backend.nucleo.tracking_utils import gerar_relatorio_tracking
 from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomDeepOCSORT, save_temp_tracker_yaml
 from neurapose_backend.temporal.inferencia_temporal import ClassificadorAcao
 from neurapose_backend.nucleo.video_utils import normalizar_video
@@ -264,6 +266,10 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
                 last_logged_percent = current_percent
                 print(f"\r[APP] Progresso: {current_percent}% ({frame_idx}/{total_frames_in})")
                 
+            # SAFE MODE: Throttling & GC
+            cpu_opt.throttle()
+            ram_opt.smart_cleanup(frame_idx)
+
             t0 = time.time()
             
             # --- DETECÇÃO ---
@@ -398,6 +404,9 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
         
         if not USING_DEEPOCSORT and yolo_model: del yolo_model.tracker
         gpu_manager.clear_cache()
+        
+        # Otimização: Limpeza Final
+        ram_opt.force_gc()
 
     total_time = time.time() - start_time_global
     tempos["video_total"] = total_time
