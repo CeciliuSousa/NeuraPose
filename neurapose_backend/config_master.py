@@ -127,16 +127,17 @@ OSNET_DIR = ROOT / "tracker" / "weights"
 OSNET_PATH = OSNET_DIR / OSNET_MODEL
 
 # Pré-processamento
+# Pré-processamento
 PROCESSING_INPUT_DIR = ROOT / "videos"
 PROCESSING_OUTPUT_DIR = ROOT / "resultados-processamentos"
 PROCESSING_VIDEOS_DIR = PROCESSING_OUTPUT_DIR / "videos"
 PROCESSING_PREDS_DIR = PROCESSING_OUTPUT_DIR / "predicoes"
 PROCESSING_JSONS_DIR = PROCESSING_OUTPUT_DIR / "jsons"
 PROCESSING_ANNOTATIONS_DIR = PROCESSING_OUTPUT_DIR / "anotacoes"
-ANNOTATIONS_OUTPUT_DIR = ROOT / "resultados-reidentificacoes" # User: Anotações input/output is same as Reid
+ANNOTATIONS_OUTPUT_DIR = PROCESSING_OUTPUT_DIR # Unificado com Processamento
 
 # ReID Manual
-REID_OUTPUT_DIR = ROOT / "resultados-reidentificacoes"
+REID_OUTPUT_DIR = PROCESSING_OUTPUT_DIR # Unificado com Processamento
 REID_MANUAL_SUFFIX = "-reid"
 REID_MANUAL_LABELS_FILENAME = "labels_reid.json"
 RTMPOSE_PREPROCESSING_PATH = RTMPOSE_PATH

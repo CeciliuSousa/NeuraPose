@@ -19,6 +19,14 @@ from neurapose_backend.LSTM.modulos.dataset import load_data_pt
 from neurapose_backend.LSTM.modulos.treinamento import train_one_epoch
 
 
+# Otimizador
+try:
+    from neurapose_backend.otimizador.cuda.gpu_utils import GPUManager, check_gpu_memory
+    from neurapose_backend.otimizador.ram import memory
+    HAS_OPTIMIZER = True
+except ImportError:
+    HAS_OPTIMIZER = False
+
 # Importa paths e constantes do config_master
 import neurapose_backend.config_master as cm
 
@@ -68,6 +76,15 @@ def main():
     if DEVICE.type == 'cuda':
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
+        
+    gpu_manager = None
+    if HAS_OPTIMIZER:
+        gpu_manager = GPUManager(device=DEVICE)
+        gpu_manager.enable_mixed_precision() 
+        gpu_manager.enable_cudnn_benchmarking()
+        gpu_manager.clear_cache()
+        memory.force_gc()
+        print(Fore.GREEN + "[OTIMIZADOR] GPU Manager & RAM Cleaner ativos.")
     
     # Banner de inicio com info da GPU
     print("\n" + "="*70)
@@ -125,6 +142,12 @@ def main():
             pbar.set_postfix({"loss": f"{loss:.4f}", "acc": f"{acc:.4f}"})
             pbar.update(1)
         print(f"[Epoca {epoch:3d}] Loss: {loss:.6f} | Acuracia: {acc:.4f}")
+        
+        # Otimização Periódica
+        if HAS_OPTIMIZER:
+            memory.smart_cleanup(epoch)
+            if epoch % 5 == 0 and gpu_manager:
+                gpu_manager.clear_cache()
 
     elapsed = time.time() - start_time
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -155,6 +178,12 @@ def main():
     print(f"Modelo usado          : {args.model.upper()}")
     print(f"Modelo salvo em       : {save_path}")
     print(f"Relatorio salvo em    : {report_path}")
+
+    # Limpeza final de GPU/RAM
+    if 'gpu_manager' in locals() and gpu_manager:
+        gpu_manager.clear_cache()
+    if 'memory' in locals():
+        memory.force_gc()
 
 if __name__ == "__main__":
     main()

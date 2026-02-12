@@ -14,12 +14,19 @@ import torch.optim as optim
 import psutil
 from pathlib import Path
 from torch.utils.data import DataLoader, WeightedRandomSampler
-from tqdm import tqdm
 from colorama import Fore, init
 import os
 from datetime import datetime
 from sklearn.model_selection import StratifiedShuffleSplit
 import shutil
+
+# Otimizador
+try:
+    from neurapose_backend.otimizador.cuda.gpu_utils import GPUManager, check_gpu_memory
+    from neurapose_backend.otimizador.ram import memory
+    HAS_OPTIMIZER = True
+except ImportError:
+    HAS_OPTIMIZER = False
 
 # Imports do projeto
 from neurapose_backend.LSTM.configuracao.config import get_config
@@ -58,6 +65,15 @@ def main():
     if DEVICE == 'cuda':
         import torch.backends.cudnn as cudnn
         cudnn.benchmark = True
+        
+    gpu_manager = None
+    if HAS_OPTIMIZER:
+        gpu_manager = GPUManager(device=DEVICE)
+        gpu_manager.enable_mixed_precision() 
+        gpu_manager.enable_cudnn_benchmarking()
+        gpu_manager.clear_cache()
+        memory.force_gc()
+        print(Fore.GREEN + "[OTIMIZADOR] GPU Manager & RAM Cleaner ativos.")
     
     # -------------------------------------------------------------------------
     # 1. BANNER E INFORMAÇÕES DO SISTEMA (PADRONIZADO)
@@ -412,6 +428,13 @@ def main():
         if early.should_stop(va_f1m, va_loss):
             print(Fore.MAGENTA + f"\n[STOP] Early stopping na epoca {epoch}")
             break
+            
+        # Otimização Periódica (a cada época)
+        if HAS_OPTIMIZER:
+            memory.smart_cleanup(epoch)
+            # Limpeza leve de cache GPU a cada 5 épocas para evitar fragmentação
+            if epoch % 5 == 0:
+                gpu_manager.clear_cache()
 
     if state.stop_requested:
         return
@@ -500,6 +523,12 @@ def main():
                 if item.is_file(): item.unlink()
             model_dir.rmdir()
     except: pass
+    
+    # Limpeza final de GPU/RAM
+    if 'gpu_manager' in locals():
+        gpu_manager.clear_cache()
+    if 'memory' in locals():
+        memory.force_gc()
 
     # Caminho final relativo para exibição
     # try:

@@ -281,7 +281,7 @@ export default function ProcessamentoPage() {
                 initialPath={roots.videos}
                 rootPath={roots.videos}
                 showExternalPicker={true}
-                title="Selecionar Diretório de Entrada (Vídeos)"
+                title="Selecionar Diretório de Entrada processamento"
             />
         </div>
     );

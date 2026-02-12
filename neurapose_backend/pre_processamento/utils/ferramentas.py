@@ -11,6 +11,15 @@ import neurapose_backend.config_master as cm
 def status_str(ok: bool):
     return Fore.GREEN + "[OK]" if ok else Fore.RED + "[ERRO]"
 
+def format_seconds_to_hms(seconds):
+    """Formata segundos para HH:MM:SS"""
+    import math
+    seconds = int(round(seconds))
+    h = seconds // 3600
+    m = (seconds % 3600) // 60
+    s = seconds % 60
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
 def get_system_info():
     # RAM
     mem = psutil.virtual_memory()
