@@ -1,5 +1,4 @@
 # neurapose_backend/nucleo/video_utils.py
-# Utilitarios para video (Normalizacao).
 
 import cv2
 import sys

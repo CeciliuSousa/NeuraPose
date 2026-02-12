@@ -37,3 +37,5 @@ neurapose_backend/.env
 
 prompts
 tests
+
+agent.md

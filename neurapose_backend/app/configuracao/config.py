@@ -1,4 +1,4 @@
-# neurapose-backend/app/configuracao/config.py
+# ./neurapose_backend/app/configuracao/config.py
 
 import argparse
 from pathlib import Path

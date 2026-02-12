@@ -14,10 +14,10 @@ class ProcessingState:
         self.is_running = False
         self.is_paused = False
         self.stop_requested = False
-        self.show_preview = False  # Flag para ativar/desativar preview em tempo real
+        self.show_preview = False
         self.current_frame = None
-        self.current_process = None  # 'test', 'train', 'process', 'convert', 'split', etc.
-        self.process_status = 'idle'  # 'idle', 'processing', 'success', 'error'
+        self.current_process = None
+        self.process_status = 'idle'
         self._lock = threading.Lock()
         self._processes = []
         self._current_thread = None
@@ -25,12 +25,10 @@ class ProcessingState:
     def set_frame(self, frame):
         with self._lock:
             self.current_frame = frame
-            # Debug: conta quantos frames foram setados
             if not hasattr(self, '_frame_count'):
                 self._frame_count = 0
             self._frame_count += 1
-            if self._frame_count % 100 == 1:  # Print a cada 100 frames
-                # print(f"[DEBUG] state.set_frame() chamado - frame #{self._frame_count}")
+            if self._frame_count % 100 == 1:
                 pass
 
     def get_frame(self):
@@ -44,7 +42,6 @@ class ProcessingState:
         self.show_preview = False
         self.current_frame = None
         self._current_thread = None
-        # Manter current_process e process_status até próximo processo
         
     def set_current_thread(self, thread):
         """Registra a thread atual de processamento."""
@@ -70,10 +67,8 @@ class ProcessingState:
         self.is_running = False
         self.process_status = 'idle'
         
-        # Mata processos registrados
         self.kill_all_processes()
         
-        # Limpa o frame para parar o stream de vídeo
         self.current_frame = None
         
         print("[FORCE STOP] Parada forçada executada.")
@@ -88,6 +83,4 @@ class ProcessingState:
         self.force_stop()
         os._exit(1)
 
-
-# Instância global compartilhada
 state = ProcessingState()
