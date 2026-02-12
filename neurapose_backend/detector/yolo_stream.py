@@ -1,498 +1,158 @@
-import os
-import sys
-import cv2
-import torch
-import logging
+# neurapose_backend/detector/yolo_stream.py
+# ==============================================================================
+# WRAPPER CENTRALIZADO DE DETECÇÃO E RASTREAMENTO (YOLO + TRACKERS)
+# ==============================================================================
+# Este módulo encapsula a lógica de escolha do Tracker (BoTSORT/DeepOCSORT) e
+# a inicialização do modelo YOLO, servindo como ponto único de entrada para
+# detecção de pessoas no sistema.
+# ==============================================================================
+
 import numpy as np
-from pathlib import Path
+import torch
 from ultralytics import YOLO
 from colorama import Fore
 
-# Importacoes do tracker
-from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomReID, CustomDeepOCSORT, save_temp_tracker_yaml
-from neurapose_backend.globals.state import state
 import neurapose_backend.config_master as cm
+from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomDeepOCSORT, save_temp_tracker_yaml
 
-# Suppress Logs
-logging.getLogger("ultralytics").setLevel(logging.ERROR)
-os.environ["YOLO_VERBOSE"] = "False"
-
-# Monkey Patch Tracker
-from ultralytics.trackers import bot_sort
-bot_sort.BOTSORT = CustomBoTSORT
-bot_sort.ReID = CustomReID
-
-import threading
-import queue
-import time
-
-class ThreadedVideoLoader:
-    def __init__(self, path, buffer_size=128):
-        self.cap = cv2.VideoCapture(str(path))
-        self.q = queue.Queue(maxsize=buffer_size)
-        self.stopped = False
-        self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        self.fps = self.cap.get(cv2.CAP_PROP_FPS) or 30.0
-        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        
-        # Start reading thread
-        self.t = threading.Thread(target=self.update, args=())
-        self.t.daemon = True
-        self.t.start()
-
-    def update(self):
-        while True:
-            if self.stopped:
-                break
-            if not self.q.full():
-                ret, frame = self.cap.read()
-                if not ret:
-                    self.stopped = True
-                    # Push None to signal end
-                    self.q.put(None) 
-                    break
-                self.q.put(frame)
-            else:
-                time.sleep(0.005) # avoid busy wait
-        self.cap.release()
-
-    def read(self):
-        # returns ret, frame like cv2
-        if self.q.empty() and self.stopped:
-            return False, None
-        
-        try:
-            # wait with timeout to allow checking stopped status
-            frame = self.q.get(timeout=1.0) 
-        except queue.Empty:
-            return False, None
-
-        if frame is None:
-            return False, None
-            
-        return True, frame
-
-    def release(self):
-        self.stopped = True
-        if self.t.is_alive():
-            self.t.join()
-        if self.cap.isOpened():
-            self.cap.release()
-
-
-class YoloStreamDetector:
-    def __init__(self):
-        self.ensure_model()
-        
-        # Seleciona o modelo correto (Engine ou PT)
-        if cm.USE_TENSORRT and self.engine_path.exists():
-            print(Fore.GREEN + f"[INFO] MODELO OTIMIZADO (TensorRT): {self.engine_path.name}")
-            # TensorRT deve ser carregado diretamente para a task 'track' ou 'predict'
-            # Ultralytics carrega .engine automaticamente via YOLO('model.engine')
-            self.model = YOLO(str(self.engine_path), task="detect")
-        else:
-            print(Fore.YELLOW + f"[INFO] Usando Modelo Padrão (PyTorch): {cm.YOLO_PATH.name}")
-            self.model = YOLO(str(cm.YOLO_PATH), task='detect').to(cm.DEVICE)
-        
-    def ensure_model(self):
-        # 1. Garante modelo PT base
-        pt_path = cm.YOLO_PATH
-        pt_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        if not pt_path.exists():
-            print(Fore.CYAN + f"[INFO] Baixando modelo base: {pt_path.name}...")
-            model_base = cm.YOLO_MODEL.replace('.pt', '')
-            try:
-                temp = YOLO(model_base, task='detect')
-                temp.save(str(pt_path))
-                
-                # Cleanup: YOLO baixa no CWD, então removemos o arquivo solto
-                local_file = Path(f"{model_base}.pt")
-                if local_file.exists():
-                    local_file.unlink()
-                    print(Fore.CYAN + f"[INFO] Arquivo temporário removido: {local_file.name}")
-                    
-            except Exception as e:
-                if pt_path.exists(): os.remove(pt_path)
-                raise FileNotFoundError(f"Erro ao baixar {cm.YOLO_PATH}: {e}")
-
-        self.engine_path = pt_path.with_name(f"{pt_path.stem}-batch{cm.YOLO_BATCH_SIZE}.engine")
-        
-        if cm.USE_TENSORRT:
-            if not self.engine_path.exists():
-                print(Fore.MAGENTA + "="*60)
-                print(f"[OTIMIZAÇÃO] Gerando Motor TensorRT para {pt_path.name}...")
-                print(f"Isso pode levar de 5 a 10 minutos. Por favor aguarde...")
-                print("="*60 + Fore.RESET)
-                try:
-                    model = YOLO(str(pt_path), task='detect')
-
-                    batch_size = cm.YOLO_BATCH_SIZE
-                    print(Fore.CYAN + f"[TRT] Exportando com Batch Size = {batch_size}...")
-                    
-                    model.export(
-                        format="engine",
-                        device=0,
-                        half=True,
-                        verbose=False,
-                        batch=batch_size,
-                        workspace=4         # Aumenta workspace para otimização (GB)
-                    )
-                    
-                    # Renomeia Engine e ONNX para o padrão: modelo-batchN.engine/onnx
-                    # Ultralytics gera: yolov8l.engine e yolov8l.onnx
-                    # Queremos: yolov8l-batch32.engine e yolov8l-batch32.onnx
-                    
-                    default_engine = pt_path.with_suffix('.engine')
-                    default_onnx = pt_path.with_suffix('.onnx')
-                    
-                    target_onnx = self.engine_path.with_suffix('.onnx')
-                    
-                    # Renomeia Engine force-overwrite
-                    if default_engine.exists() and default_engine != self.engine_path:
-                        if self.engine_path.exists(): self.engine_path.unlink()
-                        default_engine.rename(self.engine_path)
-                        print(Fore.GREEN + f"[TRT] Engine salvo: {self.engine_path.name}")
-                        
-                    # Renomeia ONNX force-overwrite
-                    if default_onnx.exists() and default_onnx != target_onnx:
-                        if target_onnx.exists(): target_onnx.unlink()
-                        default_onnx.rename(target_onnx)
-                        print(Fore.GREEN + f"[TRT] ONNX salvo: {target_onnx.name}")
-                        
-                    print(Fore.GREEN + "[SUCESSO] Modelo TensorRT gerado e versionado!")
-                except Exception as e:
-                    print(Fore.RED + f"[ERRO] Falha na exportação TensorRT: {e}")
-                    print(Fore.YELLOW + "[INFO] Fallback para PyTorch.")
-                    # Continua sem engine (vai usar .pt no init)
-    def stream_video(self, video_path: str, batch_size=None):
-        """
-        Generator que processa o vídeo em batches e cede (yields) os resultados.
-        
-        Yields:
-            tuple: (batch_index, frames_files, batch_results, track_data_partial)
-                 - frames_files: Lista de frames numpy (do batch)
-                 - batch_results: Lista de resultados do YOLO (boxes, ids)
-        
-        Returns (via generator return value logic or final property):
-            track_data_complete
-        """
-        if batch_size is None:
-            batch_size = cm.YOLO_BATCH_SIZE
-
-        # Escolha do Loader (Assíncrono vs Síncrono)
-        buffer_size = getattr(cm, 'ASYNC_BUFFER_SIZE', 128)
-        use_async = getattr(cm, 'USE_ASYNC_LOADER', True)
-        
-        if use_async:
-            print(Fore.CYAN + f"[INFO] INICIANDO LEITURA ASSÍNCRONA (Buffer={buffer_size})...")
-            loader = ThreadedVideoLoader(str(video_path), buffer_size=buffer_size)
-            fps = loader.fps
-            total_frames = loader.total_frames
-            # Mantemos interface 'read' compatível
-            cap_read = loader.read 
-            cap_release = loader.release
-        else:
-            print(Fore.YELLOW + f"[INFO] Iniciando Leitura Síncrona (OpenCV)...")
-            cap = cv2.VideoCapture(str(video_path))
-            fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            cap_read = cap.read
-            cap_release = cap.release
-        
-        # =========================================================================
-        # SELEÇÃO DINÂMICA DE TRACKER
-        # =========================================================================
-        USING_DEEPOCSORT = (cm.TRACKER_NAME.upper() == "DEEPOCSORT")
-        
-        deep_tracker = None
-        tracker = None # BoTSORT
-
-        if USING_DEEPOCSORT:
-             # DeepOCSORT roda frame a frame
-            deep_tracker = CustomDeepOCSORT()
-        else:
-             # BoTSORT Injetado
-            tracker = CustomBoTSORT(frame_rate=int(fps))
-            self.model.tracker = tracker
-            tracker_yaml_path = save_temp_tracker_yaml()
-        
-        from neurapose_backend.otimizador.cuda.gpu_utils import gpu_manager
+# Módulos de Otimização
+from neurapose_backend.otimizador.cuda.gpu_utils import gpu_manager
 from neurapose_backend.otimizador.cpu import core as cpu_opt
 from neurapose_backend.otimizador.ram import memory as ram_opt
 
-        print(Fore.CYAN + f"[INFO] STREAMING VIDEO YOLO ({batch_size} batch) | Tracker: {cm.TRACKER_NAME}...")
+class YoloDetectorPerson:
+    """
+    Wrapper unificado para detecção de pessoas e rastreamento.
+    Gerencia automaticamente:
+    1. Carga do Modelo YOLO (com path do config_master)
+    2. Escolha e Instanciação do Tracker (BoTSORT ou DeepOCSORT)
+    3. Lógica de inferência (predict -> update ou track direto)
+    4. Otimização de Recursos (CPU/GPU/RAM)
+    """
+
+    def __init__(self, target_fps=cm.FPS_TARGET):
+        """
+        Inicializa o detector e o rastreador conforme configurações globais.
         
-        track_data = {}
-        frame_idx_global = 0
-        last_progress = 0
+        Args:
+            target_fps (int): FPS alvo para configuração inicial do Tracker.
+                              Geralmente cm.FPS_TARGET (10).
+        """
+        self.target_fps = target_fps
+        self.using_tracker = (cm.TRACKER_NAME.upper() == "DEEPOCSORT")
+        
+        self.model = None
+        self.tracker = None
+        self.tracker_instance = None
+        
+        self._init_system()
+
+    def _init_system(self):
+        print(Fore.CYAN + f"[DETECTOR] Inicializando pipeline de rastreamento: {cm.TRACKER_NAME}")
+        
+        if self.using_tracker:
+            self.tracker = CustomDeepOCSORT()
+            print(Fore.GREEN + "[DETECTOR] DeepOCSORT carregado com sucesso.")
+        else:
+            print(Fore.YELLOW + f"[DETECTOR] Carregando YOLO: {cm.YOLO_PATH}")
+            try:
+                self.model = YOLO(str(cm.YOLO_PATH), task='detect').to(cm.DEVICE)
+                
+                self.tracker_instance = CustomBoTSORT(frame_rate=int(self.target_fps))
+                
+                self.model.tracker = self.tracker_instance
+                save_temp_tracker_yaml()
+                
+                print(Fore.GREEN + "[DETECTOR] YOLO + BoTSORT carregados com sucesso.")
+            except Exception as e:
+                print(Fore.RED + f"[ERRO] Falha fatal ao carregar YOLO/BoTSORT: {e}")
+                raise e
+
+    @gpu_manager.inference_mode()
+    def process_frame(self, frame: np.ndarray, conf_threshold: float = None, frame_idx: int = None):
+        """
+        Processa um único frame e retorna as trilhas (tracks).
+        
+        Args:
+            frame (np.ndarray): Imagem BGR (Opencv).
+            conf_threshold (float, optional): Sobrescreve cm.DETECTION_CONF se fornecido.
+            frame_idx (int, optional): Índice do frame para controle de GC e throttling.
+            
+        Returns:
+            np.ndarray: Array de tracks no formato [x1, y1, x2, y2, id, conf, cls]
+                        Retorna array vazio (0, 7) se nada for detectado.
+        """
+        if frame_idx is not None:
+            cpu_opt.throttle()
+            ram_opt.smart_cleanup(frame_idx)
+
+        conf = conf_threshold if conf_threshold is not None else cm.DETECTION_CONF
         
         try:
-            # Contexto de Inferencia Otimizada (Mixed Precision + NoGrad)
-            with gpu_manager.inference_mode():
-                while True:
-                    if state.stop_requested:
-                        print(Fore.YELLOW + "[STOP] Detecção interrompida.")
-                        break
+            if self.using_tracker:
+                tracks = self.tracker.track(frame)
+                return tracks
+            
+            else:
+                res = self.model.predict(
+                    source=frame,
+                    imgsz=cm.YOLO_IMGSZ,
+                    conf=conf,
+                    device=cm.DEVICE,
+                    classes=[cm.YOLO_CLASS_PERSON],
+                    verbose=False, 
+                    stream=False
+                )
+                
+                dets = np.empty((0, 6))
+                
+                if len(res) > 0 and len(res[0].boxes) > 0:
+                    dets = res[0].boxes.data.cpu().numpy()
                     
-                    cpu_opt.throttle()
-                    ram_opt.smart_cleanup(frame_idx_global)
+                    if dets.shape[1] == 4:
+                        r = dets.shape[0]
+                        dets = np.hstack((dets, np.full((r, 1), 0.85), np.zeros((r, 1))))
+                    elif dets.shape[1] == 5:
+                        dets = np.hstack((dets, np.zeros((dets.shape[0], 1))))
+                
+                tracks = self.tracker_instance.update(dets, frame)
+                
+                if len(tracks) == 0:
+                    return np.empty((0, 7))
                     
-                frames_batch = []
-                for _ in range(batch_size):
-                    ret, frame = cap_read()
-                    if not ret: break
-                    frames_batch.append(frame)
-                    
-                if not frames_batch:
-                    break
-                
-                # TensorRT Batch Padding Logic
-                # Se o batch atual for menor que o esperado pelo Engine (ex: final do vídeo), preenchemos.
-                actual_batch_size = len(frames_batch)
-                padded_frames = frames_batch
-                
-                if cm.USE_TENSORRT and actual_batch_size < batch_size:
-                    padding_needed = batch_size - actual_batch_size
-                    # Cria frames pretos (zeros) com mesmo shape
-                    # Assumindo que todos frames tem mesmo shape do primeiro
-                    h, w, c = frames_batch[0].shape
-                    black_frame = np.zeros((h, w, c), dtype=np.uint8)
-                    padded_frames = frames_batch + [black_frame] * padding_needed
+                return tracks
 
-                # Skip-Frame Logic
-                processed_batch_results = []
-                skip_val = getattr(cm, 'YOLO_SKIP_FRAME_INTERVAL', 1)
-                
-                # ============================================================
-                # BATCH INFERENCE LOGIC (TensorRT vs PyTorch)
-                # ============================================================
-                # TensorRT: Batch fixo obrigatório. Coletamos frames, fazemos padding, inferência única.
-                # PyTorch: Batch dinâmico. Podemos processar frame a frame.
-                
-                # Pré-computa quais frames precisam de YOLO
-                yolo_frame_indices = []
-                yolo_frames = []
-                for i, frame in enumerate(frames_batch):
-                    current_frame_idx = frame_idx_global + i
-                    do_yolo = (skip_val <= 1) or (current_frame_idx % skip_val == 0)
-                    if do_yolo:
-                        yolo_frame_indices.append(i)
-                        yolo_frames.append(frame)
-                
-                # Mapa de detecções: índice local -> dets
-                detections_map = {}
-                
-                if yolo_frames:
-                    try:
-                        if cm.USE_TENSORRT:
-                            # TensorRT: Batch fixo obrigatório
-                            # Padding para completar o batch size do engine
-                            trt_batch_size = batch_size  # Engine foi compilado com este valor
-                            num_yolo_frames = len(yolo_frames)
-                            
-                            if num_yolo_frames < trt_batch_size:
-                                # Padding com frames pretos
-                                h, w, c = yolo_frames[0].shape
-                                black_frame = np.zeros((h, w, c), dtype=np.uint8)
-                                padded_frames = yolo_frames + [black_frame] * (trt_batch_size - num_yolo_frames)
-                            else:
-                                padded_frames = yolo_frames[:trt_batch_size]
-                            
-                            if not USING_DEEPOCSORT:
-                                res_batch = self.model.predict(
-                                    source=padded_frames,
-                                    imgsz=cm.YOLO_IMGSZ,
-                                    conf=cm.DETECTION_CONF,
-                                    device=cm.DEVICE,
-                                    classes=[cm.YOLO_CLASS_PERSON],
-                                    verbose=False,
-                                    stream=False
-                                )
-                            else:
-                                # DeepOCSORT roda YOLO internamente frame-a-frame
-                                res_batch = []
-                                
-                            # Preenche results para BoTSORT (TensorRT)
-                            if not USING_DEEPOCSORT:
-                                # Extrai detecções apenas dos frames reais (não padding)
-                                for idx, local_i in enumerate(yolo_frame_indices):
-                                    if idx < len(res_batch) and len(res_batch[idx].boxes) > 0:
-                                        raw_data = res_batch[idx].boxes.data.cpu().numpy()
-                                        
-                                        # Normaliza para 6 colunas se necessário
-                                        if raw_data.shape[1] == 6:
-                                             detections_map[local_i] = raw_data
-                                        elif raw_data.shape[1] == 4: # [x1,y1,x2,y2]
-                                             # Add Conf=0.85, Cls=0
-                                             rows = raw_data.shape[0]
-                                             block = np.hstack((raw_data, np.full((rows, 1), 0.85), np.zeros((rows, 1))))
-                                             detections_map[local_i] = block
-                                        elif raw_data.shape[1] == 5: # [x1,y1,x2,y2,conf] or [x1,y1,x2,y2,cls]? Usually conf.
-                                             # Assume 5th is conf, add cls=0
-                                             block = np.hstack((raw_data, np.zeros((raw_data.shape[0], 1)))) 
-                                             detections_map[local_i] = block
-                                        else:
-                                             detections_map[local_i] = raw_data # Hope for the best
-                                    else:
-                                        detections_map[local_i] = np.empty((0, 6))
+        except Exception as e:
+            print(Fore.RED + f"[DETECTOR] Erro no processamento do frame: {e}")
+            return np.empty((0, 7))
 
-                        else:
-                            # --------------------------------------------------------
-                            # PyTorch: Processa frame a frame (dinâmico)
-                            # --------------------------------------------------------
-                            for idx, local_i in enumerate(yolo_frame_indices):
-                                frame = yolo_frames[idx]
-                                
-                                # SE BOTSORT: Roda YOLO Detect MANUALLY
-                                if not USING_DEEPOCSORT:
-                                    res = self.model.predict(
-                                        source=frame,
-                                        imgsz=cm.YOLO_IMGSZ,
-                                        conf=cm.DETECTION_CONF,
-                                        device=cm.DEVICE,
-                                        classes=[cm.YOLO_CLASS_PERSON],
-                                        verbose=False,
-                                        stream=False
-                                    )
-                                    if len(res) > 0 and len(res[0].boxes) > 0:
-                                        detections_map[local_i] = res[0].boxes.data.cpu().numpy()
-                                    else:
-                                        detections_map[local_i] = np.empty((0, 6))
-                                else:
-                                    # Se DEEPOCSORT, não rodamos YOLO aqui, pois o tracker roda internamente
-                                    pass
-                    except Exception as e:
-                        print(Fore.RED + f"[ERRO] Falha na inferência YOLO batch: {e}")
-                        # Fallback: todos os frames sem detecção
-                        for local_i in yolo_frame_indices:
-                            detections_map[local_i] = np.empty((0, 6))
-                
-                # ============================================================
-                # TRACKING LOOP (Sequencial por frame para manter consistência temporal)
-                # ============================================================
-                for i, frame in enumerate(frames_batch):
-                    current_frame_idx = frame_idx_global + i
-                    tracks = np.empty((0, 7))
-                    
-                    try:
-                        # Obtém detecções (do batch ou vazio se foi skip)
-                        dets = detections_map.get(i, np.empty((0, 6)))
+        try:
+            results = []
+            for i, frame in enumerate(frames):
+                results.append(self.process_frame(frame, frame_idx=i))
+            return results
+        except Exception as e:
+             print(Fore.RED + f"[DETECTOR] Erro no processamento de batch: {e}")
+             return []
 
-                        
-                        # ============================================================
-                        # SMARTSKIP: Usa Kalman Prediction em frames pulados
-                        # ============================================================
-                        is_yolo_frame = i in detections_map and len(detections_map.get(i, [])) > 0
-                        
-                        if USING_DEEPOCSORT:
-                            # --- DeepOCSORT (Frame-a-Frame Inteiro) ---
-                            # O usuário configurou CustomDeepOCSORT para rodar YOLO + Tracker em um passo
-                            # Então passamos o frame cru e recebemos os tracks
-                            if is_yolo_frame: # Respeita o skip-frame?
-                                 # Sim, só roda se for frame de yolo. Nos frames pulados, o que fazemos?
-                                 # DeepOCSORT nativo boxmot não tem predict_only explícito público fácil na classe wrapper do usuário
-                                 # Mas vamos assumir que chamamos 'update' com vazio se skipar ou repetimos?
-                                 # Vamos chamar .track(frame)
-                                 
-                                 # Nota: CustomDeepOCSORT.track retorna ndarray [x,y,x,y,id,conf,cls]
-                                 tracks = deep_tracker.track(frame)
-                            else:
-                                 # Skip frame logic para DeepOCSORT
-                                 # Se o usuário não implementou predict_only, passamos vazio ou repetimos?
-                                 # Vamos passar vazio para manter vivo
-                                 # O wrapper do usuário trata vazio: return self.tracker.update(np.empty((0, 6)), frame)
-                                 # Mas aqui não temos detecções.
-                                 # Idealmente, DeepOCSORT deve rodar em TODOS os frames para Kalman funcionar bem.
-                                 # Ignorar YOLO_SKIP_FRAME_INTERVAL para DeepOCSORT é mais seguro.
-                                 tracks = deep_tracker.track(frame)
-                        else:
-                            # --- BoTSORT (Padrão) ---
-                            if is_yolo_frame:
-                                # Frame com detecção YOLO: Update completo
-                                tracks = tracker.update(dets, frame)
-                            elif len(dets) == 0 and hasattr(tracker, 'predict_only'):
-                                # Frame PULADO: Usa Kalman Predict (Interpolação Suave)
-                                tracks = tracker.predict_only()
-                            else:
-                                # Fallback: Update com dets vazio
-                                tracks = tracker.update(dets, frame)
-                        
-                    except Exception as e:
-                        print(Fore.RED + f"[ERRO] Falha no tracking frame {current_frame_idx}: {e}")
-                        import traceback
-                        traceback.print_exc()
-                        continue
+    def cleanup(self):
+        """
+        Libera recursos de GPU e RAM.
+        Deve ser chamado ao finalizar o uso do detector.
+        """
+        print(Fore.CYAN + "[DETECTOR] Liberando recursos...")
+        if self.model:
+            del self.model
+            self.model = None
+            
+        if self.tracker:
+            del self.tracker
+            self.tracker = None
+            
+        if self.tracker_instance:
+             del self.tracker_instance
+             self.tracker_instance = None
 
-                    # 3. Processa Resultados para Compatibilidade
-                    boxes_data = None
-                    if len(tracks) > 0:
-                        # BoTSORT retorna [x1, y1, x2, y2, id, conf, cls]
-                        boxes_data = tracks
-                        
-                    # Extração de Features e Track Data
-                    if boxes_data is not None:
-                        ids = boxes_data[:, 4]
-                        current_time = current_frame_idx / fps
-                        
-                        for idx_in_batch, row in enumerate(boxes_data):
-                            tid = int(row[4])
-                            if tid < 0: continue
-                            
-                            # Feature extraction seguro
-                            if not USING_DEEPOCSORT:
-                                try:
-                                    trk = tracker.tracks[tid]
-                                    f = trk.feat.copy() if hasattr(trk, 'feat') else np.zeros(512)
-                                except:
-                                    f = np.zeros(512, dtype=np.float32)
-                            else:
-                                 f = np.zeros(512, dtype=np.float32)
-                            
-                            if tid not in track_data:
-                                track_data[tid] = {
-                                    "start": current_time,
-                                    "end": current_time,
-                                    "features": [f],
-                                    "frames": {current_frame_idx},
-                                }
-                            else:
-                                track_data[tid]["end"] = current_time
-                                track_data[tid]["frames"].add(current_frame_idx)
-                                if len(track_data[tid]["features"]) < 20:
-                                    track_data[tid]["features"].append(f)
-
-                    # Armazena apenas o necessário para o consumidor (RTMPose)
-                    processed_batch_results.append({
-                        "boxes": boxes_data,
-                        # Passamos o frame original para o RTMPose usar
-                        "frame": frame 
-                    })
-
-                # Yield Batch
-                yield (frame_idx_global, processed_batch_results)
-                
-                # Update loop state
-                frame_idx_global += len(frames_batch)
-                
-                # Log Progresso YOLO
-                prog = int((frame_idx_global / (total_frames or 1)) * 100)
-                if prog >= last_progress + 10:
-                    sys.stdout.write(f"\r{Fore.YELLOW}[YOLO Stream]{Fore.WHITE} Progresso: {prog} %")
-                    sys.stdout.flush()
-                    last_progress = prog
-                    
-        finally:
-            cap_release()
-            if not USING_DEEPOCSORT:
-                 del self.model.tracker
-            if torch.cuda.is_available():
-                gpu_manager.clear_cache()
-                
-        # Retorna metadados finais (track_data para o merge posterior)
-        # Como é um generator, podemos lançar isso via exceção controlada ou propriedade,
-        # mas o python generator return value é acessível via StopIteration.
-        # Uma forma mais limpa é o caller ter acesso ao objeto ou um yield final especial.
-        # Vamos fazer um yield final especial.
-        yield ("DONE", track_data, fps)
+        gpu_manager.clear_cache()
+        ram_opt.force_gc()
+        print(Fore.GREEN + "[DETECTOR] Recursos liberados.")
