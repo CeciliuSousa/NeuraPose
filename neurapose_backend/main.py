@@ -114,13 +114,10 @@ def configurar_prioridade_alta():
         print(f"[SYSTEM] Ajustando prioridade do processo PID {p.pid}...")
         
         if system == "Windows":
-            # HIGH_PRIORITY_CLASS (0x00000080)
-            # Não usamos REALTIME para não travar o mouse/teclado do usuário
             p.nice(psutil.HIGH_PRIORITY_CLASS)
             print("[SYSTEM] Prioridade definida para: ALTA (Windows)")
             
         elif system == "Linux":
-            # Nice -10 (Requer permissão, mas tenta)
             try:
                 p.nice(-10)
                 print("[SYSTEM] Prioridade definida para: -10 (Linux)")
@@ -732,7 +729,7 @@ def run_processing_thread(input_path: Path, output_path: Path, onnx_path: Path, 
         # Imprime banner como faz o processar.py
         imprimir_banner(onnx_path)
         
-        logger.info(f"Iniciando processamento: {input_path} -> {output_path}")
+        # logger.info(f"Iniciando processamento: {input_path} -> {output_path}")
         
         try:
             # sess, input_name = carregar_sessao_onnx(str(onnx_path)) # Removido - Modular

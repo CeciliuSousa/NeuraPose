@@ -81,7 +81,7 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
     target_fps = cm.FPS_TARGET
     skip_interval = max(1, int(round(original_fps / target_fps)))
     
-    print(Fore.CYAN + f"[APP] Vídeo: {video_path.name}")
+    # print(Fore.CYAN + f"[APP] Vídeo: {video_path.name}")
 
     queue_in = queue.Queue(maxsize=30)  
     queue_out = queue.Queue(maxsize=30) 

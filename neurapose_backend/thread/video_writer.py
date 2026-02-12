@@ -1,7 +1,7 @@
 import threading
 import cv2
 from colorama import Fore
-from neurapose_backend.config_master import cm
+import neurapose_backend.config_master as cm
 
 class VideoWriterThread(threading.Thread):
     def __init__(self, output_path, fps, width, height, queue_in):
