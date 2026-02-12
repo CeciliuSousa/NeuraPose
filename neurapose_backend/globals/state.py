@@ -8,8 +8,7 @@ import os
 
 
 class ProcessingState:
-    """Classe para gerenciar estado global de processamento."""
-    
+    """Classe para gerenciar estado global de processamento."""  
     def __init__(self):
         self.is_running = False
         self.is_paused = False

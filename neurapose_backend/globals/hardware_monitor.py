@@ -2,7 +2,6 @@ import threading
 import time
 import psutil
 import torch
-import neurapose_backend.config_master as cm
 
 class HardwareMonitorThread:
     def __init__(self, interval=1.0):
@@ -32,20 +31,14 @@ class HardwareMonitorThread:
     def _run(self):
         while self.running:
             try:
-                # CPU
                 cpu = psutil.cpu_percent(interval=None)
-                
-                # RAM
                 ram = psutil.virtual_memory()
-                
-                # GPU
                 gpu_mem = 0.0
                 gpu_total = 0.0
                 if torch.cuda.is_available():
-                    # torch.cuda.mem_get_info() retorna (free, total) em bytes
                     free, total = torch.cuda.mem_get_info()
-                    gpu_mem = (total - free) / (1024**3) # GB
-                    gpu_total = total / (1024**3)        # GB
+                    gpu_mem = (total - free) / (1024**3)
+                    gpu_total = total / (1024**3)
                 
                 with self.lock:
                     self.metrics["cpu"] = cpu
@@ -62,5 +55,4 @@ class HardwareMonitorThread:
         with self.lock:
             return self.metrics.copy()
 
-# Instância global
-monitor = HardwareMonitorThread(interval=2.0) # Atualiza a cada 2s para poupar CPU
+monitor = HardwareMonitorThread(interval=2.0)

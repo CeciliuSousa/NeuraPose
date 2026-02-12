@@ -1,7 +1,5 @@
-# ================================================================
-# detector/__init__.py
-# ================================================================
+# ./neurapose_backend/detector/__init__.py
 
-from .yolo_detector import yolo_detector_botsort
+from neurapose_backend.detector.yolo_stream import YoloDetectorPerson
 
-__all__ = ["yolo_detector_botsort"]
+__all__ = ["YoloDetectorPerson"]

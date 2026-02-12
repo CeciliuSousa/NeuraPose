@@ -34,7 +34,7 @@ from neurapose_backend.pre_processamento.anotando_classes import (
 
 
 # Visualizacao de esqueletos (utilitários prontos)
-from neurapose_backend.nucleo.visualizacao import desenhar_esqueleto_unificado, color_for_id
+from neurapose_backend.nucleo.visualizacao import desenhar_esqueleto, color_for_id
 # from neurapose_backend.config_master import POSE_CONF_MIN (Removed)
 
 
@@ -219,7 +219,7 @@ def renderizar_video_limpo(video_in, video_out, registros_processados, cut_list)
                     try:
                         kps_arr = np.array(kps)
                         base_color = color_for_id(pid)
-                        frame = desenhar_esqueleto_unificado(frame, kps_arr, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
+                        frame = desenhar_esqueleto(frame, kps_arr, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
                     except Exception:
                         pass
 

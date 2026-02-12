@@ -182,7 +182,7 @@ def main():
             metricas = {
                 "accuracy": accuracy_score(y_true, y_pred),
                 "f1_macro": f1_score(y_true, y_pred, average='macro'),
-                "confusion_matrix": confusion_matrix(y_true, y_pred).tolist()
+                "confusion_matrix": confusion_matrix(y_true, y_pred, labels=[0, 1]).tolist()
             }
             with open(out_metricas_dir / "metricas.json", "w") as f: json.dump(metricas, f, indent=2)
             

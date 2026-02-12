@@ -1,16 +1,8 @@
-# neurapose_backend/detector/yolo_stream.py
-# ==============================================================================
-# WRAPPER CENTRALIZADO DE DETECÇÃO E RASTREAMENTO (YOLO + TRACKERS)
-# ==============================================================================
-# Este módulo encapsula a lógica de escolha do Tracker (BoTSORT/DeepOCSORT) e
-# a inicialização do modelo YOLO, servindo como ponto único de entrada para
-# detecção de pessoas no sistema.
-# ==============================================================================
+# ./neurapose_backend/detector/yolo_stream.py
 
 import numpy as np
-import torch
 from ultralytics import YOLO
-from colorama import Fore
+# from colorama import Fore
 
 import neurapose_backend.config_master as cm
 from neurapose_backend.tracker.rastreador import CustomBoTSORT, CustomDeepOCSORT, save_temp_tracker_yaml
@@ -48,13 +40,14 @@ class YoloDetectorPerson:
         self._init_system()
 
     def _init_system(self):
-        print(Fore.CYAN + f"[DETECTOR] Inicializando pipeline de rastreamento: {cm.TRACKER_NAME}")
+        # print(Fore.CYAN + f"[DETECTOR] Inicializando pipeline de rastreamento: {cm.TRACKER_NAME}")
         
         if self.using_tracker:
             self.tracker = CustomDeepOCSORT()
-            print(Fore.GREEN + "[DETECTOR] DeepOCSORT carregado com sucesso.")
+            # print(Fore.GREEN + "[DETECTOR] DeepOCSORT carregado com sucesso.")
         else:
-            print(Fore.YELLOW + f"[DETECTOR] Carregando YOLO: {cm.YOLO_PATH}")
+            # print(Fore.YELLOW + f"[DETECTOR] Carregando YOLO: {cm.YOLO_PATH}")
+            pass
             try:
                 self.model = YOLO(str(cm.YOLO_PATH), task='detect').to(cm.DEVICE)
                 
@@ -63,9 +56,9 @@ class YoloDetectorPerson:
                 self.model.tracker = self.tracker_instance
                 save_temp_tracker_yaml()
                 
-                print(Fore.GREEN + "[DETECTOR] YOLO + BoTSORT carregados com sucesso.")
+                # print(Fore.GREEN + "[DETECTOR] YOLO + BoTSORT carregados com sucesso.")
             except Exception as e:
-                print(Fore.RED + f"[ERRO] Falha fatal ao carregar YOLO/BoTSORT: {e}")
+                # print(Fore.RED + f"[ERRO] Falha fatal ao carregar YOLO/BoTSORT: {e}")
                 raise e
 
     @gpu_manager.inference_mode()
@@ -123,7 +116,7 @@ class YoloDetectorPerson:
                 return tracks
 
         except Exception as e:
-            print(Fore.RED + f"[DETECTOR] Erro no processamento do frame: {e}")
+            # print(Fore.RED + f"[DETECTOR] Erro no processamento do frame: {e}")
             return np.empty((0, 7))
 
         try:
@@ -132,15 +125,15 @@ class YoloDetectorPerson:
                 results.append(self.process_frame(frame, frame_idx=i))
             return results
         except Exception as e:
-             print(Fore.RED + f"[DETECTOR] Erro no processamento de batch: {e}")
-             return []
+            # print(Fore.RED + f"[DETECTOR] Erro no processamento de batch: {e}")
+            return []
 
     def cleanup(self):
         """
         Libera recursos de GPU e RAM.
         Deve ser chamado ao finalizar o uso do detector.
         """
-        print(Fore.CYAN + "[DETECTOR] Liberando recursos...")
+        # print(Fore.CYAN + "[DETECTOR] Liberando recursos...")
         if self.model:
             del self.model
             self.model = None
@@ -155,4 +148,4 @@ class YoloDetectorPerson:
 
         gpu_manager.clear_cache()
         ram_opt.force_gc()
-        print(Fore.GREEN + "[DETECTOR] Recursos liberados.")
+        # print(Fore.GREEN + "[DETECTOR] Recursos liberados.")

@@ -18,7 +18,7 @@ from neurapose_backend.nucleo.geometria import (
     transform_preds
 )
 from neurapose_backend.nucleo.suavizacao import EmaSmoother
-from neurapose_backend.nucleo.visualizacao import desenhar_esqueleto_unificado, color_for_id
+from neurapose_backend.nucleo.visualizacao import desenhar_esqueleto, color_for_id
 
 class ExtratorPoseRTMPose:
     def __init__(self, model_path=None, device='cuda'):
@@ -245,7 +245,7 @@ class ExtratorPoseRTMPose:
             # Desenho (Opcional)
             if desenhar_no_frame:
                 base_color = color_for_id(meta["pid"])
-                frame_img = desenhar_esqueleto_unificado(frame_img, kps_suavizados, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
+                frame_img = desenhar_esqueleto(frame_img, kps_suavizados, kp_thresh=cm.POSE_CONF_MIN, base_color=base_color)
                 # Opcional: Desenhar bbox e ID
                 x1, y1, x2, y2 = meta["box"]
                 cv2.rectangle(frame_img, (x1, y1), (x2, y2), (0, 255, 0), 2)

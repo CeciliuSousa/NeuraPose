@@ -7,7 +7,6 @@ import torch.nn as nn
 import cv2
 import numpy as np
 from ultralytics.utils.ops import xywh2xyxy
-from ultralytics.utils.plotting import save_one_box
 
 import torchvision.transforms as T
 import neurapose_backend.config_master as cm

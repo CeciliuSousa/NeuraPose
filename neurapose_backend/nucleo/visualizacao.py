@@ -31,7 +31,7 @@ def color_for_id(global_id: int):
     return _hash_to_color(global_id)
 
 
-def desenhar_esqueleto_unificado(frame, keypoints, kp_thresh=cm.POSE_CONF_MIN, base_color=(0, 255, 0), edge_color=None):
+def desenhar_esqueleto(frame, keypoints, kp_thresh=cm.POSE_CONF_MIN, base_color=(0, 255, 0), edge_color=None):
     """
     Desenha o esqueleto (keypoints e conexões) no frame.
     keypoints: array (K, 3) -> [x, y, conf]
@@ -231,7 +231,7 @@ def gerar_video_predicao(
             pred_name = r.get("classe_predita", None)
 
             # 1. Desenha Esqueleto
-            frame = desenhar_esqueleto_unificado(frame, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=color_for_id(pid))
+            frame = desenhar_esqueleto(frame, kps, kp_thresh=cm.POSE_CONF_MIN, base_color=color_for_id(pid))
 
             # 2. Desenha Info (Box + Texto)
             frame = desenhar_info_predicao_padrao(
