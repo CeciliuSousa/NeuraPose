@@ -44,16 +44,40 @@ class ExtratorPoseRTMPose:
         """Configura e carrega a sessão ONNXRuntime."""
         providers = []
         if self.device == 'cuda' and 'CUDAExecutionProvider' in ort.get_available_providers():
-            providers = ['CUDAExecutionProvider']
+            providers = [
+                ('CUDAExecutionProvider', {
+                    'device_id': 0,
+                    'arena_extend_strategy': 'kNextPowerOfTwo',
+                    'gpu_mem_limit': 2 * 1024 * 1024 * 1024, # 2GB Limit for Pose
+                    'cudnn_conv_algo_search': 'EXHAUSTIVE',
+                    'do_copy_in_default_stream': True,
+                }),
+                'CPUExecutionProvider'
+            ]
         else:
             providers = ['CPUExecutionProvider']
             
         try:
             sess_options = ort.SessionOptions()
             sess_options.log_severity_level = 3
+            sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
             
             sess = ort.InferenceSession(self.model_path, providers=providers, sess_options=sess_options)
-            input_name = sess.get_inputs()[0].name
+            input_meta = sess.get_inputs()[0]
+            input_name = input_meta.name
+            input_type = input_meta.type # 'tensor(float)' or 'tensor(float16)'
+            
+            self.use_fp16 = (input_type == 'tensor(float16)') or (cm.USE_FP16 and 'float16' in input_type)
+            
+            if cm.USE_FP16 and not self.use_fp16:
+                # User quer FP16 mas modelo é FP32. 
+                # ONNX Runtime não converte on-the-fly entrada FP16 para modelo FP32 sem reclamar (geralmente).
+                # Vamos manter FP32 para evitar crash, mas avisar.
+                # print(Fore.YELLOW + f"[RTMPOSE] WARN: Config USE_FP16=True, mas modelo espera {input_type}. Usando precisão do modelo.")
+                pass
+            elif self.use_fp16:
+                 print(Fore.GREEN + f"[RTMPOSE] Precisão FP16 Ativada!")
+
             return sess, input_name
         except Exception as e:
             print(Fore.RED + f"[ERRO_CRITICO] Falha ao carregar RTMPose: {e}")
@@ -66,15 +90,21 @@ class ExtratorPoseRTMPose:
         # 1. Resize
         resized = cv2.resize(bgr_crop, (cm.SIMCC_W, cm.SIMCC_H))
         
-        # 2. BGR -> RGB e Float32
-        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB).astype(np.float32)
+        # 2. BGR -> RGB e Normalização
+        # Otimização: Fazer tudo em float32 primeiro, depois cast se necessário
+        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
         
         # 3. Normalização (ImageNet Mean/Std)
-        rgb = (rgb - cm.MEAN) / cm.STD
+        # Usando float32 para as contas de normalização para precisão, depois cast
+        rgb = (rgb.astype(np.float32) - cm.MEAN) / cm.STD
         
         # 4. Transpose HWC -> CHW e Add Batch Dim -> NCHW
         chw = rgb.transpose(2, 0, 1)[None] 
         
+        # 5. Cast final
+        if getattr(self, 'use_fp16', False):
+             return chw.astype(np.float16)
+             
         return chw.astype(np.float32)
 
     def _decodificar_simcc(self, simcc_x, simcc_y):

@@ -21,7 +21,7 @@ from neurapose_backend.LSTM.modulos.treinamento import train_one_epoch
 
 # Otimizador
 try:
-    from neurapose_backend.otimizador.cuda.gpu_utils import GPUManager, check_gpu_memory
+    from neurapose_backend.otimizador.cuda.gpu_utils import GPUManager
     from neurapose_backend.otimizador.ram import memory
     HAS_OPTIMIZER = True
 except ImportError:
@@ -84,7 +84,7 @@ def main():
         gpu_manager.enable_cudnn_benchmarking()
         gpu_manager.clear_cache()
         memory.force_gc()
-        print(Fore.GREEN + "[OTIMIZADOR] GPU Manager & RAM Cleaner ativos.")
+        # print(Fore.GREEN + "[OTIMIZADOR] GPU Manager & RAM Cleaner ativos.")
     
     # Banner de inicio com info da GPU
     print("\n" + "="*70)

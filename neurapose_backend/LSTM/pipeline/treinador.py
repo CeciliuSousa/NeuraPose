@@ -73,7 +73,7 @@ def main():
         gpu_manager.enable_cudnn_benchmarking()
         gpu_manager.clear_cache()
         memory.force_gc()
-        print(Fore.GREEN + "[OTIMIZADOR] GPU Manager & RAM Cleaner ativos.")
+        # print(Fore.GREEN + "[OTIMIZADOR] GPU Manager & RAM Cleaner ativos.")
     
     # -------------------------------------------------------------------------
     # 1. BANNER E INFORMAÇÕES DO SISTEMA (PADRONIZADO)
@@ -315,9 +315,6 @@ def main():
     # print(Fore.YELLOW + f"[LOSS] Focal Loss (gamma=2.0)") 
     criterion = FocalLoss(alpha=weights, gamma=2.0).to(DEVICE)
 
-    # Modelo e otimizador
-    # Modelo e otimizador
-    # [FIX] Instanciação corretam com os argumentos do args
     if "tft" in args.model.lower():
         model = ModelClass(
             input_size=X_train.shape[2],

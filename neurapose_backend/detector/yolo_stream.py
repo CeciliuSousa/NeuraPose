@@ -91,6 +91,7 @@ class YoloDetectorPerson:
                     source=frame,
                     imgsz=cm.YOLO_IMGSZ,
                     conf=conf,
+                    half=cm.USE_FP16,
                     device=cm.DEVICE,
                     classes=[cm.YOLO_CLASS_PERSON],
                     verbose=False, 

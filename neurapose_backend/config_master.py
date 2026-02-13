@@ -204,7 +204,7 @@ BOT_SORT_CONFIG = {
     "new_track_thresh": 0.60,
     "track_buffer": 300,
     "match_thresh": 0.90,
-    "appearance_thresh": 0.45, # Aumentado para priorizar OSNet (ReID) na associação
+    "appearance_thresh": 0.45,
     "proximity_thresh": 0.75,
     "gmc_method": "none",
     "fuse_score": True,
