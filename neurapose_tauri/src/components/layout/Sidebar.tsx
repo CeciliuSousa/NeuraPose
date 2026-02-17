@@ -27,7 +27,6 @@ const STATUS_KEYS: Record<string, string> = {
     '/testes': 'test',
     '/converter': 'convert',
     '/split': 'split',
-    // '/reid': 'reid',
     '/anotacao': 'annotate',
 };
 
@@ -43,7 +42,6 @@ function getStatusColor(status: PageStatus): string {
 const menuItems = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Processar Vídeo', href: '/processamento', icon: Video },
-    // { name: 'Re-identificação', href: '/reid', icon: ScanFace },
     { name: 'Anotação', href: '/anotacao', icon: PenTool },
     { name: 'Split Dataset', href: '/split', icon: Scissors },
     { name: 'Converter .pt', href: '/converter', icon: FileOutput },

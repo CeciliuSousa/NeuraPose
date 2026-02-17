@@ -68,7 +68,7 @@ def indexar_por_frame(records):
         if isinstance(bbox, list) and len(bbox) == 4:
             bbox = {"x1": bbox[0], "y1": bbox[1], "x2": bbox[2], "y2": bbox[3]}
 
-        frame_idx = int(r.get("frame", 0))
+        frame_idx = int(r.get("frame_idx", r.get("frame", 0)))
         frames[frame_idx].append((bbox, int(gid)))
         id_counter[int(gid)] += 1
 

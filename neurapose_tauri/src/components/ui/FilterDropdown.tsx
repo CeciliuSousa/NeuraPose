@@ -15,10 +15,6 @@ interface FilterDropdownProps {
     placeholder?: string;
 }
 
-/**
- * Componente de dropdown de filtro reutilizável.
- * Usado em ReidPage e AnotacaoPage para filtrar listas de vídeos.
- */
 export function FilterDropdown({ options, selected, onSelect, placeholder = "Filtrar" }: FilterDropdownProps) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);

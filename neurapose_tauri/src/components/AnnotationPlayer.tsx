@@ -181,12 +181,12 @@ export function AnnotationPlayer({
             const textWidth = ctx.measureText(label).width + 12;
             const labelHeight = 22;
 
-            // Fundo Branco (Pedido do User)
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+            // Fundo Colorido (Pedido do User)
+            ctx.fillStyle = strokeColor;
             ctx.fillRect(sx1, sy1 - labelHeight, textWidth, labelHeight);
 
-            // Texto Preto (Pedido do User)
-            ctx.fillStyle = 'black';
+            // Texto Branco para contraste
+            ctx.fillStyle = 'white';
             ctx.fillText(label, sx1 + 6, sy1 - 6);
         }
     };

@@ -1,11 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
 
-// =========================================================================
-// TAURI COMMANDS WRAPPER
-// =========================================================================
-// Substitui o axios por chamadas diretas ao Rust ("request_python")
-// Isso evita o overhead do browser network stack e problemas de CORS.
-
 interface ApiResponse<T> {
     status: number;
     data: T;
@@ -152,7 +146,7 @@ export const APIService = {
 
     listReIDVideos: (rootPath?: string) => api.get<{ videos: ReIDVideo[] }>(`/reid/list`, { params: { root_path: rootPath } }),
 
-    getReIDData: (videoId: string, rootPath?: string) => api.get<ReIDData>(`/reid/${videoId}/data`, { params: { root_path: rootPath } }),
+    getReIDData: (videoId: string, rootPath?: string) => api.get<ReIDData>(`/annotate/${videoId}/data`, { params: { root_path: rootPath } }),
 
     applyReIDChanges: (videoId: string, data: any, rootPath?: string) => api.post(`/reid/${videoId}/apply`, data, { params: { root_path: rootPath } }),
 

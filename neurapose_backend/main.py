@@ -36,7 +36,7 @@ try:
     # Import Routes
     from neurapose_backend.routes import (
         system, config, processing, training, testing, 
-        reid, annotation, dataset
+        annotation, dataset
     )
 except ImportError as e:
     print(f"CRITICAL ERROR: Could not import project modules.\nImport failed: {e}")
@@ -59,16 +59,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+from fastapi.staticfiles import StaticFiles
 
 # ==============================================================
 # ROUTERS
 # ==============================================================
+# Mount Static Files for Video Playback
+if cm.PROCESSING_OUTPUT_DIR.exists():
+    app.mount("/videos", StaticFiles(directory=str(cm.PROCESSING_OUTPUT_DIR)), name="videos")
+else:
+    logger.warning(f"[STATIC] Video directory not found: {cm.PROCESSING_OUTPUT_DIR}")
 app.include_router(system.router, tags=["System"])
 app.include_router(config.router, tags=["Config"])
 app.include_router(processing.router, tags=["Processing"])
 app.include_router(training.router, tags=["Training"])
 app.include_router(testing.router, tags=["Testing"])
-# app.include_router(reid.router, tags=["ReID"])
 app.include_router(annotation.router, tags=["Annotation"])
 app.include_router(dataset.router, tags=["Dataset"])
 

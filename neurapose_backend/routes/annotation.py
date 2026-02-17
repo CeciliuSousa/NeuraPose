@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 import neurapose_backend.config_master as cm
@@ -233,7 +234,91 @@ def save_all_pending(req: BatchAnnotationRequest):
                 saved_count += 1
         except: continue
 
+
     with open(labels_path, "w", encoding="utf-8") as f:
         json.dump(todas_labels, f, indent=4, ensure_ascii=False)
         
     return {"status": "success", "saved_count": saved_count}
+
+@router.get("/annotate/video/{video_id}")
+def stream_annotation_video(video_id: str, root_path: Optional[str] = None):
+    root = Path(root_path).resolve() if root_path else cm.REID_OUTPUT_DIR
+    if root.name in ["predicoes", "jsons", "videos", "reid", "anotacoes"]:
+        root = root.parent
+    
+    # Busca 1: Nome exato na pasta de vídeos (Original)
+    video_path = root / "videos" / f"{video_id}.mp4"
+    
+    # Busca 2: Nome exato na pasta de predicoes (Processado)
+    if not video_path.exists():
+        video_path = root / "predicoes" / f"{video_id}.mp4"
+    
+    # Busca 3: Tentativa de limpar sufixos _pose, _pred
+    if not video_path.exists():
+        clean_id = video_id.replace("_pose", "").replace("_pred", "")
+        video_path = root / "videos" / f"{clean_id}.mp4"
+        
+    # Busca 4: Limpo na pasta de predicoes
+    if not video_path.exists():
+        clean_id = video_id.replace("_pose", "").replace("_pred", "")
+        video_path = root / "predicoes" / f"{clean_id}_pose.mp4"
+
+    if not video_path.exists():
+        raise HTTPException(status_code=404, detail=f"Video not found: {video_id}")
+        
+
+    return FileResponse(video_path, media_type="video/mp4")
+
+@router.get("/annotate/{video_id}/data")
+def get_annotation_data(video_id: str, root_path: Optional[str] = None):
+    """Retorna dados detalhados frame a frame para o player (BBoxes, IDs)."""
+    from neurapose_backend.pre_processamento.anotando_classes import carregar_pose_records
+    
+    root = Path(root_path).resolve() if root_path else cm.REID_OUTPUT_DIR
+    if root.name in ["predicoes", "jsons", "videos", "reid", "anotacoes"]:
+        root = root.parent
+    
+    json_dir = root / "jsons"
+    json_path = json_dir / f"{video_id}.json"
+    
+    if not json_path.exists():
+        clean_id = video_id.replace("_pose", "").replace("_pred", "")
+        json_path = json_dir / f"{clean_id}.json"
+
+    if not json_path.exists():
+        json_path = json_dir / f"{clean_id}_pose.json"
+        
+    if not json_path.exists():
+        json_path = json_dir / f"{clean_id}_tracking.json"
+    
+    if not json_path.exists():
+         # Retorna vazio se não tiver JSON, para não quebrar o player
+        return {"video_id": video_id, "frames": {}, "id_counts": {}}
+    
+    records = carregar_pose_records(json_path)
+    
+    frames_data = {}
+    id_counts = {}
+    
+    for r in records:
+        fid = str(int(r.get("frame_idx", r.get("frame", -1))))
+        gid = int(r.get("id_persistente") if r.get("id_persistente") is not None else (r.get("BoTSORT_id") if r.get("BoTSORT_id") is not None else -1))
+        
+        if gid < 0: continue
+            
+        bbox = r.get("bbox", [])
+        
+        if fid not in frames_data: frames_data[fid] = []
+        frames_data[fid].append({
+            "id": gid,
+            "bbox": bbox,
+            "keypoints": r.get("keypoints", [])
+        })
+        
+        id_counts[str(gid)] = id_counts.get(str(gid), 0) + 1
+            
+    return {
+        "video_id": video_id,
+        "frames": frames_data,
+        "id_counts": id_counts
+    }

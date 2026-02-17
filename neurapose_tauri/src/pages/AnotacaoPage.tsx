@@ -352,7 +352,7 @@ export default function AnotacaoPage() {
     ], [stats]);
 
     const videoSrc = selectedVideo
-        ? `http://localhost:8000/reid/video/${selectedVideo.video_id}?root_path=${encodeURIComponent(inputPath)}&source=raw`
+        ? `http://localhost:8000/annotate/video/${selectedVideo.video_id}?root_path=${encodeURIComponent(inputPath)}`
         : '';
 
     return (

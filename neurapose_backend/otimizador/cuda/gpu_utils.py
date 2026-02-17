@@ -182,7 +182,7 @@ def enable_cudnn_auto_tuning() -> None:
         torch.backends.cudnn.enabled = True
 
 
-def clear_gpu_cache() -> None:
+def clear_gpu_cache(force: bool = False) -> None:
     """Limpa cache GPU + Python garbage collection."""
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
