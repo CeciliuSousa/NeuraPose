@@ -224,7 +224,7 @@ export function AnnotationPlayer({
             isActive = false;
             cancelAnimationFrame(animationId);
         };
-    }, [framesLookup, annotations, classe1, classe2, fps, onFrameChange]);
+    }, [framesLookup, annotations, idIntervals, classe1, classe2, fps, onFrameChange]);
 
     useEffect(() => {
         const v = videoRef.current;
