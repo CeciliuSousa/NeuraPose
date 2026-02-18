@@ -46,6 +46,7 @@ export default function AnotacaoPage() {
 
     // Dados do vídeo selecionado
     const [videoIds, setVideoIds] = useState<{ id: number; frames: number }[]>([]);
+    const [totalFrames, setTotalFrames] = useState(0);
     const [annotations, setAnnotations] = useState<Record<string, string>>({});
     const [frameData, setFrameData] = useState<any>(null); // Dados de frame para overlay
 
@@ -148,18 +149,36 @@ export default function AnotacaoPage() {
             const data = (res as any).data;
             const ids = data.ids || [];
             setVideoIds(ids);
+            setTotalFrames(data.total_frames || 0);
 
             // Usa labels retornados pela API, ou classe1 (NORMAL) como fallback
-            const initial: Record<string, string> = {};
+            const initialAnnotations: Record<string, string> = {};
+            const initialIntervals: Record<string, Array<[number, number]>> = {};
+
             ids.forEach((item: any) => {
-                // Se a API retornou um label salvo diferente de "desconhecido", usa ele
-                if (item.label && item.label !== 'desconhecido') {
-                    initial[String(item.id)] = item.label;
+                const labelData = item.label;
+                const pid = String(item.id);
+
+                if (labelData && typeof labelData === 'object') {
+                    // Formato Complexo (Classe + Intervalos)
+                    const cls = labelData.classe;
+                    // Se for "desconhecido" ou vazio, força classe1 (NORMAL)
+                    initialAnnotations[pid] = (cls && cls !== 'desconhecido') ? cls : classe1;
+
+                    if (Array.isArray(labelData.intervals)) {
+                        initialIntervals[pid] = labelData.intervals;
+                    }
+                } else if (typeof labelData === 'string' && labelData !== 'desconhecido') {
+                    // Formato Simples (Só String)
+                    initialAnnotations[pid] = labelData;
                 } else {
-                    initial[String(item.id)] = classe1;
+                    // Default
+                    initialAnnotations[pid] = classe1;
                 }
             });
-            setAnnotations(initial);
+
+            setAnnotations(initialAnnotations);
+            setIdIntervals(initialIntervals);
 
             // Carrega dados de frame para overlay de bboxes coloridas
             try {
@@ -182,8 +201,15 @@ export default function AnotacaoPage() {
     };
 
     const handleAddInterval = (id: string) => {
-        const start = parseInt(startInput);
-        const end = parseInt(endInput);
+        let start = parseInt(startInput);
+        let end = parseInt(endInput);
+
+        // Lógica Inteligente (Auto-Complete)
+        if (!isNaN(start) && (endInput.trim() === '' || isNaN(end))) {
+            end = totalFrames;
+        } else if ((startInput.trim() === '' || isNaN(start)) && !isNaN(end)) {
+            start = 0;
+        }
 
         if (isNaN(start) || isNaN(end)) {
             return;
@@ -476,6 +502,7 @@ export default function AnotacaoPage() {
                                 src={videoSrc}
                                 frameData={frameData}
                                 annotations={annotations}
+                                idIntervals={idIntervals} // Passando intervalos para renderização condicional
                                 classe1={classe1}
                                 classe2={classe2}
                                 fps={30}

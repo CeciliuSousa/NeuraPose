@@ -7,6 +7,7 @@ interface AnnotationPlayerProps {
     src: string;
     frameData: any;
     annotations: Record<string, string>;
+    idIntervals?: Record<string, Array<[number, number]>>;
     classe1?: string;
     classe2?: string;
     fps?: number;
@@ -18,6 +19,7 @@ export function AnnotationPlayer({
     src,
     frameData,
     annotations,
+    idIntervals = {},
     classe1 = CLASSE1,
     classe2 = CLASSE2,
     fps = 30,
@@ -151,7 +153,22 @@ export function AnnotationPlayer({
                 continue;
             }
 
-            const classe = annotations[String(pid)] || classe1;
+            let classe = annotations[String(pid)] || classe1;
+            const intervals = idIntervals[String(pid)];
+
+            // Lógica Temporal de Renderização
+            // Se a classe base for ANORMAL (classe2) E tiver intervalos definidos
+            if (classe === classe2 && intervals && intervals.length > 0) {
+                // Assume NORMAL por padrão
+                classe = classe1;
+                // Verifica se o frame atual está dentro de ALGUM intervalo de anomalia
+                for (const [start, end] of intervals) {
+                    if (currentFrame >= start && currentFrame <= end) {
+                        classe = classe2; // Está no intervalo de furto -> muda para ANORMAL
+                        break;
+                    }
+                }
+            }
 
             let strokeColor: string;
 

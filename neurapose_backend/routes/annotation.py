@@ -117,17 +117,19 @@ def get_annotation_details(video_id: str, root_path: Optional[str] = None):
     for gid, count in id_counter.items():
         if count >= cm.MIN_FRAMES_PER_ID:
             saved_label = saved_labels.get(str(gid), None)
+            
+            # Se for dicionário (Temporal), retorna completo. Se for string (Simples), normaliza.
             if isinstance(saved_label, dict):
-                label = saved_label.get("classe", "desconhecido")
+                label_data = saved_label
             elif saved_label:
-                label = saved_label
+                label_data = {"classe": saved_label, "intervals": []}
             else:
-                label = "desconhecido"
+                label_data = {"classe": "desconhecido", "intervals": []}
             
             ids_info.append({
                 "id": gid,
                 "frames": count,
-                "label": label
+                "label": label_data  # Retorna objeto completo ou normalizado
             })
             
     return {
