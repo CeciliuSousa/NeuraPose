@@ -433,7 +433,7 @@ class TransformerModel(nn.Module):
             nn.ReLU(),
             nn.Linear(64, num_classes)
         )
-        nn.init.classe1_(self.cls_token, std=0.02)
+        nn.init.normal_(self.cls_token, std=0.02)
 
     def forward(self, x):
         x = ensure_BTF(x)               # (B,T,F)
@@ -617,7 +617,7 @@ class TemporalFusionTransformer(nn.Module):
 
         # Positional encoding (aprendida simples)
         self.pos = nn.Parameter(torch.zeros(1, 4096, d_model)) # máx T=1000 (ajuste conforme)
-        nn.init.classe1_(self.pos, std=0.02)
+        nn.init.normal_(self.pos, std=0.02)
 
     def forward(self, x):
         # x: (B,T,F)

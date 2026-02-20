@@ -19,11 +19,10 @@ logger = logging.getLogger("NeuraPoseAPI")
 # ==============================================================
 
 class TestRequest(BaseModel):
-    model_name: str
-    datasets: List[str]
+    model_path: str
+    dataset_path: str
     device: str = "cuda"
-    test_split: bool = True
-    batch_size: int = 32
+    show_preview: bool = False
 
 # ==============================================================
 # HELPERS
@@ -37,27 +36,19 @@ def run_testing_task(req_dict: dict):
     
     with CaptureOutput(category="test"):
         try:
-            # Emulation of command line args for testar_modelo.py
-            # TODO: Refactor testar_modelo.py to not rely on sys.argv
-            sys.argv = ["testar_modelo.py"]
-            sys.argv.append("--model_name")
-            sys.argv.append(req_dict["model_name"])
+            model_path = req_dict["model_path"]
+            dataset_path = req_dict["dataset_path"]
+            show_preview = req_dict.get("show_preview", False)
             
-            for ds in req_dict["datasets"]:
-                sys.argv.append("--datasets")
-                sys.argv.append(ds)
-                
-            if not req_dict.get("test_split", True):
-                sys.argv.append("--no_split")
-                
-            sys.argv.append("--batch_size")
-            sys.argv.append(str(req_dict.get("batch_size", 32)))
-            
-            logger.info(f"Iniciando teste com args: {sys.argv}")
+            # logger.info(f"Iniciando teste dinâmico com: modelo={model_path}, dataset={dataset_path}, show={show_preview}")
             
             import neurapose_backend.app.testar_modelo as tm
             importlib.reload(tm)
-            tm.main()
+            tm.main(
+                override_model_dir=model_path,
+                override_input_dir=dataset_path,
+                override_show=show_preview
+            )
             
             state.process_status = 'success'
         except Exception as e:

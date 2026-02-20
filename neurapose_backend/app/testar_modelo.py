@@ -40,9 +40,9 @@ def format_seconds_to_hms(seconds):
     
     return " ".join(parts)
 
-def main():
+def main(override_model_dir=None, override_input_dir=None, override_show=None):
     # 1. Resolver paths PRIMEIRO para poder exibir no banner corretamente
-    arg_model = getattr(args, 'model_dir', '')
+    arg_model = override_model_dir if override_model_dir else getattr(args, 'model_dir', '')
     model_dir = Path(arg_model) if arg_model else MODEL_DIR
     best_model_path = model_dir / "model_best.pt"
     
@@ -95,7 +95,8 @@ def main():
     # Se nao achou modelo, sai agora que ja avisou no banner
     if not best_model_path.exists(): return
 
-    video_input = Path(args.input_dir) if args.input_dir else DATASET_DIR
+    arg_input = override_input_dir if override_input_dir else getattr(args, 'input_dir', '')
+    video_input = Path(arg_input) if arg_input else DATASET_DIR
     if video_input.is_dir():
         if (video_input / "teste" / "videos").exists(): video_input = video_input / "teste" / "videos"
         elif (video_input / "videos").exists(): video_input = video_input / "videos"
@@ -147,7 +148,8 @@ def main():
         if state.stop_requested: break
         print(Fore.BLUE + f"[{i+1}/{total_videos}] PROCESSANDO: {video_path.name}")
         
-        predictions = processar_video(video_path, lstm_model, norm_stats.get("mu"), norm_stats.get("sigma"), show_preview=args.show, output_dir=out_report_dir, labels_path=labels_gt_path)
+        final_show = override_show if override_show is not None else getattr(args, 'show', False)
+        predictions = processar_video(video_path, lstm_model, norm_stats.get("mu"), norm_stats.get("sigma"), show_preview=final_show, output_dir=out_report_dir, labels_path=labels_gt_path)
         
         if predictions and 'tempos' in predictions and 'total' in predictions['tempos']:
             total_time_all += predictions['tempos']['total']
@@ -202,7 +204,7 @@ def main():
                 # Se não achar por stem, tenta por nome completo se estiver no json
                 if not gt_map:
                      for k in labels_gt:
-                        if k in video_stem or video_stem in k:
+                        if isinstance(k, str) and (k in video_stem or video_stem in k):
                             gt_map = labels_gt[k]
                             break
                 

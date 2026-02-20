@@ -20,8 +20,8 @@ class SplitRequest(BaseModel):
     input_dir_process: str
     dataset_name: str
     output_root: Optional[str] = None
-    train_split: float = 0.7
-    test_split: float = 0.2
+    train_split: str = "treino"
+    test_split: str = "teste"
     train_ratio: float = 0.8  # train/(train+val)
 
 class ConvertRequest(BaseModel):
