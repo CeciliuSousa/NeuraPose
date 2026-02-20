@@ -97,6 +97,14 @@ NUM_CHANNELS = 2
 BATCH_SIZE = 256
 LEARNING_RATE = 0.0003
 EPOCHS = 5000
+USE_DATA_AUGMENTATION = False
+USE_LR_SCHEDULER = True
+
+# Early Stopping & LR Scheduler (Mecanismo Pós-CrossEntropy)
+EARLY_STOPPING_PATIENCE = 30
+LR_SCHEDULER_PATIENCE = 8
+LR_SCHEDULER_FACTOR = 0.5
+LR_SCHEDULER_MIN_LR = 1e-6
 
 # LSTM/Transformer
 LSTM_DROPOUT = 0.3
@@ -106,7 +114,7 @@ LSTM_NUM_HEADS = 8
 LSTM_KERNEL_SIZE = 5
 
 # -- TESTE --
-CLASSE2_THRESHOLD = 0.70
+CLASSE2_THRESHOLD = 0.55
 TEMPORAL_PATIENCE_FRAMES = 5    # Requer X aprovações consecutivas acima do threshold pra bater o martelo (reduz falso positivo)
 TEMPORAL_SMOOTHING_WINDOW = 3   # Média móvel das últimas X predições (suaviza oscilação de score)
 

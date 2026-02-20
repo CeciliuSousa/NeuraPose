@@ -42,14 +42,14 @@ def evaluate(model, dataloader, device, criterion=None, class_names=[cm.CLASSE1,
             
             out = model(xb)
             
-            # Predições Frame-Level
-            pred_classes = torch.argmax(out, dim=1).cpu().numpy()
-            true_classes = yb.cpu().numpy()
-            
             # Scores da classe positiva (1) para acumular
-            # Softmax para ter probabilidade real se model nao tiver
             probs = torch.softmax(out, dim=1)
             pos_scores = probs[:, 1].cpu().numpy()
+            
+            # Predições Frame-Level baseadas no Threshold Real de Produção (Ex: 0.70)
+            # Evita o viés do argmax(dim=1) que cortava em 0.50 gerando Falsos Alarmes irreais
+            pred_classes = (pos_scores >= cm.CLASSE2_THRESHOLD).astype(int)
+            true_classes = yb.cpu().numpy()
             
             preds_frame.extend(pred_classes)
             labels_frame.extend(true_classes)

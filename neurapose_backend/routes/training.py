@@ -36,6 +36,8 @@ class TrainStartRequest(BaseModel):
     num_layers: int = 2
     num_heads: int = 8
     kernel_size: int = 5
+    use_data_augmentation: bool = False
+    use_lr_scheduler: bool = True
 
 class TrainRetrainRequest(TrainStartRequest):
     pretrained_path: str 
@@ -113,6 +115,9 @@ async def train_model_start(req: TrainStartRequest, background_tasks: Background
         with CaptureOutput(category="train"):
             try:
                 import sys
+                cm.USE_DATA_AUGMENTATION = req.use_data_augmentation
+                cm.USE_LR_SCHEDULER = req.use_lr_scheduler
+                
                 sys.argv = [
                     "treinador.py",
                     "--dataset", str(data_file),
@@ -170,6 +175,9 @@ async def train_model_retrain(req: TrainRetrainRequest, background_tasks: Backgr
         with CaptureOutput(category="train"):
             try:
                 import sys
+                cm.USE_DATA_AUGMENTATION = req.use_data_augmentation
+                cm.USE_LR_SCHEDULER = req.use_lr_scheduler
+
                 sys.argv = [
                     "treinador.py",
                     "--dataset", str(data_file),

@@ -38,6 +38,8 @@ const FALLBACK_PARAMS = {
     num_layers: 2,
     num_heads: 8,
     kernel_size: 5,
+    use_data_augmentation: false,
+    use_lr_scheduler: true,
 };
 
 type TrainMode = 'treinar' | 'retreinar';
@@ -103,6 +105,8 @@ export default function TreinoPage() {
                     num_layers: cfg.NUM_LAYERS || FALLBACK_PARAMS.num_layers,
                     num_heads: cfg.NUM_HEADS || FALLBACK_PARAMS.num_heads,
                     kernel_size: cfg.KERNEL_SIZE || FALLBACK_PARAMS.kernel_size,
+                    use_data_augmentation: cfg.USE_DATA_AUGMENTATION ?? FALLBACK_PARAMS.use_data_augmentation,
+                    use_lr_scheduler: cfg.USE_LR_SCHEDULER ?? FALLBACK_PARAMS.use_lr_scheduler,
                 };
 
                 setParams(newDefaults);
@@ -403,6 +407,26 @@ export default function TreinoPage() {
                                         <label className="text-muted-foreground">Kernel Size</label>
                                         <input type="number" className="w-full px-2 py-1.5 rounded border border-border bg-background" value={params.kernel_size} onChange={e => setParams({ ...params, kernel_size: parseInt(e.target.value) || 0 })} />
                                     </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs mt-4">
+                                    <label className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background hover:border-primary/50 cursor-pointer transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={params.use_data_augmentation}
+                                            onChange={e => setParams({ ...params, use_data_augmentation: e.target.checked })}
+                                            className="w-4 h-4 accent-primary"
+                                        />
+                                        <span className="font-semibold text-muted-foreground">Data Augmentation (Mirroring)</span>
+                                    </label>
+                                    <label className="flex items-center gap-3 p-3 rounded-lg border border-border bg-background hover:border-primary/50 cursor-pointer transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={params.use_lr_scheduler}
+                                            onChange={e => setParams({ ...params, use_lr_scheduler: e.target.checked })}
+                                            className="w-4 h-4 accent-primary"
+                                        />
+                                        <span className="font-semibold text-muted-foreground">LR Scheduler (Plateau Reduce)</span>
+                                    </label>
                                 </div>
                             </div>
 

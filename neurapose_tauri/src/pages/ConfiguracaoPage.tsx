@@ -207,6 +207,8 @@ export default function ConfiguracaoPage() {
             title: "Parâmetros de Treinamento",
             description: "Hiperparâmetros usados no treinamento do modelo temporal.",
             items: [
+                { key: "USE_DATA_AUGMENTATION", label: "Data Augmentation (Mirroring/Noise)", type: "boolean" },
+                { key: "USE_LR_SCHEDULER", label: "LR Scheduler (Reduce na Estagnação)", type: "boolean" },
                 { key: "TIME_STEPS", label: "Janela Temporal (Frames)", type: "number" },
                 { key: "BATCH_SIZE", label: "Tamanho do Lote (Batch)", type: "number" },
                 { key: "LEARNING_RATE", label: "Taxa de Aprendizado (LR)", type: "number", step: 0.0001 },

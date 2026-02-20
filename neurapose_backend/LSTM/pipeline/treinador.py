@@ -296,7 +296,8 @@ def main():
         balanced_mode = False
     
     # DataLoaders - [UPDATED] Passa metadata
-    train_ds = AugmentedDataset(X_train, y_train, meta=meta_train, augment=True)
+    # O Augmentation agora escuta o comando do painel de controle interativo (Ou da Requisição da API)
+    train_ds = AugmentedDataset(X_train, y_train, meta=meta_train, augment=cm.USE_DATA_AUGMENTATION)
     val_ds = AugmentedDataset(X_val, y_val, meta=meta_val, augment=False)
 
     num_workers = min(4, os.cpu_count() or 1)
@@ -309,13 +310,14 @@ def main():
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, num_workers=num_workers, pin_memory=pin_memory)
 
     # Pesos para loss
-    inv_freq = torch.tensor([1.0 / n0, 1.0 / n1], device=DEVICE)
-    weights = inv_freq / inv_freq.sum() * 2
-    
-    # print(Fore.YELLOW + f"[LOSS] CrossEntropyLoss Ponderada") 
-    # Usando CrossEntropy em vez de FocalLoss para reduzir hiper-sensibilidade
-    # e acalmar os Falsos Alarmes (FAR), confiando apenas no WeightedSampler do batch
-    criterion = torch.nn.CrossEntropyLoss(weight=weights).to(DEVICE)
+    # EVITAR DUPLO BALANCEAMENTO: Se o dataloader já vai enviar batches 50/50 
+    # (balanced_mode = True), injetar o peso novamente causará um viés drástico a favor de Furtos.
+    if balanced_mode:
+        criterion = torch.nn.CrossEntropyLoss().to(DEVICE)
+    else:
+        inv_freq = torch.tensor([1.0 / n0, 1.0 / n1], device=DEVICE)
+        weights = inv_freq / inv_freq.sum() * 2
+        criterion = torch.nn.CrossEntropyLoss(weight=weights).to(DEVICE)
 
     if "tft" in args.model.lower():
         model = ModelClass(
@@ -370,7 +372,16 @@ def main():
     # print(Fore.BLUE + f"[INFO] Modelo instanciado com Hidden={args.hidden_size}, Layers={args.num_layers}, Heads={args.num_heads}")
 
     optimizer = optim.AdamW(model.parameters(), lr=min(args.lr, 3e-4), weight_decay=1e-2)
-    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.5, patience=12, min_lr=1e-6)
+    # Reduzimos a paciência do Scheduler para agir rápido em platôs matemáticos, lido do config_master
+    if cm.USE_LR_SCHEDULER:
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='max', 
+            factor=cm.LR_SCHEDULER_FACTOR, 
+            patience=cm.LR_SCHEDULER_PATIENCE, 
+            min_lr=cm.LR_SCHEDULER_MIN_LR
+        )
+    else:
+        scheduler = None
 
     # Diretorio de saida
     model_name = args.name
@@ -382,8 +393,8 @@ def main():
     # Salva estatisticas de normalizacao
     torch.save({"mu": mu.cpu(), "sigma": sigma.cpu()}, model_dir / cm.NORM_STATS_FILENAME)
 
-    # Early stopping
-    early = EarlyStopper(patience=12)
+    # Early stopping com paciência elevada para tolerar as oscilações lidas do config_master
+    early = EarlyStopper(patience=cm.EARLY_STOPPING_PATIENCE)
     best_val_f1, best_epoch = -1, -1
     history = []
 
@@ -421,8 +432,10 @@ def main():
             # Salva o report detalhado da melhor época
             final_val_report_id = val_report_id
 
+        # Obtém a Learning Rate atual
+        current_lr = optimizer.param_groups[0]['lr']
         # Log formatado: [TREINANDO] Epoca X/Y ...
-        print(f"{Fore.YELLOW}[TREINANDO] Epoca {epoch:0{digits}d}/{args.epochs} | Train loss: {tr_loss:.4f} | Val loss: {va_loss:.4f} | Acc: {va_acc*100:.1f}% | F1: {va_f1m:.4f}")
+        print(f"{Fore.YELLOW}[TREINANDO] Epoca {epoch:0{digits}d}/{args.epochs} | Train loss: {tr_loss:.4f} | Val loss: {va_loss:.4f} | Acc: {va_acc*100:.1f}% | F1: {va_f1m:.4f} | LR: {current_lr:.6f}")
 
         if early.should_stop(va_f1m, va_loss):
             print(Fore.MAGENTA + f"\n[STOP] Early stopping na epoca {epoch}")
