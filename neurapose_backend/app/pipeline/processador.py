@@ -159,19 +159,41 @@ def processar_video(video_path: Path, lstm_model, mu_ignored, sigma_ignored, sho
             probs_map = brain.predict_batch(track_ids, kps_list)
             
             # 3. Atribui resultados
+            # Configuração de paciência inicial
+            if not hasattr(brain, 'prob_history'):
+                from collections import deque, defaultdict
+                smooth_size = getattr(cm, "TEMPORAL_SMOOTHING_WINDOW", 3)
+                brain.prob_history = defaultdict(lambda: deque(maxlen=smooth_size))
+                brain.anomaly_streak = defaultdict(int)
+
             for rec in pose_records:
                 pid = rec["id_persistente"]
+                raw_prob = probs_map.get(pid, 0.0)
                 
-                # Se por algum motivo o ID não voltar (ex: buffer < 1 frame), assume 0.0
-                prob = probs_map.get(pid, 0.0)
+                # Suavização (Média Móvel)
+                brain.prob_history[pid].append(raw_prob)
+                smoothed_prob = sum(brain.prob_history[pid]) / len(brain.prob_history[pid])
                 
-                rec['anomalia_prob'] = round(prob, 2)
-                rec['anomalia'] = prob >= cm.CLASSE2_THRESHOLD
+                # Check Limiar com Paciência
+                is_above_thresh = smoothed_prob >= cm.CLASSE2_THRESHOLD
+                if is_above_thresh:
+                    brain.anomaly_streak[pid] += 1
+                else:
+                    brain.anomaly_streak[pid] = 0
                 
+                req_streak = getattr(cm, "TEMPORAL_PATIENCE_FRAMES", 5)
+                anomalia_confirmada = brain.anomaly_streak[pid] >= req_streak
+                
+                # Atualização Visual
+                rec['anomalia_prob'] = round(smoothed_prob, 2)
+                rec['anomalia'] = anomalia_confirmada
+                
+                # Histórico de Score Max
                 if pid not in pred_stats: pred_stats[pid] = 0.0
-                pred_stats[pid] = max(pred_stats[pid], prob)
+                pred_stats[pid] = max(pred_stats[pid], smoothed_prob)
                 
-                if rec['anomalia']:
+                # Matriz Final de Teste (Bloqueando Falsos Positivos Efêmeros)
+                if anomalia_confirmada:
                     id_final_preds[pid] = 1
                 elif pid not in id_final_preds:
                     id_final_preds[pid] = 0

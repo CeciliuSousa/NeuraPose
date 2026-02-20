@@ -107,6 +107,8 @@ LSTM_KERNEL_SIZE = 5
 
 # -- TESTE --
 CLASSE2_THRESHOLD = 0.70
+TEMPORAL_PATIENCE_FRAMES = 5    # Requer X aprovações consecutivas acima do threshold pra bater o martelo (reduz falso positivo)
+TEMPORAL_SMOOTHING_WINDOW = 3   # Média móvel das últimas X predições (suaviza oscilação de score)
 
 # -- PATHS --
 

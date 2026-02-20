@@ -102,79 +102,94 @@ def parse_scene_clip(stem: str):
     return 0, 0
 
 
-def extract_sequence(records, target_id, interval=None, max_seq_len=60, min_seq_len=5):
+def extract_sliding_windows(records, target_id, is_positive, intervals=None, max_seq_len=60, min_seq_len=5):
     """
-    Extrai sequencia de keypoints (C,T,V) para um ID.
-    Args:
-        interval: (start_frame, end_frame) ou None para video todo.
+    Extrai MÚLTIPLAS sequências de keypoints (C,T,V) usando Janela Deslizante.
+    Permite capturar o Contexto Normal (Hard Negatives) de um criminoso, e múltiplas 
+    amostras de Pessoas Normais inteiras.
     """
-    frames = []
-    
     try:
         id_target = int(target_id)
     except:
-        return None
+        return [], []
 
-    # Filtra records relevantes
+    # 1. Filtra records apenas deste ID
+    id_records = []
     for r in records:
-        rid = r.get("id_persistente", None)
         try:
-            rid = int(rid)
+            rid = int(r.get("id_persistente", -1))
+            if rid == id_target:
+                kps = r.get("keypoints", [])
+                if isinstance(kps, list) and len(kps) >= 2:
+                    id_records.append(r)
         except:
             continue
-            
-        if rid != id_target:
-            continue
 
-        # [NOVO] Filtro Temporal
-        frame_idx = r.get("frame", -1)
-        if interval:
-            start_f, end_f = interval
-            if not (start_f <= frame_idx <= end_f):
-                continue
-
-        kps = r.get("keypoints", [])
-        if not isinstance(kps, list) or len(kps) < 2:
-            continue
-
-        # Extrai coordenadas x,y de cada keypoint
-        coords = np.zeros((V, C), dtype=np.float32)
-        for i, kp in enumerate(kps[:V]):
-            if len(kp) >= 2:
-                coords[i, 0], coords[i, 1] = float(kp[0]), float(kp[1])
-        frames.append(coords)
-
-    total_frames = len(frames)
+    total_frames = len(id_records)
     if total_frames < min_seq_len:
-        return None
+        return [], []
 
-    # [NOVO] Lógica de Stride Temporal
-    # Calculamos quantos frames do video original precisamos para cobrir TEMPORAL_CONTEXT_SECONDS
-    # Ex: 5s * 10fps = 50 frames (se FPS_TARGET=10) ou 150 frames (se FPS_TARGET=30).
-    # Temos MAX_SEQ_LEN steps de entrada pro modelo.
-    # Stride = frames_needed / max_seq_len.
-    
+    # 2. Configura a Janela Temporal e o Stride Físico (Pulo de frames capturados)
     target_duration = getattr(cm, "TEMPORAL_CONTEXT_SECONDS", 5.0)
     fps_target = getattr(cm, "FPS_TARGET", 30.0)
-    
     frames_needed = int(target_duration * fps_target)
     stride = max(1, int(frames_needed / max_seq_len))
-    
-    # Normaliza para max_seq_len com Stride
-    seq = np.zeros((max_seq_len, V, C), dtype=np.float32)
 
-    for t in range(max_seq_len):
-        src_idx = t * stride
+    # 3. Slide Step (Avanço da Janela): 50% de sobreposição
+    slide_step = max(1, frames_needed // 2)
+
+    sequences = []
+    y_labels = []
+
+    for start_idx in range(0, total_frames, slide_step):
+        end_idx = min(start_idx + frames_needed, total_frames)
+        window_records = id_records[start_idx:end_idx]
         
-        if src_idx < total_frames:
-            # Frame existe na fonte
-            seq[t, :, :] = frames[src_idx]
-        else:
-            # Padding com ultimo frame disponivel (congelamento)
-            seq[t, :, :] = frames[-1]
+        # Ignora janelas muito curtas no final do vídeo
+        if len(window_records) < (frames_needed * 0.5):
+            continue
 
-    # Transpoe para formato (C, T, V) esperada pelo modelo
-    return np.transpose(seq, (2, 0, 1))
+        # 4. Avalia o Label desta Janela (Y)
+        y = 0
+        if is_positive and intervals:
+            overlap = 0
+            for r in window_records:
+                f_idx = r.get("frame", -1)
+                for inter in intervals:
+                    if inter[0] <= f_idx <= inter[1]:
+                        overlap += 1
+                        break
+            
+            # Se mais de 50% da janela ocupou a janela de furto real = Furto. 
+            # Caso o bandido andou normal (sem overlap), y=0 (Hard Negative!)
+            if overlap > (len(window_records) * 0.5):
+                y = 1
+        elif is_positive and not intervals:
+            y = 1
+            
+        # 5. Extração e Padding
+        seq = np.zeros((max_seq_len, V, C), dtype=np.float32)
+        window_len = len(window_records)
+
+        for t in range(max_seq_len):
+            src_idx = t * stride
+            if src_idx < window_len:
+                kps = window_records[src_idx].get("keypoints", [])
+                for i, kp in enumerate(kps[:V]):
+                    if len(kp) >= 2:
+                        seq[t, i, 0], seq[t, i, 1] = float(kp[0]), float(kp[1])
+            else:
+                kps = window_records[-1].get("keypoints", [])
+                for i, kp in enumerate(kps[:V]):
+                    if len(kp) >= 2:
+                        seq[t, i, 0], seq[t, i, 1] = float(kp[0]), float(kp[1])
+
+        # Transpoe para formato (C, T, V) esperado pelo modelo
+        seq_trans = np.transpose(seq, (2, 0, 1))
+        sequences.append(seq_trans)
+        y_labels.append(y)
+
+    return sequences, y_labels
 
 
 def main():
@@ -226,41 +241,24 @@ def main():
 
             is_positive = (classe.lower() == positive_class)
             
-            # Lista de tarefas para extração: [(intervalo, sufixo_meta)]
-            extraction_tasks = []
+            # Executa extração das janelas deslizantes (Hard Negatives embutido)
+            seqs, ys = extract_sliding_windows(records, pid, is_positive, intervals, max_frames, min_frames_validos)
             
-            if is_positive and intervals:
-                # Gera multiplas samples
-                for i, inter in enumerate(intervals):
-                    extraction_tasks.append((inter, i)) # i é indice do clip
-            else:
-                # Gera sample única (None = todo video)
-                extraction_tasks.append((None, 0))
+            if not seqs:
+                invalid.append(f"Sem frames suficientes: {video_stem} (id={pid})")
+                continue
 
-            # Executa extrações
-            for interval, clip_idx in extraction_tasks:
-                seq = extract_sequence(records, pid, interval, max_frames, min_frames_validos)
-                
-                if seq is None:
-                    # Se falhou extrair (muito curto), loga aviso apenas se era intervalo explícito
-                    if interval:
-                        log(f"  [WARN] Intervalo curto ignorado: ID {pid} frames {interval}", console=False)
-                    else:
-                        invalid.append(f"Sem frames suficientes: {video_stem} (id={pid})")
-                    continue
-
-                y = 1 if is_positive else 0
-                scene, video_clip_num = parse_scene_clip(video_stem)
-                
+            scene, video_clip_num = parse_scene_clip(video_stem)
+            
+            for clip_idx, (seq, y) in enumerate(zip(seqs, ys)):
                 data.append(seq)
                 y_labels.append(y)
                 
                 # Metadata: (scene, video_clip, pid, sample_idx)
-                # sample_idx diferencia múltiplos trechos do mesmo ID no mesmo video
                 metadata.append((scene, video_clip_num, int(pid), clip_idx))
                 
-                int_str = str(interval) if interval else "FULL"
-                log(f"  [OK] ID {pid} ({classe}) [{int_str}] - {seq.shape[1]} frames", console=False)
+                win_class = cm.CLASSE2 if y == 1 else cm.CLASSE1
+                log(f"  [OK] ID {pid} ({win_class} window) - {seq.shape[1]} frames", console=False)
                 total_samples += 1
 
     if len(data) == 0:

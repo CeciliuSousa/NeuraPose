@@ -181,12 +181,55 @@ def main(override_model_dir=None, override_input_dir=None, override_show=None):
                     y_pred.append(p_info["classe_id"])
 
         if y_true:
+            cm_val = confusion_matrix(y_true, y_pred, labels=[0, 1])
+            tn, fp, fn, tp = cm_val.ravel()
+            
+            far = fp / max(1, (fp + tn))
+            miss_rate = fn / max(1, (fn + tp))
+            
+            from sklearn.metrics import classification_report
+            report = classification_report(y_true, y_pred, target_names=[cm.CLASSE1, cm.CLASSE2], output_dict=True, zero_division=0)
+            
+            acc = accuracy_score(y_true, y_pred)
+            f1m = f1_score(y_true, y_pred, average='macro')
+            
             metricas = {
-                "accuracy": accuracy_score(y_true, y_pred),
-                "f1_macro": f1_score(y_true, y_pred, average='macro'),
-                "confusion_matrix": confusion_matrix(y_true, y_pred, labels=[0, 1]).tolist()
+                "accuracy": acc,
+                "f1_macro": f1m,
+                "confusion_matrix": cm_val.tolist(),
+                f"precision_{cm.CLASSE2}": report[cm.CLASSE2]['precision'],
+                f"recall_{cm.CLASSE2}": report[cm.CLASSE2]['recall'],
+                f"f1_{cm.CLASSE2}": report[cm.CLASSE2]['f1-score'],
+                "false_alarm_rate": float(far),
+                "miss_rate": float(miss_rate)
             }
             with open(out_metricas_dir / "metricas.json", "w") as f: json.dump(metricas, f, indent=2)
+            
+            # Relatorio Textual Profissional para o Teste
+            with open(out_metricas_dir / "relatorio_teste_executivo.txt", "w", encoding="utf-8") as f:
+                f.write("="*50 + "\n")
+                f.write("      RELATÓRIO EXECUTIVO DE TESTE NO MUNDO REAL\n")
+                f.write("="*50 + "\n")
+                f.write(f"Modelo         : {model_dir.name}\n")
+                f.write(f"Total Vídeos   : {total_videos}\n")
+                f.write(f"Total Pessoas  : {len(y_true)}\n\n")
+                f.write("-" * 50 + "\n")
+                f.write("MÉTRICAS GLOBAIS\n")
+                f.write("-" * 50 + "\n")
+                f.write(f"Acurácia Geral      : {acc*100:.1f}%\n")
+                f.write(f"F1-Score Macro      : {f1m:.4f}\n\n")
+                f.write("-" * 50 + "\n")
+                f.write("MÉTRICAS DA ANOMALIA (FURTO)\n")
+                f.write("-" * 50 + "\n")
+                f.write(f"Precisão (Acertos)  : {report[cm.CLASSE2]['precision']:.4f}\n")
+                f.write(f"Recall (Sensibilid.): {report[cm.CLASSE2]['recall']:.4f}\n")
+                f.write(f"F1-Score da Classe  : {report[cm.CLASSE2]['f1-score']:.4f}\n\n")
+                f.write("-" * 50 + "\n")
+                f.write("RISCO DE FALHAS CRÍTICAS (Importante para o Mercado)\n")
+                f.write("-" * 50 + "\n")
+                f.write(f"False Alarm Rate (FAR) : {far*100:.1f}% -> Pessoas NORMAIS acusadas de furto.\n")
+                f.write(f"Miss Rate (FNR)        : {miss_rate*100:.1f}% -> FURTOS que passaram despercebidos.\n")
+                f.write("="*50 + "\n")
             
             lista_res = [p for p in all_predictions.values() if p]
             with open(out_metricas_dir / "resultados.json", "w") as f: json.dump(lista_res, f, indent=2)

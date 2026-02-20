@@ -135,43 +135,41 @@ def gerar_grafico_distribuicao_classes(metricas: Dict[str, Any], metricas_dir: P
 def gerar_grafico_metricas_comparativas(metricas: Dict[str, Any], metricas_dir: Path, modelo_nome: str = cm.TEMPORAL_MODEL):
     """
     Gera gráfico de barras comparando principais métricas.
-    
-    Args:
-        metricas: Dicionário com as métricas calculadas
-        metricas_dir: Diretório para salvar o gráfico
-        modelo_nome: Nome do modelo
     """
     # Selecionar métricas principais
-    metricas_nomes = ['Accuracy', f'Precision\n{cm.CLASSE2}', f'Recall\n{cm.CLASSE2}', 'F1 Macro', 'Balanced\nAccuracy']
+    metricas_nomes = ['Accuracy', f'F1\nMacro', f'Precision\n{cm.CLASSE2}', f'Recall\n{cm.CLASSE2}', 'False\nAlarm (FAR)', 'Miss\nRate (FNR)']
     metricas_valores = [
         metricas.get('accuracy', 0),
+        metricas.get('f1_macro', 0),
         metricas.get(f'precision_{cm.CLASSE2}', 0),
         metricas.get(f'recall_{cm.CLASSE2}', 0),
-        metricas.get('f1_macro', 0),
-        metricas.get('balanced_accuracy', 0)
+        metricas.get('false_alarm_rate', 0),
+        metricas.get('miss_rate', 0)
     ]
     
-    # Cores para cada métrica
-    cores = [COLORS['primary'], COLORS['success'], COLORS['info'], COLORS['secondary'], COLORS['warning']]
+    # Cores para cada métrica (Azul/Verde pros bons, Laranja/Vermelho pros ruins)
+    cores = [COLORS['primary'], COLORS['secondary'], COLORS['success'], COLORS['info'], COLORS['warning'], COLORS['danger']]
     
     plt.figure(figsize=(12, 7))
     bars = plt.bar(metricas_nomes, metricas_valores, color=cores, alpha=0.8, edgecolor='black', linewidth=1.5)
     
-    plt.title(f'Métricas de Desempenho - {modelo_nome}', fontweight='bold', pad=15, fontsize=14)
-    plt.ylabel('Score', fontweight='bold', fontsize=12)
+    plt.title(f'Métricas de Desempenho (Incluindo Falhas) - {modelo_nome}', fontweight='bold', pad=15, fontsize=14)
+    plt.ylabel('Score / Taxa', fontweight='bold', fontsize=12)
     plt.ylim(0, 1.1)
     plt.grid(axis='y', alpha=0.3, linestyle='--')
     
     # Adicionar valores nas barras
-    for bar, valor in zip(bars, metricas_valores):
+    for i, (bar, valor) in enumerate(zip(bars, metricas_valores)):
         height = bar.get_height()
+        # Se for métrica de erro (FAR, MissRate), destacar como ruim se for alto
+        label_color = 'red' if i >= 4 and valor > 0.2 else 'black'
+        
         plt.text(bar.get_x() + bar.get_width()/2., height + 0.02,
                 f'{valor:.3f}',
-                ha='center', va='bottom', fontweight='bold', fontsize=11)
+                ha='center', va='bottom', fontweight='bold', fontsize=11, color=label_color)
     
-    # Adicionar linha de referência em 0.5
-    plt.axhline(y=0.5, color='red', linestyle='--', linewidth=1, alpha=0.5, label='Baseline (0.5)')
-    plt.legend()
+    # Adicionar linha de referência em 0.5 apenas para as métricas de acerto
+    # plt.axhline(y=0.5, color='gray', linestyle='--', linewidth=1, alpha=0.5)
     
     plt.tight_layout()
     

@@ -312,8 +312,10 @@ def main():
     inv_freq = torch.tensor([1.0 / n0, 1.0 / n1], device=DEVICE)
     weights = inv_freq / inv_freq.sum() * 2
     
-    # print(Fore.YELLOW + f"[LOSS] Focal Loss (gamma=2.0)") 
-    criterion = FocalLoss(alpha=weights, gamma=2.0).to(DEVICE)
+    # print(Fore.YELLOW + f"[LOSS] CrossEntropyLoss Ponderada") 
+    # Usando CrossEntropy em vez de FocalLoss para reduzir hiper-sensibilidade
+    # e acalmar os Falsos Alarmes (FAR), confiando apenas no WeightedSampler do batch
+    criterion = torch.nn.CrossEntropyLoss(weight=weights).to(DEVICE)
 
     if "tft" in args.model.lower():
         model = ModelClass(
@@ -491,19 +493,39 @@ def main():
     detalhes_json_path = final_model_dir / f"detalhes_validacao.json"
 
     with open(report_path, "w", encoding="utf-8") as f:
-        f.write("RELATORIO DE TREINAMENTO\n")
-        f.write(f"Data: {timestamp}\n")
-        f.write(f"Dispositivo: {get_gpu_info()}\n")
-        f.write(f"Modelo: {args.model} ({abbr})\n")
-        f.write(f"Epocas: {args.epochs}\n")
-        f.write(f"Melhor epoca: {best_epoch}\n")
-        f.write(f"Val Acc (ID-level): {accuracy_percent:.1f}%\n")
-        f.write(f"Val F1 (ID-level): {best_val_f1:.4f}\n")
-        # Podemos adicionar contagem de IDs corretos
-        # if final_val_report_id:
-        #     ok_count = sum(1 for x in final_val_report_id if x['ok'])
-        #     total_ids = len(final_val_report_id)
-        #     f.write(f"\nIDs Corretos: {ok_count}/{total_ids} ({(ok_count/total_ids)*100:.1f}%)\n")
+        f.write("="*50 + "\n")
+        f.write("         RELATÓRIO DE TREINAMENTO E VALIDAÇÃO\n")
+        f.write("="*50 + "\n")
+        f.write(f"Data Base      : {timestamp}\n")
+        f.write(f"GPU Utilizada  : {get_gpu_info()}\n")
+        f.write(f"Modelo Core    : {args.model} ({abbr})\n")
+        f.write(f"Épocas Trein.  : {args.epochs} (Melhor: {best_epoch})\n\n")
+        
+        f.write("-" * 50 + "\n")
+        f.write("MÉTRICAS GLOBAIS (Melhor Época)\n")
+        f.write("-" * 50 + "\n")
+        f.write(f"Acurácia Geral : {accuracy_percent:.1f}%\n")
+        f.write(f"F1-Score Macro : {best_val_f1:.4f}\n")
+        
+        # Extracao de metricas do report_frame e CM
+        if 'va_report' in locals() and va_report and cm.CLASSE2 in va_report:
+            p_furto = va_report[cm.CLASSE2]['precision']
+            r_furto = va_report[cm.CLASSE2]['recall']
+            f1_furto = va_report[cm.CLASSE2]['f1-score']
+            f.write(f"Precisão Furto : {p_furto:.4f}\n")
+            f.write(f"Recall Furto   : {r_furto:.4f}\n")
+        
+        if 'va_cm' in locals() and va_cm is not None and va_cm.shape == (2,2):
+            tn, fp, fn, tp = va_cm.ravel()
+            far = fp / max(1, (fp + tn))
+            miss_rate = fn / max(1, (fn + tp))
+            
+            f.write("\n" + "-" * 50 + "\n")
+            f.write("MÉTRICAS CRÍTICAS DE FALHA (Indústria)\n")
+            f.write("-" * 50 + "\n")
+            f.write(f"False Alarm Rate (FAR) : {far*100:.1f}% (Erros acusando inocentes)\n")
+            f.write(f"Miss Rate (FNR)        : {miss_rate*100:.1f}% (Furtos não detectados)\n")
+            f.write("="*50 + "\n")
 
     with open(hist_json_path, "w", encoding="utf-8") as jf:
         json.dump(history, jf, indent=2)
